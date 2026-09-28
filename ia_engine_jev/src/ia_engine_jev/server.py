@@ -1,0 +1,115 @@
+"""Bootstrap do servidor gRPC (`grpc.aio`) com graceful shutdown e health check.
+
+Entrypoint: ``python -m ia_engine_jev.server``.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import signal
+from contextlib import suppress
+
+import grpc
+from grpc_health.v1 import health, health_pb2, health_pb2_grpc
+from loguru import logger
+from redis.asyncio import Redis
+
+from ia_engine_jev.config import TenantConfigCache, escutar_invalidacoes
+from ia_engine_jev.contracts import ai_engine_pb2 as pb
+from ia_engine_jev.contracts import ai_engine_pb2_grpc as pbg
+from ia_engine_jev.servicer import IaEngineServicer
+from ia_engine_jev.settings import Settings, get_settings
+from ia_engine_jev.telemetry import configurar_logs, setup_telemetry
+
+_SERVICE_NAME = pb.DESCRIPTOR.services_by_name["IaEngineService"].full_name
+
+
+async def _build_server(
+    settings: Settings,
+) -> tuple[grpc.aio.Server, health.aio.HealthServicer, asyncio.Task[None]]:
+    interceptors = setup_telemetry(settings)
+    server = grpc.aio.server(interceptors=interceptors)
+
+    # Duas conexões Redis de propósito: `subscribe` monopoliza a conexão em que
+    # roda, então o listener não pode dividi-la com as leituras de config.
+    redis_leitura = Redis.from_url(settings.redis_url)
+    redis_pubsub = Redis.from_url(settings.redis_url)
+    config_cache = TenantConfigCache(redis_leitura)
+    listener = asyncio.create_task(
+        escutar_invalidacoes(redis_pubsub, config_cache),
+        name="config-invalidation-listener",
+    )
+
+    pbg.add_IaEngineServiceServicer_to_server(
+        IaEngineServicer(
+            transcription_enabled=settings.transcription_enabled,
+            config_cache=config_cache,
+        ),
+        server,
+    )
+
+    health_servicer = health.aio.HealthServicer()
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+
+    listen_addr = f"{settings.grpc_host}:{settings.grpc_port}"
+    server.add_insecure_port(listen_addr)
+    return server, health_servicer, listener
+
+
+async def serve() -> None:
+    settings = get_settings()
+    server, health_servicer, listener = await _build_server(settings)
+
+    await server.start()
+    await health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
+    await health_servicer.set(_SERVICE_NAME, health_pb2.HealthCheckResponse.SERVING)
+    logger.info(
+        "ia_engine_jev ouvindo em {}:{} (env={})",
+        settings.grpc_host,
+        settings.grpc_port,
+        settings.smartcore_env,
+    )
+
+    stop = asyncio.Event()
+    _install_signal_handlers(stop)
+
+    try:
+        await stop.wait()
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        logger.info(
+            "Encerrando ia_engine_jev (grace={}s)...", settings.grpc_grace_seconds
+        )
+        await health_servicer.set("", health_pb2.HealthCheckResponse.NOT_SERVING)
+        # O listener fica bloqueado em `listen()`; só o cancelamento o solta.
+        listener.cancel()
+        with suppress(asyncio.CancelledError):
+            await listener
+        await server.stop(settings.grpc_grace_seconds)
+
+
+def _install_signal_handlers(stop: asyncio.Event) -> None:
+    loop = asyncio.get_running_loop()
+
+    def _request_stop() -> None:
+        loop.call_soon_threadsafe(stop.set)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except NotImplementedError:
+            # Windows: add_signal_handler não é suportado no ProactorEventLoop.
+            signal.signal(sig, lambda *_: _request_stop())
+
+
+def main() -> None:
+    configurar_logs()
+    try:
+        asyncio.run(serve())
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

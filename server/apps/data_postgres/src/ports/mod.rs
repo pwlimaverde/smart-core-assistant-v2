@@ -9,6 +9,7 @@ pub mod plans;
 pub mod quota;
 pub mod signup;
 pub mod tenant;
+pub mod transferencia;
 pub mod treinamento;
 pub mod vouchers;
 pub mod whatsapp;
@@ -27,6 +28,7 @@ pub use plans::PlansStore;
 pub use quota::QuotaStore;
 pub use signup::{SignupIniciado, SignupStore, SlugIndisponivel, StatusSignup};
 pub use tenant::{ProgressoOnboarding, TenantStore};
+pub use transferencia::TransferenciaStore;
 pub use treinamento::{
     DocumentoTrecho, QueryComposeResultado, TreinamentoResumo, TreinamentoStore,
 };
@@ -66,6 +68,9 @@ pub use signup::MockSignupStore;
 #[cfg(test)]
 #[allow(unused_imports)]
 pub use tenant::MockTenantStore;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub use transferencia::MockTransferenciaStore;
 #[cfg(test)]
 #[allow(unused_imports)]
 pub use treinamento::MockTreinamentoStore;

@@ -27,6 +27,7 @@ pub mod mcp;
 pub mod operacional;
 pub mod security;
 pub mod tenants;
+pub mod transferencia;
 pub mod treinamento;
 
 // Re-exports de conveniência para os binários consumidores

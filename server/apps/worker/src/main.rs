@@ -68,6 +68,46 @@ impl FluxosCache {
     }
 }
 
+/// Entrada do cache de intenções: instante de gravação + catálogo do tenant.
+type EntradaCacheIntents = (Instant, Arc<Vec<ia_engine::client::IntentDefInput>>);
+
+/// Plano ia-engine-jev — o catálogo de intenções do tenant, completo (tag,
+/// grupo, descrição, exemplo e comportamento), com o mesmo TTL do cache de
+/// fluxos. O motor Jev precisa da descrição e do exemplo de cada opção para
+/// separar intenções parecidas; o motor atual recebe só as tags.
+#[derive(Clone)]
+struct IntentsCache {
+    inner: Arc<tokio::sync::Mutex<HashMap<Uuid, EntradaCacheIntents>>>,
+    ttl: Duration,
+}
+
+impl IntentsCache {
+    fn novo() -> Self {
+        let ttl_secs = std::env::var("SMARTCORE_FLUXOS_CACHE_TTL_SEGUNDOS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30);
+        Self {
+            inner: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            ttl: Duration::from_secs(ttl_secs),
+        }
+    }
+
+    async fn obter(&self, tenant: Uuid) -> Option<Arc<Vec<ia_engine::client::IntentDefInput>>> {
+        let guard = self.inner.lock().await;
+        guard.get(&tenant).and_then(|(gravado_em, intents)| {
+            (gravado_em.elapsed() < self.ttl).then(|| intents.clone())
+        })
+    }
+
+    async fn gravar(&self, tenant: Uuid, intents: Arc<Vec<ia_engine::client::IntentDefInput>>) {
+        self.inner
+            .lock()
+            .await
+            .insert(tenant, (Instant::now(), intents));
+    }
+}
+
 // O cliente de IA virou crate quando ganhou um segundo consumidor (a tela
 // de testar pergunta, no runtime_api). O apelido preserva os caminhos
 // `ia_engine::...` que o pipeline inteiro já usa.
@@ -157,6 +197,231 @@ struct AppState {
     storage_client: Arc<transport::MuxClient>,
     ia_client: Arc<dyn ia_engine::IaEngineClient>,
     fluxos_cache: FluxosCache,
+    /// Plano ia-engine-jev — o motor Jev (`SMARTCORE_IA_ENGINE_JEV_ENDPOINT`).
+    /// `None` quando não configurado: todo tenant fica no motor atual.
+    ia_client_jev: Option<Arc<dyn ia_engine::IaEngineClient>>,
+    intents_cache: IntentsCache,
+}
+
+/// Os motores de IA de uma chamada: o que decide e, na sombra, o que só é
+/// registrado para comparar.
+struct MotoresIa {
+    motor: config_tenant::Motor,
+    decide: Arc<dyn ia_engine::IaEngineClient>,
+    /// `llm` ou `jev`: quem de fato decidiu.
+    decide_nome: &'static str,
+    sombra: Option<Arc<dyn ia_engine::IaEngineClient>>,
+}
+
+/// Escolhe o motor do tenant (`motor_analise` na config publicada). Pedido de
+/// Jev sem o serviço configurado cai no motor atual, com aviso: o bot não pode
+/// parar por causa de uma variável de ambiente faltando.
+async fn motores_do_tenant(state: &AppState, tenant: Uuid) -> MotoresIa {
+    use config_tenant::Motor;
+    let motor = config_tenant::motor(state.redis_conn.as_ref(), tenant).await;
+    let atual = MotoresIa {
+        motor,
+        decide: state.ia_client.clone(),
+        decide_nome: "llm",
+        sombra: None,
+    };
+    match (motor, state.ia_client_jev.clone()) {
+        (Motor::Llm, _) => atual,
+        (Motor::Jev, Some(jev)) => MotoresIa {
+            motor,
+            decide: jev,
+            decide_nome: "jev",
+            sombra: None,
+        },
+        (Motor::Sombra, Some(jev)) => MotoresIa {
+            sombra: Some(jev),
+            ..atual
+        },
+        (_, None) => {
+            tracing::warn!(
+                motor = motor.nome(),
+                "motor Jev pedido sem SMARTCORE_IA_ENGINE_JEV_ENDPOINT; usando o motor atual"
+            );
+            atual
+        }
+    }
+}
+
+/// Catálogo de intenções do tenant (`ListIntents`), com cache. Best-effort:
+/// falha = catálogo vazio, e a análise segue sem intenções.
+async fn carregar_intents(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    causation_id: &str,
+    traceparent: &str,
+) -> Arc<Vec<ia_engine::client::IntentDefInput>> {
+    if let Some(intents) = state.intents_cache.obter(tenant_uuid).await {
+        return intents;
+    }
+    let intents = match chamar_rpc(
+        &state.pg_client,
+        &tenant_uuid.to_string(),
+        "ListIntents",
+        serde_json::json!({}),
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        Ok(resp) => Arc::new(intents_do_catalogo(&resp)),
+        Err(e) => {
+            tracing::warn!(erro = %e, "ListIntents falhou; seguindo sem intenções");
+            return Arc::new(Vec::new());
+        }
+    };
+    state
+        .intents_cache
+        .gravar(tenant_uuid, intents.clone())
+        .await;
+    intents
+}
+
+/// Intenções do `ListIntentsReply`, sem as que não têm tag.
+fn intents_do_catalogo(resposta: &serde_json::Value) -> Vec<ia_engine::client::IntentDefInput> {
+    let texto = |i: &serde_json::Value, chave: &str| {
+        i.get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    resposta
+        .get("intents")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .map(|i| ia_engine::client::IntentDefInput {
+                    tag: texto(i, "tag"),
+                    grupo: texto(i, "grupo"),
+                    descricao: texto(i, "descricao"),
+                    exemplo: texto(i, "exemplo"),
+                    comportamento: texto(i, "comportamento"),
+                })
+                .filter(|i| !i.tag.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Grava uma decisão da IA em `oraculo_decisao_ia` (sem texto de mensagem).
+/// Best-effort: o registro serve à calibração e à comparação da sombra, não
+/// pode atrasar nem derrubar a conversa.
+async fn registrar_decisao_ia(
+    state: &AppState,
+    tenant_str: &str,
+    payload: serde_json::Value,
+    causation_id: &str,
+    traceparent: &str,
+) {
+    if let Err(e) = chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "RegistrarDecisaoIa",
+        payload,
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        tracing::warn!(erro = %e, "falha ao registrar a decisão da IA");
+    }
+}
+
+/// A decisão de uma resposta, no formato de `oraculo_decisao_ia`. Só ids,
+/// números e nomes de sinal — nada do texto da conversa.
+fn registro_da_resposta(
+    atendimento_id: i32,
+    motor: &str,
+    vale: bool,
+    r: &ia_engine::client::ResponderOutput,
+    fluxo_id: Option<i32>,
+) -> serde_json::Value {
+    let motor = if r.motor.is_empty() {
+        motor
+    } else {
+        r.motor.as_str()
+    };
+    serde_json::json!({
+        "atendimento_id": atendimento_id,
+        "etapa": "resposta",
+        "motor": motor,
+        "vale": vale,
+        "modelo": r.modelo,
+        "intencao": r.intencao_principal,
+        "confianca_intencao": r.confianca_intencao,
+        "decisao": r.decisao,
+        "transferiu": r.transferir_atendimento,
+        "motivo": r.motivo_transferencia,
+        "regra_id": (r.regra_id > 0).then_some(r.regra_id),
+        "fluxo_id": fluxo_id,
+        "sinais": sinais_json(&r.sinais),
+        "trechos_aprovados": r.trechos.iter().filter(|t| t.aprovado).map(|t| t.id.clone()).collect::<Vec<_>>(),
+        "trechos_descartados": r.trechos.iter().filter(|t| !t.aprovado).map(|t| t.id.clone()).collect::<Vec<_>>(),
+        "confiabilidade": r.confiabilidade,
+        "tokens_entrada": r.uso.tokens_entrada,
+        "requisicoes": r.uso.requisicoes,
+        "duracao_ms": r.uso.duracao_ms,
+    })
+}
+
+/// A decisão de uma análise, no formato de `oraculo_decisao_ia`.
+fn registro_da_analise(
+    atendimento_id: i32,
+    motor: &str,
+    vale: bool,
+    a: &ia_engine::client::AnalyseOutput,
+) -> serde_json::Value {
+    let motor = if a.motor.is_empty() {
+        motor
+    } else {
+        a.motor.as_str()
+    };
+    let (intencao, confianca) = if a.intent_principal.is_empty() {
+        a.intents
+            .first()
+            .map(|i| (i.tipo.clone(), i.confianca))
+            .unwrap_or_default()
+    } else {
+        (a.intent_principal.clone(), a.confianca_principal)
+    };
+    let mut sinais: Vec<serde_json::Value> = a
+        .intents
+        .iter()
+        .map(
+            |i| serde_json::json!({ "nome": format!("intencao:{}", i.tipo), "valor": i.confianca }),
+        )
+        .collect();
+    sinais.extend(
+        a.intents_a_revisar
+            .iter()
+            .map(|t| serde_json::json!({ "nome": format!("a_revisar:{t}") })),
+    );
+    serde_json::json!({
+        "atendimento_id": atendimento_id,
+        "etapa": "analise",
+        "motor": motor,
+        "vale": vale,
+        "modelo": a.modelo,
+        "intencao": intencao,
+        "confianca_intencao": confianca,
+        "decisao": if a.intents_a_revisar.is_empty() { "automatica" } else { "a_revisar" },
+        "sinais": sinais,
+        "tokens_entrada": a.uso.tokens_entrada,
+        "requisicoes": a.uso.requisicoes,
+        "duracao_ms": a.uso.duracao_ms,
+    })
+}
+
+fn sinais_json(sinais: &[ia_engine::client::SinalOutput]) -> Vec<serde_json::Value> {
+    sinais
+        .iter()
+        .map(|s| serde_json::json!({ "nome": s.nome, "valor": s.valor, "limiar": s.limiar }))
+        .collect()
 }
 
 /// Carrega os fluxos disponíveis do tenant (via `ListarFluxosDoTenant` no
@@ -226,6 +491,7 @@ async fn aplicar_transferencia_ia(
     atendimento_id: i32,
     fluxos: &[FluxoItem],
     fluxo_transferencia: &str,
+    detalhes: serde_json::Value,
     causation_id: &str,
     traceparent: &str,
 ) {
@@ -273,16 +539,25 @@ async fn aplicar_transferencia_ia(
     // `atendente_id` entra porque a transferência agora atribui (D2), e "para
     // quem foi" é a pergunta que se faz quando uma conversa some da vista de
     // quem esperava por ela. Nulo significa fila sem ninguém disponível.
+    //
+    // Plano ia-engine-jev: com o motor Jev, a trilha diz também POR QUE —
+    // o motivo (nome da regra do tenant ou do sinal), os sinais medidos com o
+    // limiar comparado, o motor e o modelo. No motor atual esses campos vêm
+    // vazios: ele não sabe dizer por que transferiu.
+    let mut contexto = serde_json::json!({
+        "atendimento_id": atendimento_id,
+        "fluxo_id": item.fluxo_id,
+        "etapa_id": resp.get("etapa_id"),
+        "atendente_id": resp.get("atendente_id"),
+    });
+    if let (Some(base), serde_json::Value::Object(extra)) = (contexto.as_object_mut(), detalhes) {
+        base.extend(extra);
+    }
     state.audit_logger.info(
         tenant_uuid,
         "atendimento.transferido_por_ia",
         "Atendimento transferido automaticamente pela IA para outro fluxo",
-        serde_json::json!({
-            "atendimento_id": atendimento_id,
-            "fluxo_id": item.fluxo_id,
-            "etapa_id": resp.get("etapa_id"),
-            "atendente_id": resp.get("atendente_id"),
-        }),
+        contexto,
         None,
         None,
         Some(causation_id.to_string()),
@@ -391,6 +666,14 @@ struct RespostaIa {
     /// B4 — a resposta terminou em transferência (pedida pelo LLM ou pelo
     /// veto do tenant).
     transferida: bool,
+    /// Plano ia-engine-jev — quem decidiu (`llm` | `jev`) e com qual versão.
+    motor: String,
+    modelo: String,
+    /// Como o motor Jev decidiu (automatica | transferida | sem_info |
+    /// a_revisar | reserva); vazio no motor atual.
+    decisao_motor: String,
+    /// A LLM prometeu transferir sem regra e a resposta foi gerada de novo.
+    regerada: bool,
 }
 
 /// B4 (D1, passo 2) — como a resposta do bot foi decidida.
@@ -451,6 +734,11 @@ mod tests_decisao {
         fluxos_count = tracing::field::Empty,
         campos_pendentes_count = tracing::field::Empty,
         confianca = tracing::field::Empty,
+        motor = tracing::field::Empty,
+        modelo = tracing::field::Empty,
+        transferida = tracing::field::Empty,
+        motivo = tracing::field::Empty,
+        llm_chamada = tracing::field::Empty,
     )
 )]
 async fn responder_via_ia(
@@ -501,6 +789,10 @@ async fn responder_via_ia(
     // 3. RAG via data_postgres.QueryCompose — best-effort: uma falha aqui não
     // aborta a resposta, só segue sem contexto de treinamento.
     let mut dados_treinamento = String::new();
+    // Plano ia-engine-jev: o motor Jev julga cada trecho sozinho, então eles
+    // viajam também separados (com id), e o comportamento à parte.
+    let mut trechos: Vec<ia_engine::client::TrechoInput> = Vec::new();
+    let mut comportamento = String::new();
     if !query_embedding.is_empty() {
         let qc_payload = serde_json::json!({
             "query_embedding": query_embedding,
@@ -521,11 +813,24 @@ async fn responder_via_ia(
                 let mut partes: Vec<String> = Vec::new();
                 if let Some(c) = resp.get("comportamento").and_then(|v| v.as_str()) {
                     partes.push(c.to_string());
+                    comportamento = c.to_string();
                 }
                 if let Some(docs) = resp.get("documentos").and_then(|v| v.as_array()) {
                     for d in docs {
                         if let Some(c) = d.get("conteudo").and_then(|v| v.as_str()) {
                             partes.push(c.to_string());
+                            trechos.push(ia_engine::client::TrechoInput {
+                                id: d
+                                    .get("id")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or(0)
+                                    .to_string(),
+                                conteudo: c.to_string(),
+                                distancia: d
+                                    .get("distancia")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                            });
                         }
                     }
                 }
@@ -637,39 +942,118 @@ async fn responder_via_ia(
     span.record("fluxos_count", fluxos.len());
     span.record("campos_pendentes_count", campos_pendentes.len());
 
-    // 5. Gera a resposta (Structured Output + score triádico + safety-net de
-    // transferência ficam dentro do ia_engine — ver features/responder.py).
-    let resposta = state
-        .ia_client
-        .responder(
-            ia_engine::ResponderInput {
-                tenant_id: tenant_id_str.clone(),
-                atendimento_id: atendimento_id.to_string(),
-                mensagem: mensagem_texto.to_string(),
-                historico,
-                fluxos_disponiveis: fluxos_kv,
-                dados_treinamento,
-                campos_coletados,
-                campos_pendentes,
-            },
-            traceparent,
-        )
+    // 5. Gera a resposta. Motor atual: structured output + score triádico +
+    // safety-net dentro do ia_engine. Motor Jev: sinais antes de gerar, LLM só
+    // texto, conferência depois — tudo dentro do ia_engine_jev.
+    let motores = motores_do_tenant(state, tenant_uuid).await;
+    let intents = if motores.motor == config_tenant::Motor::Llm {
+        Vec::new()
+    } else {
+        carregar_intents(state, tenant_uuid, causation_id, traceparent)
+            .await
+            .as_ref()
+            .clone()
+    };
+    let n_trechos = trechos.len();
+    let entrada = ia_engine::ResponderInput {
+        tenant_id: tenant_id_str.clone(),
+        atendimento_id: atendimento_id.to_string(),
+        mensagem: mensagem_texto.to_string(),
+        historico,
+        fluxos_disponiveis: fluxos_kv,
+        dados_treinamento,
+        campos_coletados,
+        campos_pendentes,
+        intents,
+        trechos,
+        comportamento,
+    };
+
+    // Sombra: o Jev responde ao lado, sem efeito nenhum na conversa — só o
+    // registro da decisão dele, para comparar com a do motor atual.
+    if let Some(sombra) = motores.sombra.clone() {
+        let st = state.clone();
+        let entrada_sombra = entrada.clone();
+        let tp = traceparent.to_string();
+        let causa = causation_id.to_string();
+        let tenant = tenant_id_str.clone();
+        let fluxos_sombra = fluxos.clone();
+        tokio::spawn(async move {
+            match sombra.responder(entrada_sombra, &tp).await {
+                Ok(r) => {
+                    let fluxo_id = fluxos_sombra
+                        .iter()
+                        .find(|f| f.chave == r.fluxo_transferencia)
+                        .map(|f| f.fluxo_id);
+                    let registro = registro_da_resposta(atendimento_id, "jev", false, &r, fluxo_id);
+                    registrar_decisao_ia(&st, &tenant, registro, &causa, &tp).await;
+                }
+                Err(e) => tracing::warn!(erro = %e, "motor Jev (sombra) falhou na resposta"),
+            }
+        });
+    }
+
+    let resposta = motores
+        .decide
+        .responder(entrada, traceparent)
         .await
         .map_err(|e| anyhow::anyhow!("ia_engine.Responder falhou: {e}"))?;
+
+    let fluxo_destino = fluxos
+        .iter()
+        .find(|f| f.chave == resposta.fluxo_transferencia)
+        .map(|f| f.fluxo_id);
+    if motores.motor != config_tenant::Motor::Llm {
+        let registro = registro_da_resposta(
+            atendimento_id,
+            motores.decide_nome,
+            true,
+            &resposta,
+            fluxo_destino,
+        );
+        registrar_decisao_ia(state, &tenant_id_str, registro, causation_id, traceparent).await;
+    }
 
     // N6.3: quando a IA decide transferir e devolve um fluxo válido, move o atendimento
     // para o fluxo/etapa certos. Best-effort — nunca falha a resposta ao usuário.
     if resposta.transferir_atendimento && !resposta.fluxo_transferencia.is_empty() {
+        let detalhes = serde_json::json!({
+            "motivo": resposta.motivo_transferencia,
+            "regra_id": (resposta.regra_id > 0).then_some(resposta.regra_id),
+            "sinais": sinais_json(&resposta.sinais),
+            "motor": if resposta.motor.is_empty() { motores.decide_nome } else { resposta.motor.as_str() },
+            "modelo": resposta.modelo,
+        });
         aplicar_transferencia_ia(
             state,
             tenant_uuid,
             atendimento_id,
             &fluxos,
             &resposta.fluxo_transferencia,
+            detalhes,
             causation_id,
             traceparent,
         )
         .await;
+    }
+
+    // A LLM prometeu transferir sem regra disparada: o motor gerou de novo. É
+    // o caso que mostra se o prompt está empurrando a LLM a decidir o que não é
+    // dela. Sem conteúdo: só o fato e o desfecho.
+    if resposta.regerada {
+        state.audit_logger.info(
+            tenant_uuid,
+            "bot.transferencia_prometida_barrada",
+            "A IA prometeu transferir sem regra; a resposta foi gerada de novo",
+            serde_json::json!({
+                "atendimento_id": atendimento_id,
+                "decisao": resposta.decisao,
+                "modelo": resposta.modelo,
+            }),
+            None,
+            None,
+            Some(causation_id.to_string()),
+        );
     }
 
     // C1 — fecha o laço: o que a IA extraiu vira valor na ficha.
@@ -736,11 +1120,36 @@ async fn responder_via_ia(
     // A confiança entra no span: é número, não revela conteúdo, e é o que
     // permitirá calibrar os limiares antes de ligar o veto.
     span.record("confianca", resposta.confiabilidade);
+    let motor = if resposta.motor.is_empty() {
+        motores.decide_nome.to_string()
+    } else {
+        resposta.motor.clone()
+    };
+    span.record("motor", motor.as_str());
+    span.record("modelo", resposta.modelo.as_str());
+    span.record("transferida", resposta.transferir_atendimento);
+    // Tipo do sinal ou "regra" — o nome da regra é do tenant e fica na trilha.
+    let motivo_curto = resposta
+        .motivo_transferencia
+        .split(':')
+        .find(|p| *p != "duvida")
+        .unwrap_or_default();
+    span.record("motivo", motivo_curto);
+    // No motor Jev, a LLM só é chamada se houve a conferência depois de gerar:
+    // mais requisições que a de "antes" mais uma por trecho.
+    let llm_chamada = motor != "jev"
+        || resposta.decisao == "reserva"
+        || resposta.uso.requisicoes as usize > 1 + n_trechos;
+    span.record("llm_chamada", llm_chamada);
 
     Ok(RespostaIa {
         texto: resposta.resposta_texto,
         confianca: resposta.confiabilidade,
         transferida: resposta.transferir_atendimento,
+        motor,
+        modelo: resposta.modelo,
+        decisao_motor: resposta.decisao,
+        regerada: resposta.regerada,
     })
 }
 
@@ -806,6 +1215,19 @@ async fn main() -> anyhow::Result<()> {
         ));
     tracing::info!(endpoint = %ia_engine_endpoint, "Cliente gRPC ia_engine estabelecido (lazy).");
 
+    // Plano ia-engine-jev — o motor Jev, opcional. Sem a variável, todo tenant
+    // fica no motor atual, qualquer que seja o `motor_analise` configurado.
+    let ia_client_jev: Option<Arc<dyn ia_engine::IaEngineClient>> = match std::env::var(
+        "SMARTCORE_IA_ENGINE_JEV_ENDPOINT",
+    ) {
+        Ok(endpoint) if !endpoint.trim().is_empty() => {
+            let cliente = ia_engine::TonicIaEngineClient::connect_lazy(endpoint.trim())?;
+            tracing::info!(endpoint = %endpoint, "Cliente gRPC ia_engine_jev estabelecido (lazy).");
+            Some(Arc::new(ia_engine::ResilientIaEngine::new(cliente)))
+        }
+        _ => None,
+    };
+
     // A auditoria vai para o barramento: é de lá que o consumidor do
     // `data_postgres` lê o `security:stream` para consolidar em `audit_log`.
     let audit_logger = observability::AuditLogger::new_with_redis(bus_conn.clone(), "worker");
@@ -818,6 +1240,8 @@ async fn main() -> anyhow::Result<()> {
         storage_client,
         ia_client,
         fluxos_cache: FluxosCache::novo(),
+        ia_client_jev,
+        intents_cache: IntentsCache::novo(),
     };
 
     // 3. Inicia o consumidor do barramento (events:stream)
@@ -2046,7 +2470,7 @@ async fn acionar_bot(
         // de bot NUNCA trava o atendimento por causa da IA.
         let pergunta = texto_do_contato.clone().unwrap_or_default();
         let mut transferida_pela_ia = false;
-        let (bot_text, confianca_bot) = match responder_via_ia(
+        let (bot_text, confianca_bot, info_ia) = match responder_via_ia(
             state,
             tenant_uuid,
             atendimento_id,
@@ -2056,9 +2480,11 @@ async fn acionar_bot(
         )
         .await
         {
-            Ok(r) if !r.texto.trim().is_empty() => {
+            Ok(mut r) if !r.texto.trim().is_empty() => {
                 transferida_pela_ia = r.transferida;
-                (r.texto, Some(r.confianca))
+                let texto = std::mem::take(&mut r.texto);
+                let confianca = r.confianca;
+                (texto, Some(confianca), Some(r))
             }
             Ok(_) => {
                 tracing::warn!(
@@ -2080,7 +2506,7 @@ async fn acionar_bot(
                 );
                 // Sem confiança: este texto não veio da IA, veio da config do
                 // tenant (ou da constante). Gravar 0.0 seria mentir na medição.
-                (texto_fallback, None)
+                (texto_fallback, None, None)
             }
             Err(e) => {
                 tracing::warn!(
@@ -2104,7 +2530,7 @@ async fn acionar_bot(
                 );
                 // Sem confiança: este texto não veio da IA, veio da config do
                 // tenant (ou da constante). Gravar 0.0 seria mentir na medição.
-                (texto_fallback, None)
+                (texto_fallback, None, None)
             }
         };
         let bot_text = bot_text.as_str();
@@ -2206,6 +2632,11 @@ async fn acionar_bot(
                     // agregada — não existe "a mensagem respondida". Ausente
                     // quando o texto veio do fallback, e não da IA.
                     "confianca": confianca_bot,
+                    // Plano ia-engine-jev: a escala da confiança muda com o
+                    // motor (cosseno × probabilidade) — sem o motor ao lado,
+                    // o histórico mistura as duas.
+                    "motor": info_ia.as_ref().map(|i| i.motor.as_str()),
+                    "modelo": info_ia.as_ref().map(|i| i.modelo.as_str()),
                 }),
                 &ctx.event_id,
                 &ctx.traceparent,
@@ -2230,8 +2661,15 @@ async fn acionar_bot(
             )
             .await
             .unwrap_or(0.8);
-            let decisao =
-                decisao_da_resposta(confianca_bot, transferida_pela_ia, minima_automatica);
+            // Motor Jev: a decisão vem dele (com limiares na escala certa);
+            // motor atual ou reserva: a regra do B4 sobre a confiança.
+            let decisao = match info_ia.as_ref().map(|i| i.decisao_motor.as_str()) {
+                Some("a_revisar") => "revisao",
+                Some("automatica") => "automatica",
+                Some("transferida") => "transferida",
+                Some("sem_info") => "sem_info",
+                _ => decisao_da_resposta(confianca_bot, transferida_pela_ia, minima_automatica),
+            };
             // P16 — a resposta saiu, mas abaixo da confiança automática: o
             // cartão ganha a marca "revisar". Best-effort — falhar aqui não
             // desfaz a resposta que já foi enviada.
@@ -2264,6 +2702,18 @@ async fn acionar_bot(
                     "recipient": mascarar_telefone(&ctx.sender),
                     "confianca": confianca_bot,
                     "decisao": decisao,
+                    "motor": info_ia.as_ref().map(|i| i.motor.as_str()),
+                    "modelo": info_ia.as_ref().map(|i| i.modelo.as_str()),
+                    // No motor Jev, a confiança É a resposta apoiada na base.
+                    "resposta_apoiada": info_ia
+                        .as_ref()
+                        .filter(|i| i.motor == "jev")
+                        .and(confianca_bot),
+                    "regerada": info_ia.as_ref().map(|i| i.regerada).unwrap_or(false),
+                    "reserva": info_ia
+                        .as_ref()
+                        .map(|i| i.decisao_motor == "reserva")
+                        .unwrap_or(false),
                 }),
                 None,
                 None,
@@ -2720,8 +3170,9 @@ async fn avaliar_sentimento_best_effort(
     // lendo do Redis. Antes era preciso um RPC `ResolverConfigIa` aqui só para
     // montar o `LlmProviderConfigInput` que ia no request.
 
-    let saida = match state
-        .ia_client
+    let motores = motores_do_tenant(state, tenant_uuid).await;
+    let saida = match motores
+        .decide
         .sentimento(
             ia_engine::client::SentimentoInput {
                 tenant_id: tenant_str.to_string(),
@@ -2780,7 +3231,9 @@ async fn avaliar_sentimento_best_effort(
         intents_count = tracing::field::Empty,
         entidades_count = tracing::field::Empty,
         assunto_definido = tracing::field::Empty,
-        duracao_ms = tracing::field::Empty
+        duracao_ms = tracing::field::Empty,
+        motor = tracing::field::Empty,
+        modelo = tracing::field::Empty
     )
 )]
 async fn analisar_mensagem_best_effort(
@@ -2803,37 +3256,55 @@ async fn analisar_mensagem_best_effort(
         return;
     }
 
-    let tipos_intencao = match chamar_rpc(
-        &state.pg_client,
-        tenant_str,
-        "ListIntents",
-        serde_json::json!({}),
-        causation_id,
-        traceparent,
-    )
-    .await
-    {
-        Ok(resp) => tipos_de_intencao(&resp),
-        Err(e) => {
-            tracing::warn!(erro = %e, "ListIntents falhou; analisando sem tipos de intenção");
-            String::new()
-        }
-    };
+    let intents = carregar_intents(state, tenant_uuid, causation_id, traceparent).await;
+    let tipos_intencao = tipos_de_intencao(&intents);
+    let motores = motores_do_tenant(state, tenant_uuid).await;
 
-    let saida = match state
-        .ia_client
-        .analyse(
-            ia_engine::client::AnalyseInput {
-                tenant_id: tenant_str.to_string(),
-                mensagem: texto.to_string(),
-                historico: Vec::new(),
-                valid_intent_types: tipos_intencao,
-                valid_entity_types: tipos_entidade,
-            },
+    // Motor Jev: as últimas falas dão contexto a respostas curtas ("sim",
+    // "500"). O motor atual segue analisando só a mensagem, como antes.
+    let historico = if motores.motor == config_tenant::Motor::Llm {
+        Vec::new()
+    } else {
+        historico_recente(
+            state,
+            tenant_str,
+            atendimento_id,
+            texto,
+            causation_id,
             traceparent,
         )
         .await
-    {
+    };
+    let entrada = ia_engine::client::AnalyseInput {
+        tenant_id: tenant_str.to_string(),
+        mensagem: texto.to_string(),
+        historico,
+        valid_intent_types: tipos_intencao,
+        valid_entity_types: tipos_entidade,
+        intents: intents.as_ref().clone(),
+        // Os tipos de entidade com descrição e estratégia o ia_engine_jev lê
+        // da config do tenant (Redis); não precisam viajar aqui.
+        entidades: Vec::new(),
+    };
+
+    if let Some(sombra) = motores.sombra.clone() {
+        let st = state.clone();
+        let entrada_sombra = entrada.clone();
+        let tp = traceparent.to_string();
+        let causa = causation_id.to_string();
+        let tenant = tenant_str.to_string();
+        tokio::spawn(async move {
+            match sombra.analyse(entrada_sombra, &tp).await {
+                Ok(a) => {
+                    let registro = registro_da_analise(atendimento_id, "jev", false, &a);
+                    registrar_decisao_ia(&st, &tenant, registro, &causa, &tp).await;
+                }
+                Err(e) => tracing::warn!(erro = %e, "motor Jev (sombra) falhou na análise"),
+            }
+        });
+    }
+
+    let saida = match motores.decide.analyse(entrada, traceparent).await {
         Ok(s) => s,
         Err(e) => {
             tracing::warn!(erro = %e, "ia_engine.Analyse falhou; mensagem fica sem análise");
@@ -2844,6 +3315,27 @@ async fn analisar_mensagem_best_effort(
     let span = tracing::Span::current();
     span.record("intents_count", saida.intents.len());
     span.record("entidades_count", saida.entidades.len());
+    span.record(
+        "motor",
+        if saida.motor.is_empty() {
+            motores.decide_nome
+        } else {
+            saida.motor.as_str()
+        },
+    );
+    span.record("modelo", saida.modelo.as_str());
+    if motores.motor != config_tenant::Motor::Llm {
+        let registro = registro_da_analise(atendimento_id, motores.decide_nome, true, &saida);
+        registrar_decisao_ia(state, tenant_str, registro, causation_id, traceparent).await;
+    }
+    // O motor Jev já aplicou os pisos dele, cada um na sua escala (confiança
+    // de `Choice` para o assunto, probabilidade de `Noul` para as etiquetas):
+    // reaplicar aqui o 0,8 do motor atual misturaria as escalas.
+    let piso_do_motor = if saida.motor == "jev" {
+        Some(0.0)
+    } else {
+        None
+    };
 
     let intents: Vec<serde_json::Value> = saida
         .intents
@@ -2867,13 +3359,16 @@ async fn analisar_mensagem_best_effort(
             "entidades": entidades,
             // P14/P15 — o mesmo "quando confio na IA" do B4 decide se a
             // intenção vira etiqueta e se a entidade entra no cadastro.
-            "piso_confianca": config_tenant::numero(
-                state.redis_conn.as_ref(),
-                tenant_uuid,
-                "confianca_minima_automatica",
-            )
-            .await
-            .unwrap_or(0.8),
+            "piso_confianca": match piso_do_motor {
+                Some(p) => p,
+                None => config_tenant::numero(
+                    state.redis_conn.as_ref(),
+                    tenant_uuid,
+                    "confianca_minima_automatica",
+                )
+                .await
+                .unwrap_or(0.8),
+            },
         }),
         causation_id,
         traceparent,
@@ -2916,42 +3411,132 @@ async fn analisar_mensagem_best_effort(
     span.record("duracao_ms", inicio.elapsed().as_millis() as u64);
 }
 
-/// B9 — as tags das intenções cadastradas, no formato que o `Analyse` espera:
-/// separadas por vírgula. Vazio quando não há intenção nenhuma.
-fn tipos_de_intencao(resposta: &serde_json::Value) -> String {
-    resposta
-        .get("intents")
+/// B9 — as tags das intenções cadastradas, no formato que o `Analyse` do motor
+/// atual espera: separadas por vírgula. Vazio quando não há intenção nenhuma.
+fn tipos_de_intencao(intents: &[ia_engine::client::IntentDefInput]) -> String {
+    intents
+        .iter()
+        .map(|i| i.tag.as_str())
+        .filter(|t| !t.is_empty())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// As últimas falas do atendimento (sem a mensagem que está sendo analisada),
+/// para o motor Jev entender respostas curtas. Best-effort: falha = sem
+/// histórico.
+async fn historico_recente(
+    state: &AppState,
+    tenant_str: &str,
+    atendimento_id: i32,
+    mensagem_atual: &str,
+    causation_id: &str,
+    traceparent: &str,
+) -> Vec<ia_engine::ChatTurnInput> {
+    let Ok(resp) = chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "GetThread",
+        serde_json::json!({ "atendimento_id": atendimento_id, "limit": 6 }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    else {
+        return Vec::new();
+    };
+    let mut turnos: Vec<ia_engine::ChatTurnInput> = resp
+        .get("mensagens")
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|i| i.get("tag").and_then(|t| t.as_str()))
-                .map(str::trim)
-                .filter(|t| !t.is_empty())
-                .collect::<Vec<_>>()
-                .join(",")
+                .filter_map(|m| {
+                    let conteudo = m.get("conteudo").and_then(|v| v.as_str())?;
+                    if conteudo.is_empty() {
+                        return None;
+                    }
+                    let remetente = m.get("remetente").and_then(|v| v.as_str()).unwrap_or("");
+                    let role = if remetente == REMETENTE_ATENDENTE || remetente == REMETENTE_BOT {
+                        "ai"
+                    } else {
+                        "human"
+                    };
+                    Some(ia_engine::ChatTurnInput {
+                        role: role.to_string(),
+                        conteudo: conteudo.to_string(),
+                    })
+                })
+                .collect()
         })
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if turnos
+        .last()
+        .is_some_and(|t| t.conteudo.trim() == mensagem_atual.trim())
+    {
+        turnos.pop();
+    }
+    let excesso = turnos.len().saturating_sub(4);
+    turnos.drain(..excesso);
+    turnos
 }
 
 #[cfg(test)]
 mod tests_analise {
-    use super::tipos_de_intencao;
+    use super::{intents_do_catalogo, registro_da_resposta, tipos_de_intencao};
 
     #[test]
     fn junta_as_tags_das_intencoes_cadastradas() {
         let resp = serde_json::json!({
             "intents": [
-                { "tag": "segunda_via_boleto", "grupo": "financeiro" },
+                { "tag": "segunda_via_boleto", "grupo": "financeiro", "descricao": "boleto" },
                 { "tag": " duvida_entrega " },
                 { "tag": "" },
                 { "grupo": "sem_tag" },
             ]
         });
+        let intents = intents_do_catalogo(&resp);
+        assert_eq!(intents.len(), 2);
+        assert_eq!(intents[0].grupo, "financeiro");
+        assert_eq!(intents[0].descricao, "boleto");
         assert_eq!(
-            tipos_de_intencao(&resp),
+            tipos_de_intencao(&intents),
             "segunda_via_boleto,duvida_entrega"
         );
-        assert_eq!(tipos_de_intencao(&serde_json::json!({})), "");
+        assert_eq!(
+            tipos_de_intencao(&intents_do_catalogo(&serde_json::json!({}))),
+            ""
+        );
+    }
+
+    #[test]
+    fn registro_da_resposta_sem_texto_e_com_motivo() {
+        let r = super::ia_engine::client::ResponderOutput {
+            resposta_texto: "texto que não pode ir para o registro".into(),
+            transferir_atendimento: true,
+            motivo_transferencia: "regra:Fechar pedido".into(),
+            regra_id: 7,
+            motor: "jev".into(),
+            trechos: vec![
+                super::ia_engine::client::TrechoAvaliadoOutput {
+                    id: "3".into(),
+                    aprovado: true,
+                    conflito: false,
+                },
+                super::ia_engine::client::TrechoAvaliadoOutput {
+                    id: "4".into(),
+                    aprovado: false,
+                    conflito: false,
+                },
+            ],
+            ..Default::default()
+        };
+        let reg = registro_da_resposta(10, "llm", true, &r, Some(2));
+        assert_eq!(reg["motor"], "jev");
+        assert_eq!(reg["regra_id"], 7);
+        assert_eq!(reg["fluxo_id"], 2);
+        assert_eq!(reg["trechos_aprovados"], serde_json::json!(["3"]));
+        assert_eq!(reg["trechos_descartados"], serde_json::json!(["4"]));
+        assert!(!reg.to_string().contains("não pode ir"));
     }
 }
 
@@ -3442,6 +4027,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -3537,6 +4124,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -3632,6 +4221,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -3800,6 +4391,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -3874,6 +4467,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -3903,6 +4498,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -3936,6 +4533,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -3996,6 +4595,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             pg_client,
             whatsapp_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -4076,6 +4677,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             pg_client,
             whatsapp_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -4134,6 +4737,8 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
             pg_client,
             whatsapp_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -4335,6 +4940,8 @@ mod tests {
             storage_client,
             ia_client: Arc::new(mock_ia),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
         };
 
         let tenant = Uuid::new_v4();
@@ -4486,6 +5093,8 @@ mod tests {
             storage_client,
             ia_client: Arc::new(mock_ia),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
         };
 
         let tenant = Uuid::new_v4();
@@ -4592,6 +5201,8 @@ mod tests {
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
         };
 
         let fluxos = vec![FluxoItem {
@@ -4606,6 +5217,7 @@ mod tests {
             42,
             &fluxos,
             "Inexistente - x",
+            serde_json::json!({}),
             "c",
             "tp",
         )
@@ -4622,6 +5234,7 @@ mod tests {
             42,
             &fluxos,
             "Vendas - funil",
+            serde_json::json!({}),
             "c",
             "tp",
         )
@@ -4697,6 +5310,8 @@ mod tests {
             pg_client,
             ia_client: Arc::new(mock_ia),
             fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
         };
 
         avaliar_sentimento_best_effort(

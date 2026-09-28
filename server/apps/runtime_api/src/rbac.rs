@@ -159,6 +159,17 @@ pub const MAPA: &[(&str, &[&str])] = &[
         ],
     ),
     ("ListarExcluidos", SOMENTE_ADMIN),
+    // Plano ia-engine-jev — "Transferência para atendente". Quando o bot
+    // transfere é configuração do negócio: lê quem lê configuração, muda quem
+    // muda configuração. As últimas transferências são dado de atendimento.
+    ("ListRegrasTransferencia", &["configuracoes:read"]),
+    ("GetRegraTransferencia", &["configuracoes:read"]),
+    ("GetConfigTransferencia", &["configuracoes:read"]),
+    ("SalvarRegraTransferencia", &["configuracoes:write"]),
+    ("SetRegraTransferenciaAtiva", &["configuracoes:write"]),
+    ("SetSinaisTransferencia", &["configuracoes:write"]),
+    ("GerarSugestoesTransferencia", &["configuracoes:write"]),
+    ("ListTransferencias", &["atendimentos:read"]),
     // B10 (N11 E5) — cadastro de clientes é dado de negócio do tenant: lê quem
     // lê cliente, escreve quem escreve cliente.
     ("ListClientes", &["clientes:read"]),

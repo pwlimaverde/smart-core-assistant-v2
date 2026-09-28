@@ -40,6 +40,79 @@ message ChatHistory {
   repeated ChatTurn turnos = 1;
 }
 
+// --- Motor Jev (plano ia-engine-jev) --------------------------------------
+// Tudo aditivo: o `ia_engine` atual ignora os campos novos e não envia os de
+// resposta; o `ia_engine_jev` usa os dois lados. Sem `map` (o conversor
+// proto→flatbuffers não aceita).
+
+// Intenção do catálogo do tenant com o que o Jev precisa para escolher entre
+// opções parecidas: descrição e exemplo. `comportamento` é o texto que a LLM
+// recebe quando a intenção é a escolhida.
+message IntentDef {
+  string tag = 1;
+  string grupo = 2;
+  string descricao = 3;
+  string exemplo = 4;
+  string comportamento = 5;
+}
+
+// Tipo de entidade com a estratégia de busca de valor (regex | lista | varios
+// | data | livre) e as opções conhecidas, quando houver.
+message EntidadeDef {
+  string tipo = 1;
+  string descricao = 2;
+  string estrategia = 3;
+  repeated string opcoes = 4;
+}
+
+// Trecho da base de conhecimento, um por documento — antes chegavam colados
+// num texto só, o que impedia avaliar trecho a trecho.
+message Trecho {
+  string id = 1;
+  string conteudo = 2;
+  double distancia = 3;
+}
+
+// Um sinal que pesou na decisão: nome, valor medido e o limiar comparado.
+message SinalDaDecisao {
+  string nome = 1;
+  double valor = 2;
+  double limiar = 3;
+}
+
+// Como cada trecho foi julgado: aprovado como evidência, em conflito, ou
+// descartado (nenhum dos dois).
+message TrechoAvaliado {
+  string id = 1;
+  bool aprovado = 2;
+  bool conflito = 3;
+}
+
+// Custo e duração da decisão, para o registro das decisões da IA.
+message UsoDoMotor {
+  int64 tokens_entrada = 1;
+  int32 requisicoes = 2;
+  int64 duracao_ms = 3;
+}
+
+// --- TestarRegraTransferencia (só o motor Jev) ---
+// Uma frase contra uma regra de transferência, antes de ela valer. Nada é
+// gravado: nem a frase, nem o resultado.
+message TestarRegraTransferenciaRequest {
+  string tenant_id = 1;
+  string frase = 2;
+  string condicao = 3;
+  repeated string exemplos_sim = 4;
+  repeated string exemplos_nao = 5;
+  string sensibilidade = 6; // baixa | media | alta
+}
+message TestarRegraTransferenciaResponse {
+  double probabilidade = 1;
+  double limiar = 2;
+  bool dispararia = 3;
+  string modelo = 4;
+}
+
 // --- Transcribe (áudio -> texto) ---
 message TranscribeRequest {
   string tenant_id = 1;
@@ -72,6 +145,10 @@ message AnalyseRequest {
   string valid_intent_types = 4;
   repeated string valid_entity_types = 5;
   reserved 6; // era llm — vem do RuntimeConfig (Redis)
+  // Motor Jev: catálogo completo (descrição e exemplo) e tipos de entidade
+  // com estratégia. O motor atual continua usando os campos 4 e 5.
+  repeated IntentDef intents = 7;
+  repeated EntidadeDef entidades = 8;
 }
 message Intent {
   string tipo = 1;
@@ -85,6 +162,14 @@ message Entidade {
 message AnalyseResponse {
   repeated Intent intents = 1;
   repeated Entidade entidades = 2;
+  // Motor Jev: a intenção principal com a confiança do `Choice`, as
+  // etiquetas na faixa de dúvida e quem respondeu.
+  string intent_principal = 3;
+  double confianca_principal = 4;
+  repeated string intents_a_revisar = 5;
+  string motor = 6;
+  string modelo = 7;
+  UsoDoMotor uso = 8;
 }
 
 // --- ExtrairTextoDocumento (B9 / N10 E5) ---
@@ -140,6 +225,13 @@ message ResponderRequest {
   // 12 era similarity_threshold   | 11 era embeddings_provider
   // Todos vêm do RuntimeConfig (Redis).
   reserved 6, 10, 11, 12;
+  // Motor Jev: catálogo de intenções (o comportamento vem da intenção que o
+  // Jev escolher), trechos separados e o comportamento da intenção mais
+  // próxima por vetor, à parte. As regras de transferência NÃO viajam aqui:
+  // vêm do Redis com a config do tenant.
+  repeated IntentDef intents = 13;
+  repeated Trecho trechos = 14;
+  string comportamento = 15;
 }
 // C1 — o que a IA extraiu da mensagem do cliente.
 //
@@ -163,6 +255,20 @@ message ResponderResponse {
   // Aditivo: um `ia_engine` antigo simplesmente nao envia nada aqui, e o
   // servidor grava zero campos — que e o comportamento de hoje.
   repeated CampoExtraido campos_extraidos = 5;
+  // Motor Jev: por que transferiu (nome da regra ou do sinal), os sinais com
+  // valor e limiar, e como a resposta foi decidida.
+  string motivo_transferencia = 6;
+  repeated SinalDaDecisao sinais = 7;
+  string motor = 8;
+  string modelo = 9;
+  UsoDoMotor uso = 10;
+  repeated TrechoAvaliado trechos = 11;
+  string intencao_principal = 12;
+  double confianca_intencao = 13;
+  // automatica | transferida | sem_info | a_revisar | reserva
+  string decisao = 14;
+  int64 regra_id = 15;
+  bool regerada = 16;
 }
 
 // --- Sentimento (equivalente a analise_avaliacao) ---
@@ -185,4 +291,6 @@ service IaEngineService {
   rpc Responder(ResponderRequest) returns (ResponderResponse);
   rpc Sentimento(SentimentoRequest) returns (SentimentoResponse);
   rpc ExtrairTextoDocumento(ExtrairTextoDocumentoRequest) returns (ExtrairTextoDocumentoResponse);
+  // Só o motor Jev implementa; o atual responde UNIMPLEMENTED.
+  rpc TestarRegraTransferencia(TestarRegraTransferenciaRequest) returns (TestarRegraTransferenciaResponse);
 }

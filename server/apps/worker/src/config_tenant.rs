@@ -158,6 +158,44 @@ pub(crate) async fn analise_previa(
     Some((habilitada, tipos))
 }
 
+/// Plano ia-engine-jev — o motor das decisões da IA para o tenant: `llm`,
+/// `sombra` ou `jev`. Sem config legível, `llm` (o motor atual).
+pub(crate) async fn motor(conn: Option<&ConnectionManager>, tenant: Uuid) -> Motor {
+    match obter(conn, tenant).await {
+        Some(cfg) => Motor::de(cfg.get("motor_analise").and_then(|v| v.as_str())),
+        None => Motor::Llm,
+    }
+}
+
+/// Motor das decisões da IA de um tenant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Motor {
+    /// O `ia_engine` atual decide (LLM com structured output).
+    Llm,
+    /// Os dois motores rodam; vale o atual, e o Jev fica registrado ao lado.
+    Sombra,
+    /// O `ia_engine_jev` decide.
+    Jev,
+}
+
+impl Motor {
+    pub(crate) fn de(valor: Option<&str>) -> Self {
+        match valor.map(str::trim) {
+            Some("jev") => Motor::Jev,
+            Some("sombra") => Motor::Sombra,
+            _ => Motor::Llm,
+        }
+    }
+
+    pub(crate) fn nome(self) -> &'static str {
+        match self {
+            Motor::Llm => "llm",
+            Motor::Sombra => "sombra",
+            Motor::Jev => "jev",
+        }
+    }
+}
+
 /// Assina `tenant:config:invalidate` e descarta a cópia em RAM do tenant avisado.
 ///
 /// Roda em background e se reconecta sozinho: se a assinatura cair e ninguém

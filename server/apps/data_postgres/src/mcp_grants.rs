@@ -672,6 +672,26 @@ pub async fn handler_list_my_audit_log(
         .unwrap_or(0)
         .max(0);
 
+    // Plano ia-engine-jev: filtro por tipo de evento (só transferências, só
+    // mudanças de regra). Só letras, dígitos, ponto e sublinhado — o prefixo
+    // vai para a consulta, e nada ali pode alargar o filtro.
+    let evento_prefixo = payload
+        .get("evento_prefixo")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if evento_prefixo.len() > 80
+        || !evento_prefixo
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_')
+    {
+        return erro(
+            error_core::AppError::Validation("evento_prefixo inválido".to_string()),
+            &env,
+        );
+    }
+
     let filtro = if admin {
         FiltroAtividade {
             origem: origem.to_string(),
@@ -680,6 +700,7 @@ pub async fn handler_list_my_audit_log(
             desde,
             limit,
             offset,
+            evento_prefixo: evento_prefixo.clone(),
         }
     } else {
         FiltroAtividade {
@@ -689,6 +710,7 @@ pub async fn handler_list_my_audit_log(
             desde,
             limit,
             offset,
+            evento_prefixo: evento_prefixo.clone(),
         }
     };
 

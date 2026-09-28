@@ -78,6 +78,17 @@ pub struct RuntimeConfigDto {
     /// Prompts de sistema resolvidos pela mesma cascata (tenant > global).
     /// Chave ausente => o `ia_engine` usa o default versionado no código dele.
     pub prompts: HashMap<String, String>,
+    // --- Motor Jev (plano ia-engine-jev) ---
+    /// Chave da plataforma (CoreSetting `TYPESAFE_API_KEY`), decifrada.
+    pub typesafe_api_key: String,
+    pub jev_modelo: String,
+    /// Lido pelo **worker**, que escolhe o motor de cada mensagem.
+    pub motor_analise: String,
+    pub entity_descricoes: HashMap<String, String>,
+    pub jev_config: serde_json::Value,
+    pub transferencia_sinais: serde_json::Value,
+    pub transferencia_fluxo_padrao_id: Option<i32>,
+    pub regras_transferencia: Vec<serde_json::Value>,
 }
 
 impl From<&RuntimeConfig> for RuntimeConfigDto {
@@ -114,6 +125,14 @@ impl From<&RuntimeConfig> for RuntimeConfigDto {
             groq_api_key: cfg.groq_api_key.expose_secret().to_string(),
             google_api_key: cfg.google_api_key.expose_secret().to_string(),
             prompts: cfg.prompts.clone(),
+            typesafe_api_key: cfg.typesafe_api_key.expose_secret().to_string(),
+            jev_modelo: cfg.jev_modelo.clone(),
+            motor_analise: cfg.motor_analise.clone(),
+            entity_descricoes: cfg.entity_descricoes.clone(),
+            jev_config: cfg.jev_config.clone(),
+            transferencia_sinais: cfg.transferencia_sinais.clone(),
+            transferencia_fluxo_padrao_id: cfg.transferencia_fluxo_padrao_id,
+            regras_transferencia: cfg.regras_transferencia.clone(),
         }
     }
 }

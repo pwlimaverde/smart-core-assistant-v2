@@ -268,6 +268,9 @@ pub struct FiltroAtividade {
     pub desde: Option<chrono::DateTime<chrono::Utc>>,
     pub limit: i64,
     pub offset: i64,
+    /// Plano ia-engine-jev: só eventos que começam com isto (ex.:
+    /// `transferencia_regra.`, `atendimento.transferido`). `""` = todos.
+    pub evento_prefixo: String,
 }
 
 /// Prefixo que o `mcp_server` põe no `user-agent` de toda chamada de agente.
@@ -330,6 +333,7 @@ pub async fn buscar_atividade_do_tenant(
           AND ($3::int IS NULL OR a.user_id = $3)
           AND ($4::uuid IS NULL OR g.id = $4)
           AND ($5::timestamptz IS NULL OR a.timestamp >= $5)
+          AND ($8::text = '' OR left(a.event, length($8)) = $8)
         ORDER BY a.timestamp DESC
         LIMIT $6 OFFSET $7
         "#,
@@ -341,6 +345,7 @@ pub async fn buscar_atividade_do_tenant(
     .bind(filtro.desde)
     .bind(filtro.limit)
     .bind(filtro.offset)
+    .bind(&filtro.evento_prefixo)
     .fetch_all(&mut **tx)
     .await?;
 

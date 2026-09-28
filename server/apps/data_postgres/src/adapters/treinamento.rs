@@ -115,6 +115,7 @@ impl TreinamentoStore for PgTreinamentoStore {
                 .await?
                 .into_iter()
                 .map(|(doc, distancia)| DocumentoTrecho {
+                    id: doc.id,
                     conteudo: doc.conteudo,
                     distancia,
                 })

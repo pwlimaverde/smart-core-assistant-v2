@@ -72,6 +72,27 @@ pub struct RuntimeConfig {
     /// Chave ausente significa "use o default", que vive versionado no código do
     /// `ia_engine`: assim uma chave não semeada nunca deixa a IA sem prompt.
     pub prompts: std::collections::HashMap<String, String>,
+
+    // --- Motor Jev (plano ia-engine-jev) ---------------------------------
+    /// Chave da PLATAFORMA na TypeSafe (CoreSetting `TYPESAFE_API_KEY`, na
+    /// configuração geral). Sem override por tenant: uma conta para todos.
+    pub typesafe_api_key: SecretString,
+    /// Versão fixa do Jev (tenant > CoreSetting `JEV_MODELO`).
+    pub jev_modelo: String,
+    /// llm | sombra | jev (tenant > CoreSetting `MOTOR_ANALISE`). Lido pelo
+    /// worker, que escolhe o motor de cada mensagem.
+    pub motor_analise: String,
+    /// Tipo de entidade → descrição (`entity_types` do tenant). O motor Jev
+    /// usa a descrição na pergunta de presença; o atual só lia os nomes.
+    pub entity_descricoes: std::collections::HashMap<String, String>,
+    /// Pisos calibrados na avaliação e estratégia por tipo de entidade.
+    pub jev_config: serde_json::Value,
+    /// Sinais automáticos da transferência (liga/desliga e sensibilidade).
+    pub transferencia_sinais: serde_json::Value,
+    pub transferencia_fluxo_padrao_id: Option<i32>,
+    /// Regras ATIVAS do cadastro "Transferência para atendente", já no
+    /// formato que o `ia_engine_jev` lê.
+    pub regras_transferencia: Vec<serde_json::Value>,
 }
 
 /// Cache concorrente de RuntimeConfig por tenant (DashMap thread-safe).

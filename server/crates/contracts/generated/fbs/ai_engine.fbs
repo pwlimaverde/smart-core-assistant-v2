@@ -22,6 +22,61 @@ table ChatHistory {
   turnos:[smartcore.contracts.ai.ChatTurn];
 }
 
+table IntentDef {
+  tag:string;
+  grupo:string;
+  descricao:string;
+  exemplo:string;
+  comportamento:string;
+}
+
+table EntidadeDef {
+  tipo:string;
+  descricao:string;
+  estrategia:string;
+  opcoes:[string];
+}
+
+table Trecho {
+  id:string;
+  conteudo:string;
+  distancia:double;
+}
+
+table SinalDaDecisao {
+  nome:string;
+  valor:double;
+  limiar:double;
+}
+
+table TrechoAvaliado {
+  id:string;
+  aprovado:bool;
+  conflito:bool;
+}
+
+table UsoDoMotor {
+  tokens_entrada:long;
+  requisicoes:int;
+  duracao_ms:long;
+}
+
+table TestarRegraTransferenciaRequest {
+  tenant_id:string;
+  frase:string;
+  condicao:string;
+  exemplos_sim:[string];
+  exemplos_nao:[string];
+  sensibilidade:string;
+}
+
+table TestarRegraTransferenciaResponse {
+  probabilidade:double;
+  limiar:double;
+  dispararia:bool;
+  modelo:string;
+}
+
 table TranscribeRequest {
   tenant_id:string;
   media:smartcore.contracts.ai.MediaRef;
@@ -50,6 +105,8 @@ table AnalyseRequest {
   historico:smartcore.contracts.ai.ChatHistory;
   valid_intent_types:string;
   valid_entity_types:[string];
+  intents:[smartcore.contracts.ai.IntentDef];
+  entidades:[smartcore.contracts.ai.EntidadeDef];
 }
 
 table Intent {
@@ -66,6 +123,12 @@ table Entidade {
 table AnalyseResponse {
   intents:[smartcore.contracts.ai.Intent];
   entidades:[smartcore.contracts.ai.Entidade];
+  intent_principal:string;
+  confianca_principal:double;
+  intents_a_revisar:[string];
+  motor:string;
+  modelo:string;
+  uso:smartcore.contracts.ai.UsoDoMotor;
 }
 
 table ExtrairTextoDocumentoRequest {
@@ -114,6 +177,9 @@ table ResponderRequest {
   dados_treinamento:string;
   campos_coletados:[smartcore.contracts.ai.CampoColetado];
   campos_pendentes:[smartcore.contracts.ai.CampoPendente];
+  intents:[smartcore.contracts.ai.IntentDef];
+  trechos:[smartcore.contracts.ai.Trecho];
+  comportamento:string;
 }
 
 table CampoExtraido {
@@ -128,6 +194,17 @@ table ResponderResponse {
   fluxo_transferencia:string;
   confiabilidade:double;
   campos_extraidos:[smartcore.contracts.ai.CampoExtraido];
+  motivo_transferencia:string;
+  sinais:[smartcore.contracts.ai.SinalDaDecisao];
+  motor:string;
+  modelo:string;
+  uso:smartcore.contracts.ai.UsoDoMotor;
+  trechos:[smartcore.contracts.ai.TrechoAvaliado];
+  intencao_principal:string;
+  confianca_intencao:double;
+  decisao:string;
+  regra_id:long;
+  regerada:bool;
 }
 
 table SentimentoRequest {

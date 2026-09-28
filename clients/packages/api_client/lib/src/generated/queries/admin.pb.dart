@@ -12297,6 +12297,7 @@ class ListMyAuditLogRequest extends $pb.GeneratedMessage {
     $fixnum.Int64? desde,
     $core.int? limit,
     $core.int? offset,
+    $core.String? eventoPrefixo,
   }) {
     final result = create();
     if (origem != null) result.origem = origem;
@@ -12304,6 +12305,7 @@ class ListMyAuditLogRequest extends $pb.GeneratedMessage {
     if (desde != null) result.desde = desde;
     if (limit != null) result.limit = limit;
     if (offset != null) result.offset = offset;
+    if (eventoPrefixo != null) result.eventoPrefixo = eventoPrefixo;
     return result;
   }
 
@@ -12326,6 +12328,7 @@ class ListMyAuditLogRequest extends $pb.GeneratedMessage {
     ..aInt64(3, _omitFieldNames ? '' : 'desde')
     ..aI(4, _omitFieldNames ? '' : 'limit')
     ..aI(5, _omitFieldNames ? '' : 'offset')
+    ..aOS(6, _omitFieldNames ? '' : 'eventoPrefixo')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -12397,6 +12400,17 @@ class ListMyAuditLogRequest extends $pb.GeneratedMessage {
   $core.bool hasOffset() => $_has(4);
   @$pb.TagNumber(5)
   void clearOffset() => $_clearField(5);
+
+  /// Só eventos que começam com isto (ex.: "transferencia_regra.",
+  /// "atendimento.transferido"). Vazio = todos.
+  @$pb.TagNumber(6)
+  $core.String get eventoPrefixo => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set eventoPrefixo($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasEventoPrefixo() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearEventoPrefixo() => $_clearField(6);
 }
 
 /// Sem a mensagem do evento, de propósito: alguns eventos guardam nome ou
@@ -23777,6 +23791,14 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
     $core.double? confiabilidade,
     $core.bool? transferiria,
     $core.String? fluxoTransferencia,
+    $core.String? motor,
+    $core.String? modelo,
+    $core.String? motivoTransferencia,
+    $core.Iterable<SinalValor>? sinais,
+    $core.String? intencaoPrincipal,
+    $core.double? confiancaIntencao,
+    $core.String? decisao,
+    $core.Iterable<$core.String>? trechosAprovados,
   }) {
     final result = create();
     if (resposta != null) result.resposta = resposta;
@@ -23787,6 +23809,16 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
     if (transferiria != null) result.transferiria = transferiria;
     if (fluxoTransferencia != null)
       result.fluxoTransferencia = fluxoTransferencia;
+    if (motor != null) result.motor = motor;
+    if (modelo != null) result.modelo = modelo;
+    if (motivoTransferencia != null)
+      result.motivoTransferencia = motivoTransferencia;
+    if (sinais != null) result.sinais.addAll(sinais);
+    if (intencaoPrincipal != null) result.intencaoPrincipal = intencaoPrincipal;
+    if (confiancaIntencao != null) result.confiancaIntencao = confiancaIntencao;
+    if (decisao != null) result.decisao = decisao;
+    if (trechosAprovados != null)
+      result.trechosAprovados.addAll(trechosAprovados);
     return result;
   }
 
@@ -23811,6 +23843,15 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
     ..aD(4, _omitFieldNames ? '' : 'confiabilidade')
     ..aOB(5, _omitFieldNames ? '' : 'transferiria')
     ..aOS(6, _omitFieldNames ? '' : 'fluxoTransferencia')
+    ..aOS(7, _omitFieldNames ? '' : 'motor')
+    ..aOS(8, _omitFieldNames ? '' : 'modelo')
+    ..aOS(9, _omitFieldNames ? '' : 'motivoTransferencia')
+    ..pPM<SinalValor>(10, _omitFieldNames ? '' : 'sinais',
+        subBuilder: SinalValor.create)
+    ..aOS(11, _omitFieldNames ? '' : 'intencaoPrincipal')
+    ..aD(12, _omitFieldNames ? '' : 'confiancaIntencao')
+    ..aOS(13, _omitFieldNames ? '' : 'decisao')
+    ..pPS(14, _omitFieldNames ? '' : 'trechosAprovados')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -23882,6 +23923,1891 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
   $core.bool hasFluxoTransferencia() => $_has(5);
   @$pb.TagNumber(6)
   void clearFluxoTransferencia() => $_clearField(6);
+
+  /// Plano ia-engine-jev — por que decidiu assim. Vazios no motor atual.
+  @$pb.TagNumber(7)
+  $core.String get motor => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set motor($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasMotor() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearMotor() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get modelo => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set modelo($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasModelo() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearModelo() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.String get motivoTransferencia => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set motivoTransferencia($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasMotivoTransferencia() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearMotivoTransferencia() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $pb.PbList<SinalValor> get sinais => $_getList(9);
+
+  @$pb.TagNumber(11)
+  $core.String get intencaoPrincipal => $_getSZ(10);
+  @$pb.TagNumber(11)
+  set intencaoPrincipal($core.String value) => $_setString(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasIntencaoPrincipal() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearIntencaoPrincipal() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.double get confiancaIntencao => $_getN(11);
+  @$pb.TagNumber(12)
+  set confiancaIntencao($core.double value) => $_setDouble(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasConfiancaIntencao() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearConfiancaIntencao() => $_clearField(12);
+
+  /// automatica | transferida | sem_info | a_revisar | reserva
+  @$pb.TagNumber(13)
+  $core.String get decisao => $_getSZ(12);
+  @$pb.TagNumber(13)
+  set decisao($core.String value) => $_setString(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasDecisao() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearDecisao() => $_clearField(13);
+
+  /// Ids dos trechos aprovados como evidência (os demais foram descartados).
+  @$pb.TagNumber(14)
+  $pb.PbList<$core.String> get trechosAprovados => $_getList(13);
+}
+
+/// Uma regra do cadastro. `gatilho_tipo`: condicao (frase exata, lida ao pé da
+/// letra) ou intencao (a intenção escolhida pelo Jev). `momento`: imediato ou
+/// apos_coleta (só depois de preenchidos `campos_coleta`). `destino_tipo`:
+/// fluxo (destino_fluxo_id), setor_jev (o setor que o Jev escolher) ou padrao.
+class RegraTransferencia extends $pb.GeneratedMessage {
+  factory RegraTransferencia({
+    $fixnum.Int64? id,
+    $core.String? nome,
+    $core.String? gatilhoTipo,
+    $core.String? condicao,
+    $core.String? intencaoTag,
+    $core.Iterable<$core.String>? exemplosSim,
+    $core.Iterable<$core.String>? exemplosNao,
+    $core.String? momento,
+    $core.Iterable<$core.String>? camposColeta,
+    $core.String? destinoTipo,
+    $core.int? destinoFluxoId,
+    $core.String? mensagem,
+    $core.String? sensibilidade,
+    $core.bool? ativa,
+    $core.bool? sugestao,
+    $fixnum.Int64? criadoEm,
+    $fixnum.Int64? atualizadoEm,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nome != null) result.nome = nome;
+    if (gatilhoTipo != null) result.gatilhoTipo = gatilhoTipo;
+    if (condicao != null) result.condicao = condicao;
+    if (intencaoTag != null) result.intencaoTag = intencaoTag;
+    if (exemplosSim != null) result.exemplosSim.addAll(exemplosSim);
+    if (exemplosNao != null) result.exemplosNao.addAll(exemplosNao);
+    if (momento != null) result.momento = momento;
+    if (camposColeta != null) result.camposColeta.addAll(camposColeta);
+    if (destinoTipo != null) result.destinoTipo = destinoTipo;
+    if (destinoFluxoId != null) result.destinoFluxoId = destinoFluxoId;
+    if (mensagem != null) result.mensagem = mensagem;
+    if (sensibilidade != null) result.sensibilidade = sensibilidade;
+    if (ativa != null) result.ativa = ativa;
+    if (sugestao != null) result.sugestao = sugestao;
+    if (criadoEm != null) result.criadoEm = criadoEm;
+    if (atualizadoEm != null) result.atualizadoEm = atualizadoEm;
+    return result;
+  }
+
+  RegraTransferencia._();
+
+  factory RegraTransferencia.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RegraTransferencia.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RegraTransferencia',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'gatilhoTipo')
+    ..aOS(4, _omitFieldNames ? '' : 'condicao')
+    ..aOS(5, _omitFieldNames ? '' : 'intencaoTag')
+    ..pPS(6, _omitFieldNames ? '' : 'exemplosSim')
+    ..pPS(7, _omitFieldNames ? '' : 'exemplosNao')
+    ..aOS(8, _omitFieldNames ? '' : 'momento')
+    ..pPS(9, _omitFieldNames ? '' : 'camposColeta')
+    ..aOS(10, _omitFieldNames ? '' : 'destinoTipo')
+    ..aI(11, _omitFieldNames ? '' : 'destinoFluxoId')
+    ..aOS(12, _omitFieldNames ? '' : 'mensagem')
+    ..aOS(13, _omitFieldNames ? '' : 'sensibilidade')
+    ..aOB(14, _omitFieldNames ? '' : 'ativa')
+    ..aOB(15, _omitFieldNames ? '' : 'sugestao')
+    ..aInt64(16, _omitFieldNames ? '' : 'criadoEm')
+    ..aInt64(17, _omitFieldNames ? '' : 'atualizadoEm')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RegraTransferencia clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RegraTransferencia copyWith(void Function(RegraTransferencia) updates) =>
+      super.copyWith((message) => updates(message as RegraTransferencia))
+          as RegraTransferencia;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RegraTransferencia create() => RegraTransferencia._();
+  @$core.override
+  RegraTransferencia createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RegraTransferencia getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RegraTransferencia>(create);
+  static RegraTransferencia? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get id => $_getI64(0);
+  @$pb.TagNumber(1)
+  set id($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get gatilhoTipo => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set gatilhoTipo($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasGatilhoTipo() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearGatilhoTipo() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get condicao => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set condicao($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasCondicao() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearCondicao() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get intencaoTag => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set intencaoTag($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasIntencaoTag() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearIntencaoTag() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $pb.PbList<$core.String> get exemplosSim => $_getList(5);
+
+  @$pb.TagNumber(7)
+  $pb.PbList<$core.String> get exemplosNao => $_getList(6);
+
+  @$pb.TagNumber(8)
+  $core.String get momento => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set momento($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasMomento() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearMomento() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $pb.PbList<$core.String> get camposColeta => $_getList(8);
+
+  @$pb.TagNumber(10)
+  $core.String get destinoTipo => $_getSZ(9);
+  @$pb.TagNumber(10)
+  set destinoTipo($core.String value) => $_setString(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasDestinoTipo() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearDestinoTipo() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $core.int get destinoFluxoId => $_getIZ(10);
+  @$pb.TagNumber(11)
+  set destinoFluxoId($core.int value) => $_setSignedInt32(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasDestinoFluxoId() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearDestinoFluxoId() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.String get mensagem => $_getSZ(11);
+  @$pb.TagNumber(12)
+  set mensagem($core.String value) => $_setString(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasMensagem() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearMensagem() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $core.String get sensibilidade => $_getSZ(12);
+  @$pb.TagNumber(13)
+  set sensibilidade($core.String value) => $_setString(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasSensibilidade() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearSensibilidade() => $_clearField(13);
+
+  @$pb.TagNumber(14)
+  $core.bool get ativa => $_getBF(13);
+  @$pb.TagNumber(14)
+  set ativa($core.bool value) => $_setBool(13, value);
+  @$pb.TagNumber(14)
+  $core.bool hasAtiva() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearAtiva() => $_clearField(14);
+
+  @$pb.TagNumber(15)
+  $core.bool get sugestao => $_getBF(14);
+  @$pb.TagNumber(15)
+  set sugestao($core.bool value) => $_setBool(14, value);
+  @$pb.TagNumber(15)
+  $core.bool hasSugestao() => $_has(14);
+  @$pb.TagNumber(15)
+  void clearSugestao() => $_clearField(15);
+
+  @$pb.TagNumber(16)
+  $fixnum.Int64 get criadoEm => $_getI64(15);
+  @$pb.TagNumber(16)
+  set criadoEm($fixnum.Int64 value) => $_setInt64(15, value);
+  @$pb.TagNumber(16)
+  $core.bool hasCriadoEm() => $_has(15);
+  @$pb.TagNumber(16)
+  void clearCriadoEm() => $_clearField(16);
+
+  @$pb.TagNumber(17)
+  $fixnum.Int64 get atualizadoEm => $_getI64(16);
+  @$pb.TagNumber(17)
+  set atualizadoEm($fixnum.Int64 value) => $_setInt64(16, value);
+  @$pb.TagNumber(17)
+  $core.bool hasAtualizadoEm() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearAtualizadoEm() => $_clearField(17);
+}
+
+class ListMyRegrasTransferenciaRequest extends $pb.GeneratedMessage {
+  factory ListMyRegrasTransferenciaRequest() => create();
+
+  ListMyRegrasTransferenciaRequest._();
+
+  factory ListMyRegrasTransferenciaRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyRegrasTransferenciaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyRegrasTransferenciaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyRegrasTransferenciaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyRegrasTransferenciaRequest copyWith(
+          void Function(ListMyRegrasTransferenciaRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyRegrasTransferenciaRequest))
+          as ListMyRegrasTransferenciaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyRegrasTransferenciaRequest create() =>
+      ListMyRegrasTransferenciaRequest._();
+  @$core.override
+  ListMyRegrasTransferenciaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyRegrasTransferenciaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyRegrasTransferenciaRequest>(
+          create);
+  static ListMyRegrasTransferenciaRequest? _defaultInstance;
+}
+
+class ListMyRegrasTransferenciaResponse extends $pb.GeneratedMessage {
+  factory ListMyRegrasTransferenciaResponse({
+    $core.Iterable<RegraTransferencia>? regras,
+  }) {
+    final result = create();
+    if (regras != null) result.regras.addAll(regras);
+    return result;
+  }
+
+  ListMyRegrasTransferenciaResponse._();
+
+  factory ListMyRegrasTransferenciaResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyRegrasTransferenciaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyRegrasTransferenciaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<RegraTransferencia>(1, _omitFieldNames ? '' : 'regras',
+        subBuilder: RegraTransferencia.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyRegrasTransferenciaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyRegrasTransferenciaResponse copyWith(
+          void Function(ListMyRegrasTransferenciaResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as ListMyRegrasTransferenciaResponse))
+          as ListMyRegrasTransferenciaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyRegrasTransferenciaResponse create() =>
+      ListMyRegrasTransferenciaResponse._();
+  @$core.override
+  ListMyRegrasTransferenciaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyRegrasTransferenciaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyRegrasTransferenciaResponse>(
+          create);
+  static ListMyRegrasTransferenciaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<RegraTransferencia> get regras => $_getList(0);
+}
+
+/// id = 0 cria; senão atualiza a regra inteira com o que vier.
+class SalvarMyRegraTransferenciaRequest extends $pb.GeneratedMessage {
+  factory SalvarMyRegraTransferenciaRequest({
+    $fixnum.Int64? id,
+    RegraTransferencia? regra,
+    $core.bool? dryRun,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (regra != null) result.regra = regra;
+    if (dryRun != null) result.dryRun = dryRun;
+    return result;
+  }
+
+  SalvarMyRegraTransferenciaRequest._();
+
+  factory SalvarMyRegraTransferenciaRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SalvarMyRegraTransferenciaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SalvarMyRegraTransferenciaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'id')
+    ..aOM<RegraTransferencia>(2, _omitFieldNames ? '' : 'regra',
+        subBuilder: RegraTransferencia.create)
+    ..aOB(3, _omitFieldNames ? '' : 'dryRun')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SalvarMyRegraTransferenciaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SalvarMyRegraTransferenciaRequest copyWith(
+          void Function(SalvarMyRegraTransferenciaRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as SalvarMyRegraTransferenciaRequest))
+          as SalvarMyRegraTransferenciaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SalvarMyRegraTransferenciaRequest create() =>
+      SalvarMyRegraTransferenciaRequest._();
+  @$core.override
+  SalvarMyRegraTransferenciaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SalvarMyRegraTransferenciaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SalvarMyRegraTransferenciaRequest>(
+          create);
+  static SalvarMyRegraTransferenciaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get id => $_getI64(0);
+  @$pb.TagNumber(1)
+  set id($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  RegraTransferencia get regra => $_getN(1);
+  @$pb.TagNumber(2)
+  set regra(RegraTransferencia value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasRegra() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearRegra() => $_clearField(2);
+  @$pb.TagNumber(2)
+  RegraTransferencia ensureRegra() => $_ensure(1);
+
+  @$pb.TagNumber(3)
+  $core.bool get dryRun => $_getBF(2);
+  @$pb.TagNumber(3)
+  set dryRun($core.bool value) => $_setBool(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDryRun() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDryRun() => $_clearField(3);
+}
+
+class SalvarMyRegraTransferenciaResponse extends $pb.GeneratedMessage {
+  factory SalvarMyRegraTransferenciaResponse({
+    RegraTransferencia? regra,
+    $core.bool? simulacao,
+    $core.Iterable<$core.String>? camposAlterados,
+  }) {
+    final result = create();
+    if (regra != null) result.regra = regra;
+    if (simulacao != null) result.simulacao = simulacao;
+    if (camposAlterados != null) result.camposAlterados.addAll(camposAlterados);
+    return result;
+  }
+
+  SalvarMyRegraTransferenciaResponse._();
+
+  factory SalvarMyRegraTransferenciaResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SalvarMyRegraTransferenciaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SalvarMyRegraTransferenciaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<RegraTransferencia>(1, _omitFieldNames ? '' : 'regra',
+        subBuilder: RegraTransferencia.create)
+    ..aOB(2, _omitFieldNames ? '' : 'simulacao')
+    ..pPS(3, _omitFieldNames ? '' : 'camposAlterados')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SalvarMyRegraTransferenciaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SalvarMyRegraTransferenciaResponse copyWith(
+          void Function(SalvarMyRegraTransferenciaResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as SalvarMyRegraTransferenciaResponse))
+          as SalvarMyRegraTransferenciaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SalvarMyRegraTransferenciaResponse create() =>
+      SalvarMyRegraTransferenciaResponse._();
+  @$core.override
+  SalvarMyRegraTransferenciaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SalvarMyRegraTransferenciaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SalvarMyRegraTransferenciaResponse>(
+          create);
+  static SalvarMyRegraTransferenciaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  RegraTransferencia get regra => $_getN(0);
+  @$pb.TagNumber(1)
+  set regra(RegraTransferencia value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasRegra() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearRegra() => $_clearField(1);
+  @$pb.TagNumber(1)
+  RegraTransferencia ensureRegra() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $core.bool get simulacao => $_getBF(1);
+  @$pb.TagNumber(2)
+  set simulacao($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSimulacao() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSimulacao() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $pb.PbList<$core.String> get camposAlterados => $_getList(2);
+}
+
+/// Desativar exige `confirmar` = nome da regra (vazio só para ativar).
+class SetMyRegraTransferenciaAtivaRequest extends $pb.GeneratedMessage {
+  factory SetMyRegraTransferenciaAtivaRequest({
+    $fixnum.Int64? id,
+    $core.bool? ativa,
+    $core.String? confirmar,
+    $core.bool? dryRun,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (ativa != null) result.ativa = ativa;
+    if (confirmar != null) result.confirmar = confirmar;
+    if (dryRun != null) result.dryRun = dryRun;
+    return result;
+  }
+
+  SetMyRegraTransferenciaAtivaRequest._();
+
+  factory SetMyRegraTransferenciaAtivaRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetMyRegraTransferenciaAtivaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetMyRegraTransferenciaAtivaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'id')
+    ..aOB(2, _omitFieldNames ? '' : 'ativa')
+    ..aOS(3, _omitFieldNames ? '' : 'confirmar')
+    ..aOB(4, _omitFieldNames ? '' : 'dryRun')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyRegraTransferenciaAtivaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyRegraTransferenciaAtivaRequest copyWith(
+          void Function(SetMyRegraTransferenciaAtivaRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as SetMyRegraTransferenciaAtivaRequest))
+          as SetMyRegraTransferenciaAtivaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetMyRegraTransferenciaAtivaRequest create() =>
+      SetMyRegraTransferenciaAtivaRequest._();
+  @$core.override
+  SetMyRegraTransferenciaAtivaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetMyRegraTransferenciaAtivaRequest getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          SetMyRegraTransferenciaAtivaRequest>(create);
+  static SetMyRegraTransferenciaAtivaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get id => $_getI64(0);
+  @$pb.TagNumber(1)
+  set id($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.bool get ativa => $_getBF(1);
+  @$pb.TagNumber(2)
+  set ativa($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAtiva() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAtiva() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get confirmar => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set confirmar($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasConfirmar() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearConfirmar() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get dryRun => $_getBF(3);
+  @$pb.TagNumber(4)
+  set dryRun($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDryRun() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDryRun() => $_clearField(4);
+}
+
+class SetMyRegraTransferenciaAtivaResponse extends $pb.GeneratedMessage {
+  factory SetMyRegraTransferenciaAtivaResponse({
+    RegraTransferencia? regra,
+    $core.bool? simulacao,
+  }) {
+    final result = create();
+    if (regra != null) result.regra = regra;
+    if (simulacao != null) result.simulacao = simulacao;
+    return result;
+  }
+
+  SetMyRegraTransferenciaAtivaResponse._();
+
+  factory SetMyRegraTransferenciaAtivaResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetMyRegraTransferenciaAtivaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetMyRegraTransferenciaAtivaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<RegraTransferencia>(1, _omitFieldNames ? '' : 'regra',
+        subBuilder: RegraTransferencia.create)
+    ..aOB(2, _omitFieldNames ? '' : 'simulacao')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyRegraTransferenciaAtivaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyRegraTransferenciaAtivaResponse copyWith(
+          void Function(SetMyRegraTransferenciaAtivaResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as SetMyRegraTransferenciaAtivaResponse))
+          as SetMyRegraTransferenciaAtivaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetMyRegraTransferenciaAtivaResponse create() =>
+      SetMyRegraTransferenciaAtivaResponse._();
+  @$core.override
+  SetMyRegraTransferenciaAtivaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetMyRegraTransferenciaAtivaResponse getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          SetMyRegraTransferenciaAtivaResponse>(create);
+  static SetMyRegraTransferenciaAtivaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  RegraTransferencia get regra => $_getN(0);
+  @$pb.TagNumber(1)
+  set regra(RegraTransferencia value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasRegra() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearRegra() => $_clearField(1);
+  @$pb.TagNumber(1)
+  RegraTransferencia ensureRegra() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $core.bool get simulacao => $_getBF(1);
+  @$pb.TagNumber(2)
+  set simulacao($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSimulacao() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSimulacao() => $_clearField(2);
+}
+
+/// Sinais automáticos: pede_humano, irritacao, duvida_transfere,
+/// base_sem_resposta, resposta_sem_apoio.
+class SinalTransferencia extends $pb.GeneratedMessage {
+  factory SinalTransferencia({
+    $core.String? nome,
+    $core.bool? ativo,
+    $core.String? sensibilidade,
+  }) {
+    final result = create();
+    if (nome != null) result.nome = nome;
+    if (ativo != null) result.ativo = ativo;
+    if (sensibilidade != null) result.sensibilidade = sensibilidade;
+    return result;
+  }
+
+  SinalTransferencia._();
+
+  factory SinalTransferencia.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SinalTransferencia.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SinalTransferencia',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'nome')
+    ..aOB(2, _omitFieldNames ? '' : 'ativo')
+    ..aOS(3, _omitFieldNames ? '' : 'sensibilidade')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SinalTransferencia clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SinalTransferencia copyWith(void Function(SinalTransferencia) updates) =>
+      super.copyWith((message) => updates(message as SinalTransferencia))
+          as SinalTransferencia;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SinalTransferencia create() => SinalTransferencia._();
+  @$core.override
+  SinalTransferencia createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SinalTransferencia getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SinalTransferencia>(create);
+  static SinalTransferencia? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get nome => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set nome($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNome() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNome() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.bool get ativo => $_getBF(1);
+  @$pb.TagNumber(2)
+  set ativo($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAtivo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAtivo() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get sensibilidade => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set sensibilidade($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasSensibilidade() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearSensibilidade() => $_clearField(3);
+}
+
+class ConfigTransferencia extends $pb.GeneratedMessage {
+  factory ConfigTransferencia({
+    $core.Iterable<SinalTransferencia>? sinais,
+    $core.int? fluxoPadraoId,
+    $core.String? msgTransferencia,
+    $core.String? motorAnalise,
+  }) {
+    final result = create();
+    if (sinais != null) result.sinais.addAll(sinais);
+    if (fluxoPadraoId != null) result.fluxoPadraoId = fluxoPadraoId;
+    if (msgTransferencia != null) result.msgTransferencia = msgTransferencia;
+    if (motorAnalise != null) result.motorAnalise = motorAnalise;
+    return result;
+  }
+
+  ConfigTransferencia._();
+
+  factory ConfigTransferencia.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ConfigTransferencia.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ConfigTransferencia',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<SinalTransferencia>(1, _omitFieldNames ? '' : 'sinais',
+        subBuilder: SinalTransferencia.create)
+    ..aI(2, _omitFieldNames ? '' : 'fluxoPadraoId')
+    ..aOS(3, _omitFieldNames ? '' : 'msgTransferencia')
+    ..aOS(4, _omitFieldNames ? '' : 'motorAnalise')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ConfigTransferencia clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ConfigTransferencia copyWith(void Function(ConfigTransferencia) updates) =>
+      super.copyWith((message) => updates(message as ConfigTransferencia))
+          as ConfigTransferencia;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ConfigTransferencia create() => ConfigTransferencia._();
+  @$core.override
+  ConfigTransferencia createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ConfigTransferencia getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ConfigTransferencia>(create);
+  static ConfigTransferencia? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<SinalTransferencia> get sinais => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $core.int get fluxoPadraoId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set fluxoPadraoId($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasFluxoPadraoId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearFluxoPadraoId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get msgTransferencia => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set msgTransferencia($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasMsgTransferencia() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearMsgTransferencia() => $_clearField(3);
+
+  /// llm | sombra | jev — o efetivo, já com o global aplicado. Só leitura aqui.
+  @$pb.TagNumber(4)
+  $core.String get motorAnalise => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set motorAnalise($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasMotorAnalise() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearMotorAnalise() => $_clearField(4);
+}
+
+class GetMyConfigTransferenciaRequest extends $pb.GeneratedMessage {
+  factory GetMyConfigTransferenciaRequest() => create();
+
+  GetMyConfigTransferenciaRequest._();
+
+  factory GetMyConfigTransferenciaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetMyConfigTransferenciaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetMyConfigTransferenciaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyConfigTransferenciaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyConfigTransferenciaRequest copyWith(
+          void Function(GetMyConfigTransferenciaRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as GetMyConfigTransferenciaRequest))
+          as GetMyConfigTransferenciaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetMyConfigTransferenciaRequest create() =>
+      GetMyConfigTransferenciaRequest._();
+  @$core.override
+  GetMyConfigTransferenciaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetMyConfigTransferenciaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetMyConfigTransferenciaRequest>(
+          create);
+  static GetMyConfigTransferenciaRequest? _defaultInstance;
+}
+
+class SetMySinaisTransferenciaRequest extends $pb.GeneratedMessage {
+  factory SetMySinaisTransferenciaRequest({
+    $core.Iterable<SinalTransferencia>? sinais,
+    $core.bool? alterarFluxoPadrao,
+    $core.int? fluxoPadraoId,
+    $core.bool? dryRun,
+  }) {
+    final result = create();
+    if (sinais != null) result.sinais.addAll(sinais);
+    if (alterarFluxoPadrao != null)
+      result.alterarFluxoPadrao = alterarFluxoPadrao;
+    if (fluxoPadraoId != null) result.fluxoPadraoId = fluxoPadraoId;
+    if (dryRun != null) result.dryRun = dryRun;
+    return result;
+  }
+
+  SetMySinaisTransferenciaRequest._();
+
+  factory SetMySinaisTransferenciaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetMySinaisTransferenciaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetMySinaisTransferenciaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<SinalTransferencia>(1, _omitFieldNames ? '' : 'sinais',
+        subBuilder: SinalTransferencia.create)
+    ..aOB(2, _omitFieldNames ? '' : 'alterarFluxoPadrao')
+    ..aI(3, _omitFieldNames ? '' : 'fluxoPadraoId')
+    ..aOB(4, _omitFieldNames ? '' : 'dryRun')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMySinaisTransferenciaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMySinaisTransferenciaRequest copyWith(
+          void Function(SetMySinaisTransferenciaRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as SetMySinaisTransferenciaRequest))
+          as SetMySinaisTransferenciaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetMySinaisTransferenciaRequest create() =>
+      SetMySinaisTransferenciaRequest._();
+  @$core.override
+  SetMySinaisTransferenciaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetMySinaisTransferenciaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SetMySinaisTransferenciaRequest>(
+          create);
+  static SetMySinaisTransferenciaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<SinalTransferencia> get sinais => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $core.bool get alterarFluxoPadrao => $_getBF(1);
+  @$pb.TagNumber(2)
+  set alterarFluxoPadrao($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAlterarFluxoPadrao() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAlterarFluxoPadrao() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get fluxoPadraoId => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set fluxoPadraoId($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasFluxoPadraoId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearFluxoPadraoId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get dryRun => $_getBF(3);
+  @$pb.TagNumber(4)
+  set dryRun($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDryRun() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDryRun() => $_clearField(4);
+}
+
+class ConfigTransferenciaResponse extends $pb.GeneratedMessage {
+  factory ConfigTransferenciaResponse({
+    ConfigTransferencia? config,
+    $core.bool? simulacao,
+  }) {
+    final result = create();
+    if (config != null) result.config = config;
+    if (simulacao != null) result.simulacao = simulacao;
+    return result;
+  }
+
+  ConfigTransferenciaResponse._();
+
+  factory ConfigTransferenciaResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ConfigTransferenciaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ConfigTransferenciaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<ConfigTransferencia>(1, _omitFieldNames ? '' : 'config',
+        subBuilder: ConfigTransferencia.create)
+    ..aOB(2, _omitFieldNames ? '' : 'simulacao')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ConfigTransferenciaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ConfigTransferenciaResponse copyWith(
+          void Function(ConfigTransferenciaResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ConfigTransferenciaResponse))
+          as ConfigTransferenciaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ConfigTransferenciaResponse create() =>
+      ConfigTransferenciaResponse._();
+  @$core.override
+  ConfigTransferenciaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ConfigTransferenciaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ConfigTransferenciaResponse>(create);
+  static ConfigTransferenciaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  ConfigTransferencia get config => $_getN(0);
+  @$pb.TagNumber(1)
+  set config(ConfigTransferencia value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasConfig() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearConfig() => $_clearField(1);
+  @$pb.TagNumber(1)
+  ConfigTransferencia ensureConfig() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $core.bool get simulacao => $_getBF(1);
+  @$pb.TagNumber(2)
+  set simulacao($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSimulacao() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSimulacao() => $_clearField(2);
+}
+
+class SinalValor extends $pb.GeneratedMessage {
+  factory SinalValor({
+    $core.String? nome,
+    $core.double? valor,
+    $core.double? limiar,
+  }) {
+    final result = create();
+    if (nome != null) result.nome = nome;
+    if (valor != null) result.valor = valor;
+    if (limiar != null) result.limiar = limiar;
+    return result;
+  }
+
+  SinalValor._();
+
+  factory SinalValor.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SinalValor.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SinalValor',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'nome')
+    ..aD(2, _omitFieldNames ? '' : 'valor')
+    ..aD(3, _omitFieldNames ? '' : 'limiar')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SinalValor clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SinalValor copyWith(void Function(SinalValor) updates) =>
+      super.copyWith((message) => updates(message as SinalValor)) as SinalValor;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SinalValor create() => SinalValor._();
+  @$core.override
+  SinalValor createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SinalValor getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SinalValor>(create);
+  static SinalValor? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get nome => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set nome($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNome() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNome() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.double get valor => $_getN(1);
+  @$pb.TagNumber(2)
+  set valor($core.double value) => $_setDouble(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasValor() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearValor() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.double get limiar => $_getN(2);
+  @$pb.TagNumber(3)
+  set limiar($core.double value) => $_setDouble(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasLimiar() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearLimiar() => $_clearField(3);
+}
+
+/// Uma transferência decidida pela IA — sem texto da conversa.
+class TransferenciaIa extends $pb.GeneratedMessage {
+  factory TransferenciaIa({
+    $fixnum.Int64? id,
+    $core.int? atendimentoId,
+    $core.String? motor,
+    $core.String? modelo,
+    $core.String? motivo,
+    $fixnum.Int64? regraId,
+    $core.int? fluxoId,
+    $core.String? fluxoNome,
+    $core.Iterable<SinalValor>? sinais,
+    $fixnum.Int64? criadoEm,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (motor != null) result.motor = motor;
+    if (modelo != null) result.modelo = modelo;
+    if (motivo != null) result.motivo = motivo;
+    if (regraId != null) result.regraId = regraId;
+    if (fluxoId != null) result.fluxoId = fluxoId;
+    if (fluxoNome != null) result.fluxoNome = fluxoNome;
+    if (sinais != null) result.sinais.addAll(sinais);
+    if (criadoEm != null) result.criadoEm = criadoEm;
+    return result;
+  }
+
+  TransferenciaIa._();
+
+  factory TransferenciaIa.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TransferenciaIa.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TransferenciaIa',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'id')
+    ..aI(2, _omitFieldNames ? '' : 'atendimentoId')
+    ..aOS(3, _omitFieldNames ? '' : 'motor')
+    ..aOS(4, _omitFieldNames ? '' : 'modelo')
+    ..aOS(5, _omitFieldNames ? '' : 'motivo')
+    ..aInt64(6, _omitFieldNames ? '' : 'regraId')
+    ..aI(7, _omitFieldNames ? '' : 'fluxoId')
+    ..aOS(8, _omitFieldNames ? '' : 'fluxoNome')
+    ..pPM<SinalValor>(9, _omitFieldNames ? '' : 'sinais',
+        subBuilder: SinalValor.create)
+    ..aInt64(10, _omitFieldNames ? '' : 'criadoEm')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TransferenciaIa clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TransferenciaIa copyWith(void Function(TransferenciaIa) updates) =>
+      super.copyWith((message) => updates(message as TransferenciaIa))
+          as TransferenciaIa;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TransferenciaIa create() => TransferenciaIa._();
+  @$core.override
+  TransferenciaIa createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TransferenciaIa getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TransferenciaIa>(create);
+  static TransferenciaIa? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get id => $_getI64(0);
+  @$pb.TagNumber(1)
+  set id($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get atendimentoId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set atendimentoId($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAtendimentoId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAtendimentoId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get motor => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set motor($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasMotor() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearMotor() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get modelo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set modelo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasModelo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearModelo() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get motivo => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set motivo($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasMotivo() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearMotivo() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $fixnum.Int64 get regraId => $_getI64(5);
+  @$pb.TagNumber(6)
+  set regraId($fixnum.Int64 value) => $_setInt64(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasRegraId() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearRegraId() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.int get fluxoId => $_getIZ(6);
+  @$pb.TagNumber(7)
+  set fluxoId($core.int value) => $_setSignedInt32(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasFluxoId() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearFluxoId() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get fluxoNome => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set fluxoNome($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasFluxoNome() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearFluxoNome() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $pb.PbList<SinalValor> get sinais => $_getList(8);
+
+  @$pb.TagNumber(10)
+  $fixnum.Int64 get criadoEm => $_getI64(9);
+  @$pb.TagNumber(10)
+  set criadoEm($fixnum.Int64 value) => $_setInt64(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasCriadoEm() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearCriadoEm() => $_clearField(10);
+}
+
+class ListMyTransferenciasRequest extends $pb.GeneratedMessage {
+  factory ListMyTransferenciasRequest({
+    $core.int? limite,
+  }) {
+    final result = create();
+    if (limite != null) result.limite = limite;
+    return result;
+  }
+
+  ListMyTransferenciasRequest._();
+
+  factory ListMyTransferenciasRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyTransferenciasRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyTransferenciasRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'limite')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyTransferenciasRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyTransferenciasRequest copyWith(
+          void Function(ListMyTransferenciasRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyTransferenciasRequest))
+          as ListMyTransferenciasRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyTransferenciasRequest create() =>
+      ListMyTransferenciasRequest._();
+  @$core.override
+  ListMyTransferenciasRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyTransferenciasRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyTransferenciasRequest>(create);
+  static ListMyTransferenciasRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get limite => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set limite($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasLimite() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearLimite() => $_clearField(1);
+}
+
+class ListMyTransferenciasResponse extends $pb.GeneratedMessage {
+  factory ListMyTransferenciasResponse({
+    $core.Iterable<TransferenciaIa>? transferencias,
+  }) {
+    final result = create();
+    if (transferencias != null) result.transferencias.addAll(transferencias);
+    return result;
+  }
+
+  ListMyTransferenciasResponse._();
+
+  factory ListMyTransferenciasResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyTransferenciasResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyTransferenciasResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<TransferenciaIa>(1, _omitFieldNames ? '' : 'transferencias',
+        subBuilder: TransferenciaIa.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyTransferenciasResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyTransferenciasResponse copyWith(
+          void Function(ListMyTransferenciasResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyTransferenciasResponse))
+          as ListMyTransferenciasResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyTransferenciasResponse create() =>
+      ListMyTransferenciasResponse._();
+  @$core.override
+  ListMyTransferenciasResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyTransferenciasResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyTransferenciasResponse>(create);
+  static ListMyTransferenciasResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<TransferenciaIa> get transferencias => $_getList(0);
+}
+
+/// Uma frase contra uma regra (a salva, por `regra_id`, ou a do formulário,
+/// ainda não salva). Nada é gravado.
+class TestarMyRegraTransferenciaRequest extends $pb.GeneratedMessage {
+  factory TestarMyRegraTransferenciaRequest({
+    $core.String? frase,
+    $fixnum.Int64? regraId,
+    RegraTransferencia? regra,
+  }) {
+    final result = create();
+    if (frase != null) result.frase = frase;
+    if (regraId != null) result.regraId = regraId;
+    if (regra != null) result.regra = regra;
+    return result;
+  }
+
+  TestarMyRegraTransferenciaRequest._();
+
+  factory TestarMyRegraTransferenciaRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TestarMyRegraTransferenciaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TestarMyRegraTransferenciaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'frase')
+    ..aInt64(2, _omitFieldNames ? '' : 'regraId')
+    ..aOM<RegraTransferencia>(3, _omitFieldNames ? '' : 'regra',
+        subBuilder: RegraTransferencia.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarMyRegraTransferenciaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarMyRegraTransferenciaRequest copyWith(
+          void Function(TestarMyRegraTransferenciaRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as TestarMyRegraTransferenciaRequest))
+          as TestarMyRegraTransferenciaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TestarMyRegraTransferenciaRequest create() =>
+      TestarMyRegraTransferenciaRequest._();
+  @$core.override
+  TestarMyRegraTransferenciaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TestarMyRegraTransferenciaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TestarMyRegraTransferenciaRequest>(
+          create);
+  static TestarMyRegraTransferenciaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get frase => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set frase($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasFrase() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearFrase() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get regraId => $_getI64(1);
+  @$pb.TagNumber(2)
+  set regraId($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasRegraId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearRegraId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  RegraTransferencia get regra => $_getN(2);
+  @$pb.TagNumber(3)
+  set regra(RegraTransferencia value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRegra() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRegra() => $_clearField(3);
+  @$pb.TagNumber(3)
+  RegraTransferencia ensureRegra() => $_ensure(2);
+}
+
+class TestarMyRegraTransferenciaResponse extends $pb.GeneratedMessage {
+  factory TestarMyRegraTransferenciaResponse({
+    $core.double? probabilidade,
+    $core.double? limiar,
+    $core.bool? dispararia,
+    $core.String? modelo,
+  }) {
+    final result = create();
+    if (probabilidade != null) result.probabilidade = probabilidade;
+    if (limiar != null) result.limiar = limiar;
+    if (dispararia != null) result.dispararia = dispararia;
+    if (modelo != null) result.modelo = modelo;
+    return result;
+  }
+
+  TestarMyRegraTransferenciaResponse._();
+
+  factory TestarMyRegraTransferenciaResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TestarMyRegraTransferenciaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TestarMyRegraTransferenciaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aD(1, _omitFieldNames ? '' : 'probabilidade')
+    ..aD(2, _omitFieldNames ? '' : 'limiar')
+    ..aOB(3, _omitFieldNames ? '' : 'dispararia')
+    ..aOS(4, _omitFieldNames ? '' : 'modelo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarMyRegraTransferenciaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarMyRegraTransferenciaResponse copyWith(
+          void Function(TestarMyRegraTransferenciaResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as TestarMyRegraTransferenciaResponse))
+          as TestarMyRegraTransferenciaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TestarMyRegraTransferenciaResponse create() =>
+      TestarMyRegraTransferenciaResponse._();
+  @$core.override
+  TestarMyRegraTransferenciaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TestarMyRegraTransferenciaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TestarMyRegraTransferenciaResponse>(
+          create);
+  static TestarMyRegraTransferenciaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.double get probabilidade => $_getN(0);
+  @$pb.TagNumber(1)
+  set probabilidade($core.double value) => $_setDouble(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProbabilidade() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProbabilidade() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.double get limiar => $_getN(1);
+  @$pb.TagNumber(2)
+  set limiar($core.double value) => $_setDouble(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasLimiar() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearLimiar() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.bool get dispararia => $_getBF(2);
+  @$pb.TagNumber(3)
+  set dispararia($core.bool value) => $_setBool(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDispararia() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDispararia() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get modelo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set modelo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasModelo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearModelo() => $_clearField(4);
+}
+
+class GerarMySugestoesTransferenciaRequest extends $pb.GeneratedMessage {
+  factory GerarMySugestoesTransferenciaRequest() => create();
+
+  GerarMySugestoesTransferenciaRequest._();
+
+  factory GerarMySugestoesTransferenciaRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GerarMySugestoesTransferenciaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GerarMySugestoesTransferenciaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GerarMySugestoesTransferenciaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GerarMySugestoesTransferenciaRequest copyWith(
+          void Function(GerarMySugestoesTransferenciaRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as GerarMySugestoesTransferenciaRequest))
+          as GerarMySugestoesTransferenciaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GerarMySugestoesTransferenciaRequest create() =>
+      GerarMySugestoesTransferenciaRequest._();
+  @$core.override
+  GerarMySugestoesTransferenciaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GerarMySugestoesTransferenciaRequest getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          GerarMySugestoesTransferenciaRequest>(create);
+  static GerarMySugestoesTransferenciaRequest? _defaultInstance;
+}
+
+class GerarMySugestoesTransferenciaResponse extends $pb.GeneratedMessage {
+  factory GerarMySugestoesTransferenciaResponse({
+    $core.int? criadas,
+  }) {
+    final result = create();
+    if (criadas != null) result.criadas = criadas;
+    return result;
+  }
+
+  GerarMySugestoesTransferenciaResponse._();
+
+  factory GerarMySugestoesTransferenciaResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GerarMySugestoesTransferenciaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GerarMySugestoesTransferenciaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'criadas')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GerarMySugestoesTransferenciaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GerarMySugestoesTransferenciaResponse copyWith(
+          void Function(GerarMySugestoesTransferenciaResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as GerarMySugestoesTransferenciaResponse))
+          as GerarMySugestoesTransferenciaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GerarMySugestoesTransferenciaResponse create() =>
+      GerarMySugestoesTransferenciaResponse._();
+  @$core.override
+  GerarMySugestoesTransferenciaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GerarMySugestoesTransferenciaResponse getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          GerarMySugestoesTransferenciaResponse>(create);
+  static GerarMySugestoesTransferenciaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get criadas => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set criadas($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasCriadas() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearCriadas() => $_clearField(1);
+}
+
+class DefinirMotorTenantRequest extends $pb.GeneratedMessage {
+  factory DefinirMotorTenantRequest({
+    $core.String? tenantId,
+    $core.String? motor,
+  }) {
+    final result = create();
+    if (tenantId != null) result.tenantId = tenantId;
+    if (motor != null) result.motor = motor;
+    return result;
+  }
+
+  DefinirMotorTenantRequest._();
+
+  factory DefinirMotorTenantRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DefinirMotorTenantRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DefinirMotorTenantRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tenantId')
+    ..aOS(2, _omitFieldNames ? '' : 'motor')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirMotorTenantRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirMotorTenantRequest copyWith(
+          void Function(DefinirMotorTenantRequest) updates) =>
+      super.copyWith((message) => updates(message as DefinirMotorTenantRequest))
+          as DefinirMotorTenantRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DefinirMotorTenantRequest create() => DefinirMotorTenantRequest._();
+  @$core.override
+  DefinirMotorTenantRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DefinirMotorTenantRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DefinirMotorTenantRequest>(create);
+  static DefinirMotorTenantRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tenantId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tenantId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTenantId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTenantId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get motor => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set motor($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasMotor() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMotor() => $_clearField(2);
+}
+
+class DefinirMotorTenantResponse extends $pb.GeneratedMessage {
+  factory DefinirMotorTenantResponse({
+    $core.String? anterior,
+    $core.String? atual,
+  }) {
+    final result = create();
+    if (anterior != null) result.anterior = anterior;
+    if (atual != null) result.atual = atual;
+    return result;
+  }
+
+  DefinirMotorTenantResponse._();
+
+  factory DefinirMotorTenantResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DefinirMotorTenantResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DefinirMotorTenantResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'anterior')
+    ..aOS(2, _omitFieldNames ? '' : 'atual')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirMotorTenantResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirMotorTenantResponse copyWith(
+          void Function(DefinirMotorTenantResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as DefinirMotorTenantResponse))
+          as DefinirMotorTenantResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DefinirMotorTenantResponse create() => DefinirMotorTenantResponse._();
+  @$core.override
+  DefinirMotorTenantResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DefinirMotorTenantResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DefinirMotorTenantResponse>(create);
+  static DefinirMotorTenantResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get anterior => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set anterior($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAnterior() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAnterior() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get atual => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set atual($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAtual() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAtual() => $_clearField(2);
 }
 
 /// B9 (N10 E6) - a avaliacao de um ensaio, com a resposta correta. E correcao

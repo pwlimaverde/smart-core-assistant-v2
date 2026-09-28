@@ -179,9 +179,41 @@ async fn executar_tick(state: &AppState, clock: &dyn Clock) {
                 }
             }
         }
+
+        // Plano ia-engine-jev — retenção de 90 dias do registro das decisões da
+        // IA. Diário: o lock de 24 h faz as vezes de intervalo.
+        let mut conn = redis_conn.clone();
+        if tentar_lock(&mut conn, "scheduler:lock:decisoes_ia", 86_400_000).await {
+            match purgar_decisoes_ia(state).await {
+                Ok(n) if n > 0 => {
+                    tracing::info!(apagadas = n, "scheduler: decisões da IA antigas apagadas")
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!("scheduler: falha na retenção das decisões da IA: {:?}", e)
+                }
+            }
+        }
     } else {
         tracing::warn!("scheduler: sem conexão Redis, tick pulado (sem lock disponível)");
     }
+}
+
+/// Apaga o registro das decisões da IA com mais de 90 dias (RPC cross-tenant,
+/// pool administrativo do lado do data_postgres). Sem texto de conversa ali,
+/// mas também sem motivo para guardar além da calibração.
+async fn purgar_decisoes_ia(state: &AppState) -> anyhow::Result<usize> {
+    let dias = env_u64("SMARTCORE_DECISOES_IA_RETENCAO_DIAS", 90);
+    let resp = chamar_rpc(
+        &state.pg_client,
+        SISTEMA_TENANT_PLACEHOLDER,
+        "PurgarDecisoesIa",
+        serde_json::json!({ "dias": dias }),
+        "scheduler.tick",
+        "",
+    )
+    .await?;
+    Ok(resp.get("apagadas").and_then(|v| v.as_u64()).unwrap_or(0) as usize)
 }
 
 /// Lock Redis `SET NX PX` — mesmo padrão do debounce de mensagens (`main.rs`),
@@ -1096,6 +1128,8 @@ Dois."
             pg_client,
             ia_client: std::sync::Arc::new(crate::ia_engine::MockIaEngineClient::new()),
             fluxos_cache: crate::FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: crate::IntentsCache::novo(),
         }
     }
 

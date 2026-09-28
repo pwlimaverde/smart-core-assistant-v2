@@ -286,6 +286,50 @@ jobs:
           path: ia_engine/coverage.xml
           if-no-files-found: ignore
 
+  # Plano ia-engine-jev: o motor novo, no mesmo molde do ia_engine. Nenhum
+  # teste chama a TypeSafe — o Jev é dublado com respostas gravadas.
+  ia_engine_jev:
+    name: ia_engine_jev — testes e cobertura (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instala uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: uv sync (dev)
+        working-directory: ia_engine_jev
+        run: uv sync --dev
+
+      - name: Gera stubs gRPC (proto canônico)
+        working-directory: ia_engine_jev
+        run: uv run python scripts/gen_proto.py
+
+      - name: ruff check
+        working-directory: ia_engine_jev
+        run: uv run ruff check .
+
+      - name: mypy
+        working-directory: ia_engine_jev
+        run: uv run mypy src/ia_engine_jev
+
+      # Piso inicial de 85%: o código herdado do ia_engine chega com a suíte
+      # dele, e o novo (perguntas, decisões, features do Jev) com a sua. Sobe
+      # conforme a cobertura real, como o do mcp_server.
+      - name: "uv run pytest --cov (ratchet: falha abaixo de 85%)"
+        working-directory: ia_engine_jev
+        run: uv run pytest --cov=ia_engine_jev --cov-report=xml --cov-report=term-missing --cov-fail-under=85
+
+      - name: Publica cobertura ia_engine_jev como artefato
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ia-engine-jev-coverage
+          path: ia_engine_jev/coverage.xml
+          if-no-files-found: ignore
+
   # N13: mesmo molde do job do ia_engine. Sem banco e sem Rust — o mcp_server
   # não fala com Postgres (nem alcança a rede dele) e consome o backend por gRPC.
   mcp_server:

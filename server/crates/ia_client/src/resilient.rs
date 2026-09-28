@@ -162,6 +162,18 @@ impl<C: IaEngineClient> IaEngineClient for ResilientIaEngine<C> {
         })
         .await
     }
+
+    async fn testar_regra_transferencia(
+        &self,
+        req: TestarRegraInput,
+        traceparent: &str,
+    ) -> Result<TestarRegraOutput, IaEngineError> {
+        self.com_resiliencia(self.timeout_text, || {
+            self.inner
+                .testar_regra_transferencia(req.clone(), traceparent)
+        })
+        .await
+    }
 }
 
 #[cfg(test)]

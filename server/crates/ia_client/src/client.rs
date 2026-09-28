@@ -42,6 +42,57 @@ pub struct InterpretMediaOutput {
     pub resumo: String,
 }
 
+/// Intenção do catálogo como o motor Jev a recebe (plano ia-engine-jev).
+#[derive(Debug, Clone, Default)]
+pub struct IntentDefInput {
+    pub tag: String,
+    pub grupo: String,
+    pub descricao: String,
+    pub exemplo: String,
+    pub comportamento: String,
+}
+
+/// Tipo de entidade com a estratégia de busca de valor.
+#[derive(Debug, Clone, Default)]
+pub struct EntidadeDefInput {
+    pub tipo: String,
+    pub descricao: String,
+    pub estrategia: String,
+    pub opcoes: Vec<String>,
+}
+
+/// Trecho da base de conhecimento, um por documento.
+#[derive(Debug, Clone, Default)]
+pub struct TrechoInput {
+    pub id: String,
+    pub conteudo: String,
+    pub distancia: f64,
+}
+
+/// Um sinal que pesou na decisão do motor Jev.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SinalOutput {
+    pub nome: String,
+    pub valor: f64,
+    pub limiar: f64,
+}
+
+/// Julgamento de um trecho: evidência, conflito ou descartado.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TrechoAvaliadoOutput {
+    pub id: String,
+    pub aprovado: bool,
+    pub conflito: bool,
+}
+
+/// Custo e duração de uma decisão do motor.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct UsoOutput {
+    pub tokens_entrada: i64,
+    pub requisicoes: i32,
+    pub duracao_ms: i64,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct AnalyseInput {
     pub tenant_id: String,
@@ -49,6 +100,9 @@ pub struct AnalyseInput {
     pub historico: Vec<ChatTurnInput>,
     pub valid_intent_types: String,
     pub valid_entity_types: Vec<String>,
+    /// Motor Jev — o atual ignora.
+    pub intents: Vec<IntentDefInput>,
+    pub entidades: Vec<EntidadeDefInput>,
 }
 #[derive(Debug, Clone, Default)]
 pub struct IntentOutput {
@@ -65,6 +119,13 @@ pub struct EntidadeOutput {
 pub struct AnalyseOutput {
     pub intents: Vec<IntentOutput>,
     pub entidades: Vec<EntidadeOutput>,
+    /// Motor Jev; vazios no motor atual.
+    pub intent_principal: String,
+    pub confianca_principal: f64,
+    pub intents_a_revisar: Vec<String>,
+    pub motor: String,
+    pub modelo: String,
+    pub uso: UsoOutput,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -102,6 +163,10 @@ pub struct ResponderInput {
     pub dados_treinamento: String,
     pub campos_coletados: Vec<CampoColetadoInput>,
     pub campos_pendentes: Vec<CampoPendenteInput>,
+    /// Motor Jev — o atual ignora e segue com `dados_treinamento`.
+    pub intents: Vec<IntentDefInput>,
+    pub trechos: Vec<TrechoInput>,
+    pub comportamento: String,
 }
 #[derive(Debug, Clone, Default)]
 pub struct ResponderOutput {
@@ -115,6 +180,20 @@ pub struct ResponderOutput {
     /// anterior ao C1: o campo é aditivo no proto, e um servidor antigo
     /// simplesmente não o envia.
     pub campos_extraidos: Vec<CampoExtraidoOutput>,
+    /// Motor Jev; vazios no motor atual (que não sabe dizer por que transferiu).
+    pub motivo_transferencia: String,
+    pub sinais: Vec<SinalOutput>,
+    pub motor: String,
+    pub modelo: String,
+    pub uso: UsoOutput,
+    pub trechos: Vec<TrechoAvaliadoOutput>,
+    pub intencao_principal: String,
+    pub confianca_intencao: f64,
+    /// automatica | transferida | sem_info | a_revisar | reserva; vazio no
+    /// motor atual.
+    pub decisao: String,
+    pub regra_id: i64,
+    pub regerada: bool,
 }
 
 /// Um campo extraído, como o modelo devolveu — sem validação.
@@ -152,6 +231,24 @@ pub struct ExtrairTextoOutput {
     pub texto: String,
     pub formato: String,
     pub caracteres: i32,
+}
+
+/// Uma frase contra uma regra de transferência (só o motor Jev).
+#[derive(Debug, Clone, Default)]
+pub struct TestarRegraInput {
+    pub tenant_id: String,
+    pub frase: String,
+    pub condicao: String,
+    pub exemplos_sim: Vec<String>,
+    pub exemplos_nao: Vec<String>,
+    pub sensibilidade: String,
+}
+#[derive(Debug, Clone, Default)]
+pub struct TestarRegraOutput {
+    pub probabilidade: f64,
+    pub limiar: f64,
+    pub dispararia: bool,
+    pub modelo: String,
 }
 
 /// Erro do cliente `ia_engine`, já classificado por retentabilidade (usado pelo
@@ -232,4 +329,12 @@ pub trait IaEngineClient: Send + Sync {
         req: ExtrairTextoInput,
         traceparent: &str,
     ) -> Result<ExtrairTextoOutput, IaEngineError>;
+
+    /// Plano ia-engine-jev — testa uma regra de transferência contra uma
+    /// frase. Só o motor Jev implementa; o atual devolve `Invalid`.
+    async fn testar_regra_transferencia(
+        &self,
+        req: TestarRegraInput,
+        traceparent: &str,
+    ) -> Result<TestarRegraOutput, IaEngineError>;
 }

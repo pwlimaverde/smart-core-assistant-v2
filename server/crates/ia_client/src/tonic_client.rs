@@ -149,6 +149,17 @@ impl IaEngineClient for TonicIaEngineClient {
             historico: Some(historico_para_proto(req.historico)),
             valid_intent_types: req.valid_intent_types,
             valid_entity_types: req.valid_entity_types,
+            intents: intents_para_proto(req.intents),
+            entidades: req
+                .entidades
+                .into_iter()
+                .map(|e| pb::EntidadeDef {
+                    tipo: e.tipo,
+                    descricao: e.descricao,
+                    estrategia: e.estrategia,
+                    opcoes: e.opcoes,
+                })
+                .collect(),
         };
         let mut client = self.client.clone();
         let resp = client
@@ -174,6 +185,12 @@ impl IaEngineClient for TonicIaEngineClient {
                     confianca: e.confianca,
                 })
                 .collect(),
+            intent_principal: resp.intent_principal,
+            confianca_principal: resp.confianca_principal,
+            intents_a_revisar: resp.intents_a_revisar,
+            motor: resp.motor,
+            modelo: resp.modelo,
+            uso: uso_do_proto(resp.uso),
         })
     }
 
@@ -232,6 +249,17 @@ impl IaEngineClient for TonicIaEngineClient {
                     hint: c.hint,
                 })
                 .collect(),
+            intents: intents_para_proto(req.intents),
+            trechos: req
+                .trechos
+                .into_iter()
+                .map(|t| pb::Trecho {
+                    id: t.id,
+                    conteudo: t.conteudo,
+                    distancia: t.distancia,
+                })
+                .collect(),
+            comportamento: req.comportamento,
         };
         let mut client = self.client.clone();
         let resp = client
@@ -253,6 +281,33 @@ impl IaEngineClient for TonicIaEngineClient {
                     confianca: c.confianca,
                 })
                 .collect(),
+            motivo_transferencia: resp.motivo_transferencia,
+            sinais: resp
+                .sinais
+                .into_iter()
+                .map(|s| SinalOutput {
+                    nome: s.nome,
+                    valor: s.valor,
+                    limiar: s.limiar,
+                })
+                .collect(),
+            motor: resp.motor,
+            modelo: resp.modelo,
+            uso: uso_do_proto(resp.uso),
+            trechos: resp
+                .trechos
+                .into_iter()
+                .map(|t| TrechoAvaliadoOutput {
+                    id: t.id,
+                    aprovado: t.aprovado,
+                    conflito: t.conflito,
+                })
+                .collect(),
+            intencao_principal: resp.intencao_principal,
+            confianca_intencao: resp.confianca_intencao,
+            decisao: resp.decisao,
+            regra_id: resp.regra_id,
+            regerada: resp.regerada,
         })
     }
 
@@ -277,6 +332,62 @@ impl IaEngineClient for TonicIaEngineClient {
             feedback: resp.feedback,
         })
     }
+
+    async fn testar_regra_transferencia(
+        &self,
+        req: TestarRegraInput,
+        traceparent: &str,
+    ) -> Result<TestarRegraOutput, IaEngineError> {
+        let payload = pb::TestarRegraTransferenciaRequest {
+            tenant_id: req.tenant_id,
+            frase: req.frase,
+            condicao: req.condicao,
+            exemplos_sim: req.exemplos_sim,
+            exemplos_nao: req.exemplos_nao,
+            sensibilidade: req.sensibilidade,
+        };
+        let mut client = self.client.clone();
+        let resp = client
+            .testar_regra_transferencia(com_traceparent(payload, traceparent))
+            .await
+            // O motor atual não implementa o RPC: UNIMPLEMENTED vira `Invalid`,
+            // que não é retentado — tentar de novo não o faria existir.
+            .map_err(|status| match status.code() {
+                tonic::Code::Unimplemented => IaEngineError::Invalid(
+                    "o motor de IA configurado não testa regras de transferência".into(),
+                ),
+                _ => mapear_status(status),
+            })?
+            .into_inner();
+        Ok(TestarRegraOutput {
+            probabilidade: resp.probabilidade,
+            limiar: resp.limiar,
+            dispararia: resp.dispararia,
+            modelo: resp.modelo,
+        })
+    }
+}
+
+fn intents_para_proto(intents: Vec<IntentDefInput>) -> Vec<pb::IntentDef> {
+    intents
+        .into_iter()
+        .map(|i| pb::IntentDef {
+            tag: i.tag,
+            grupo: i.grupo,
+            descricao: i.descricao,
+            exemplo: i.exemplo,
+            comportamento: i.comportamento,
+        })
+        .collect()
+}
+
+fn uso_do_proto(uso: Option<pb::UsoDoMotor>) -> UsoOutput {
+    uso.map(|u| UsoOutput {
+        tokens_entrada: u.tokens_entrada,
+        requisicoes: u.requisicoes,
+        duracao_ms: u.duracao_ms,
+    })
+    .unwrap_or_default()
 }
 
 #[cfg(test)]

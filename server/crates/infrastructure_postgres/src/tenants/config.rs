@@ -138,6 +138,18 @@ pub async fn resolve_runtime_config(
         .fetch_optional(&mut *tx)
         .await?;
 
+    // Plano ia-engine-jev — colunas do motor Jev e as regras ativas de
+    // transferência. Query de tempo de execução pelo mesmo motivo do B4.
+    let jev: Option<JevTenantRow> = sqlx::query_as(
+        "SELECT motor_analise, jev_modelo, jev_config, transferencia_sinais, \
+                transferencia_fluxo_padrao_id \
+         FROM tenants_tenantconfig WHERE tenant_id = $1",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let regras_transferencia = regras_ativas(&mut tx, tenant_id).await?;
+
     tx.commit().await?;
 
     // Helper: usa campo do tenant se não nulo/vazio; senão usa o global
@@ -294,7 +306,131 @@ pub async fn resolve_runtime_config(
         groq_api_key: resolve_api_key("groq_api_key", "GROQ_API_KEY")?,
         google_api_key: resolve_api_key("google_api_key", "GOOGLE_API_KEY")?,
         prompts,
+        // Só o global: a chave do Jev é da plataforma. Ler o JSONB do tenant
+        // aqui deixaria um tenant usar outra conta TypeSafe.
+        typesafe_api_key: SecretString::from(
+            core.get("TYPESAFE_API_KEY").cloned().unwrap_or_default(),
+        ),
+        jev_modelo: fallback(
+            jev.as_ref().and_then(|j| j.jev_modelo.clone()),
+            "JEV_MODELO",
+        )
+        .if_empty(MODELO_JEV_PADRAO),
+        motor_analise: motor_valido(&fallback(
+            jev.as_ref().and_then(|j| j.motor_analise.clone()),
+            "MOTOR_ANALISE",
+        )),
+        entity_descricoes: descricoes_de_entidade(analise.as_ref().map(|a| &a.1)),
+        jev_config: jev
+            .as_ref()
+            .map(|j| j.jev_config.clone())
+            .unwrap_or_else(|| serde_json::json!({})),
+        transferencia_sinais: jev
+            .as_ref()
+            .map(|j| j.transferencia_sinais.clone())
+            .unwrap_or_else(|| serde_json::json!({})),
+        transferencia_fluxo_padrao_id: jev.as_ref().and_then(|j| j.transferencia_fluxo_padrao_id),
+        regras_transferencia,
     })
+}
+
+/// Versão do Jev quando nem o tenant nem a configuração geral dizem nada.
+pub const MODELO_JEV_PADRAO: &str = "jev-1.13.0";
+
+#[derive(sqlx::FromRow)]
+struct JevTenantRow {
+    motor_analise: Option<String>,
+    jev_modelo: Option<String>,
+    jev_config: serde_json::Value,
+    transferencia_sinais: serde_json::Value,
+    transferencia_fluxo_padrao_id: Option<i32>,
+}
+
+trait SeVazio {
+    fn if_empty(self, padrao: &str) -> String;
+}
+
+impl SeVazio for String {
+    fn if_empty(self, padrao: &str) -> String {
+        if self.trim().is_empty() {
+            padrao.to_string()
+        } else {
+            self
+        }
+    }
+}
+
+/// `llm`, `sombra` ou `jev`; qualquer outra coisa cai em `llm`, com aviso —
+/// um valor torto não pode ligar um motor sem querer.
+pub fn motor_valido(valor: &str) -> String {
+    match valor.trim().to_lowercase().as_str() {
+        "sombra" => "sombra".into(),
+        "jev" => "jev".into(),
+        "llm" | "" => "llm".into(),
+        outro => {
+            tracing::warn!(motor = outro, "motor_analise desconhecido; usando llm");
+            "llm".into()
+        }
+    }
+}
+
+/// Tipo → descrição, a partir de `entity_types` (lista de nomes ou objeto).
+pub fn descricoes_de_entidade(
+    valor: Option<&serde_json::Value>,
+) -> std::collections::HashMap<String, String> {
+    let valor = match valor {
+        Some(serde_json::Value::Object(m)) if m.len() == 1 && m.contains_key("entity_types") => {
+            m.get("entity_types")
+        }
+        outro => outro,
+    };
+    let mut mapa = std::collections::HashMap::new();
+    match valor {
+        Some(serde_json::Value::Object(itens)) => {
+            for (tipo, desc) in itens {
+                let tipo = tipo.trim();
+                if !tipo.is_empty() {
+                    mapa.insert(
+                        tipo.to_string(),
+                        desc.as_str().unwrap_or_default().to_string(),
+                    );
+                }
+            }
+        }
+        Some(serde_json::Value::Array(itens)) => {
+            for tipo in itens.iter().filter_map(|v| v.as_str()) {
+                if !tipo.trim().is_empty() {
+                    mapa.insert(tipo.trim().to_string(), String::new());
+                }
+            }
+        }
+        _ => {}
+    }
+    mapa
+}
+
+/// Regras ativas de transferência, no formato do `RegraTransferencia` do
+/// `ia_engine_jev` (os nomes dos campos são contrato com o Python).
+async fn regras_ativas(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: Uuid,
+) -> Result<Vec<serde_json::Value>, DbError> {
+    let linhas: Vec<(serde_json::Value,)> = sqlx::query_as(
+        "SELECT jsonb_build_object( \
+            'id', id, 'nome', nome, 'gatilho_tipo', gatilho_tipo, \
+            'condicao', condicao, 'intencao_tag', intencao_tag, \
+            'exemplos_sim', exemplos_sim, 'exemplos_nao', exemplos_nao, \
+            'momento', momento, 'campos_coleta', campos_coleta, \
+            'destino_tipo', destino_tipo, 'destino_fluxo_id', destino_fluxo_id, \
+            'mensagem', mensagem, 'sensibilidade', sensibilidade) \
+         FROM oraculo_regra_transferencia \
+         WHERE tenant_id = $1 AND ativa \
+         ORDER BY id",
+    )
+    .bind(tenant_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(linhas.into_iter().map(|(v,)| v).collect())
 }
 
 /// Um parâmetro numérico do tenant só vale quando é positivo; zero (ou menos)

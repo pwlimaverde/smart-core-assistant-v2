@@ -3188,6 +3188,7 @@ const ListMyAuditLogRequest$json = {
     {'1': 'desde', '3': 3, '4': 1, '5': 3, '10': 'desde'},
     {'1': 'limit', '3': 4, '4': 1, '5': 5, '10': 'limit'},
     {'1': 'offset', '3': 5, '4': 1, '5': 5, '10': 'offset'},
+    {'1': 'evento_prefixo', '3': 6, '4': 1, '5': 9, '10': 'eventoPrefixo'},
   ],
 };
 
@@ -3195,7 +3196,8 @@ const ListMyAuditLogRequest$json = {
 final $typed_data.Uint8List listMyAuditLogRequestDescriptor = $convert.base64Decode(
     'ChVMaXN0TXlBdWRpdExvZ1JlcXVlc3QSFgoGb3JpZ2VtGAEgASgJUgZvcmlnZW0SGQoIZ3Jhbn'
     'RfaWQYAiABKAlSB2dyYW50SWQSFAoFZGVzZGUYAyABKANSBWRlc2RlEhQKBWxpbWl0GAQgASgF'
-    'UgVsaW1pdBIWCgZvZmZzZXQYBSABKAVSBm9mZnNldA==');
+    'UgVsaW1pdBIWCgZvZmZzZXQYBSABKAVSBm9mZnNldBIlCg5ldmVudG9fcHJlZml4bxgGIAEoCV'
+    'INZXZlbnRvUHJlZml4bw==');
 
 @$core.Deprecated('Use myAuditLogEntryDescriptor instead')
 const MyAuditLogEntry$json = {
@@ -5924,6 +5926,45 @@ const TestarPerguntaResponse$json = {
       '5': 9,
       '10': 'fluxoTransferencia'
     },
+    {'1': 'motor', '3': 7, '4': 1, '5': 9, '10': 'motor'},
+    {'1': 'modelo', '3': 8, '4': 1, '5': 9, '10': 'modelo'},
+    {
+      '1': 'motivo_transferencia',
+      '3': 9,
+      '4': 1,
+      '5': 9,
+      '10': 'motivoTransferencia'
+    },
+    {
+      '1': 'sinais',
+      '3': 10,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.SinalValor',
+      '10': 'sinais'
+    },
+    {
+      '1': 'intencao_principal',
+      '3': 11,
+      '4': 1,
+      '5': 9,
+      '10': 'intencaoPrincipal'
+    },
+    {
+      '1': 'confianca_intencao',
+      '3': 12,
+      '4': 1,
+      '5': 1,
+      '10': 'confiancaIntencao'
+    },
+    {'1': 'decisao', '3': 13, '4': 1, '5': 9, '10': 'decisao'},
+    {
+      '1': 'trechos_aprovados',
+      '3': 14,
+      '4': 3,
+      '5': 9,
+      '10': 'trechosAprovados'
+    },
   ],
 };
 
@@ -5934,7 +5975,458 @@ final $typed_data.Uint8List testarPerguntaResponseDescriptor = $convert.base64De
     'dHJlY2hvcxgDIAMoCzIoLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5UcmVjaG9Vc2Fkb1'
     'IHdHJlY2hvcxImCg5jb25maWFiaWxpZGFkZRgEIAEoAVIOY29uZmlhYmlsaWRhZGUSIgoMdHJh'
     'bnNmZXJpcmlhGAUgASgIUgx0cmFuc2ZlcmlyaWESLwoTZmx1eG9fdHJhbnNmZXJlbmNpYRgGIA'
-    'EoCVISZmx1eG9UcmFuc2ZlcmVuY2lh');
+    'EoCVISZmx1eG9UcmFuc2ZlcmVuY2lhEhQKBW1vdG9yGAcgASgJUgVtb3RvchIWCgZtb2RlbG8Y'
+    'CCABKAlSBm1vZGVsbxIxChRtb3Rpdm9fdHJhbnNmZXJlbmNpYRgJIAEoCVITbW90aXZvVHJhbn'
+    'NmZXJlbmNpYRI/CgZzaW5haXMYCiADKAsyJy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMu'
+    'U2luYWxWYWxvclIGc2luYWlzEi0KEmludGVuY2FvX3ByaW5jaXBhbBgLIAEoCVIRaW50ZW5jYW'
+    '9QcmluY2lwYWwSLQoSY29uZmlhbmNhX2ludGVuY2FvGAwgASgBUhFjb25maWFuY2FJbnRlbmNh'
+    'bxIYCgdkZWNpc2FvGA0gASgJUgdkZWNpc2FvEisKEXRyZWNob3NfYXByb3ZhZG9zGA4gAygJUh'
+    'B0cmVjaG9zQXByb3ZhZG9z');
+
+@$core.Deprecated('Use regraTransferenciaDescriptor instead')
+const RegraTransferencia$json = {
+  '1': 'RegraTransferencia',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'gatilho_tipo', '3': 3, '4': 1, '5': 9, '10': 'gatilhoTipo'},
+    {'1': 'condicao', '3': 4, '4': 1, '5': 9, '10': 'condicao'},
+    {'1': 'intencao_tag', '3': 5, '4': 1, '5': 9, '10': 'intencaoTag'},
+    {'1': 'exemplos_sim', '3': 6, '4': 3, '5': 9, '10': 'exemplosSim'},
+    {'1': 'exemplos_nao', '3': 7, '4': 3, '5': 9, '10': 'exemplosNao'},
+    {'1': 'momento', '3': 8, '4': 1, '5': 9, '10': 'momento'},
+    {'1': 'campos_coleta', '3': 9, '4': 3, '5': 9, '10': 'camposColeta'},
+    {'1': 'destino_tipo', '3': 10, '4': 1, '5': 9, '10': 'destinoTipo'},
+    {'1': 'destino_fluxo_id', '3': 11, '4': 1, '5': 5, '10': 'destinoFluxoId'},
+    {'1': 'mensagem', '3': 12, '4': 1, '5': 9, '10': 'mensagem'},
+    {'1': 'sensibilidade', '3': 13, '4': 1, '5': 9, '10': 'sensibilidade'},
+    {'1': 'ativa', '3': 14, '4': 1, '5': 8, '10': 'ativa'},
+    {'1': 'sugestao', '3': 15, '4': 1, '5': 8, '10': 'sugestao'},
+    {'1': 'criado_em', '3': 16, '4': 1, '5': 3, '10': 'criadoEm'},
+    {'1': 'atualizado_em', '3': 17, '4': 1, '5': 3, '10': 'atualizadoEm'},
+  ],
+};
+
+/// Descriptor for `RegraTransferencia`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List regraTransferenciaDescriptor = $convert.base64Decode(
+    'ChJSZWdyYVRyYW5zZmVyZW5jaWESDgoCaWQYASABKANSAmlkEhIKBG5vbWUYAiABKAlSBG5vbW'
+    'USIQoMZ2F0aWxob190aXBvGAMgASgJUgtnYXRpbGhvVGlwbxIaCghjb25kaWNhbxgEIAEoCVII'
+    'Y29uZGljYW8SIQoMaW50ZW5jYW9fdGFnGAUgASgJUgtpbnRlbmNhb1RhZxIhCgxleGVtcGxvc1'
+    '9zaW0YBiADKAlSC2V4ZW1wbG9zU2ltEiEKDGV4ZW1wbG9zX25hbxgHIAMoCVILZXhlbXBsb3NO'
+    'YW8SGAoHbW9tZW50bxgIIAEoCVIHbW9tZW50bxIjCg1jYW1wb3NfY29sZXRhGAkgAygJUgxjYW'
+    '1wb3NDb2xldGESIQoMZGVzdGlub190aXBvGAogASgJUgtkZXN0aW5vVGlwbxIoChBkZXN0aW5v'
+    'X2ZsdXhvX2lkGAsgASgFUg5kZXN0aW5vRmx1eG9JZBIaCghtZW5zYWdlbRgMIAEoCVIIbWVuc2'
+    'FnZW0SJAoNc2Vuc2liaWxpZGFkZRgNIAEoCVINc2Vuc2liaWxpZGFkZRIUCgVhdGl2YRgOIAEo'
+    'CFIFYXRpdmESGgoIc3VnZXN0YW8YDyABKAhSCHN1Z2VzdGFvEhsKCWNyaWFkb19lbRgQIAEoA1'
+    'IIY3JpYWRvRW0SIwoNYXR1YWxpemFkb19lbRgRIAEoA1IMYXR1YWxpemFkb0Vt');
+
+@$core.Deprecated('Use listMyRegrasTransferenciaRequestDescriptor instead')
+const ListMyRegrasTransferenciaRequest$json = {
+  '1': 'ListMyRegrasTransferenciaRequest',
+};
+
+/// Descriptor for `ListMyRegrasTransferenciaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyRegrasTransferenciaRequestDescriptor =
+    $convert.base64Decode('CiBMaXN0TXlSZWdyYXNUcmFuc2ZlcmVuY2lhUmVxdWVzdA==');
+
+@$core.Deprecated('Use listMyRegrasTransferenciaResponseDescriptor instead')
+const ListMyRegrasTransferenciaResponse$json = {
+  '1': 'ListMyRegrasTransferenciaResponse',
+  '2': [
+    {
+      '1': 'regras',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.RegraTransferencia',
+      '10': 'regras'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyRegrasTransferenciaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyRegrasTransferenciaResponseDescriptor =
+    $convert.base64Decode(
+        'CiFMaXN0TXlSZWdyYXNUcmFuc2ZlcmVuY2lhUmVzcG9uc2USRwoGcmVncmFzGAEgAygLMi8uc2'
+        '1hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlJlZ3JhVHJhbnNmZXJlbmNpYVIGcmVncmFz');
+
+@$core.Deprecated('Use salvarMyRegraTransferenciaRequestDescriptor instead')
+const SalvarMyRegraTransferenciaRequest$json = {
+  '1': 'SalvarMyRegraTransferenciaRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+    {
+      '1': 'regra',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.RegraTransferencia',
+      '10': 'regra'
+    },
+    {'1': 'dry_run', '3': 3, '4': 1, '5': 8, '10': 'dryRun'},
+  ],
+};
+
+/// Descriptor for `SalvarMyRegraTransferenciaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List salvarMyRegraTransferenciaRequestDescriptor =
+    $convert.base64Decode(
+        'CiFTYWx2YXJNeVJlZ3JhVHJhbnNmZXJlbmNpYVJlcXVlc3QSDgoCaWQYASABKANSAmlkEkUKBX'
+        'JlZ3JhGAIgASgLMi8uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlJlZ3JhVHJhbnNmZXJl'
+        'bmNpYVIFcmVncmESFwoHZHJ5X3J1bhgDIAEoCFIGZHJ5UnVu');
+
+@$core.Deprecated('Use salvarMyRegraTransferenciaResponseDescriptor instead')
+const SalvarMyRegraTransferenciaResponse$json = {
+  '1': 'SalvarMyRegraTransferenciaResponse',
+  '2': [
+    {
+      '1': 'regra',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.RegraTransferencia',
+      '10': 'regra'
+    },
+    {'1': 'simulacao', '3': 2, '4': 1, '5': 8, '10': 'simulacao'},
+    {'1': 'campos_alterados', '3': 3, '4': 3, '5': 9, '10': 'camposAlterados'},
+  ],
+};
+
+/// Descriptor for `SalvarMyRegraTransferenciaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List salvarMyRegraTransferenciaResponseDescriptor =
+    $convert.base64Decode(
+        'CiJTYWx2YXJNeVJlZ3JhVHJhbnNmZXJlbmNpYVJlc3BvbnNlEkUKBXJlZ3JhGAEgASgLMi8uc2'
+        '1hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlJlZ3JhVHJhbnNmZXJlbmNpYVIFcmVncmESHAoJ'
+        'c2ltdWxhY2FvGAIgASgIUglzaW11bGFjYW8SKQoQY2FtcG9zX2FsdGVyYWRvcxgDIAMoCVIPY2'
+        'FtcG9zQWx0ZXJhZG9z');
+
+@$core.Deprecated('Use setMyRegraTransferenciaAtivaRequestDescriptor instead')
+const SetMyRegraTransferenciaAtivaRequest$json = {
+  '1': 'SetMyRegraTransferenciaAtivaRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'ativa', '3': 2, '4': 1, '5': 8, '10': 'ativa'},
+    {'1': 'confirmar', '3': 3, '4': 1, '5': 9, '10': 'confirmar'},
+    {'1': 'dry_run', '3': 4, '4': 1, '5': 8, '10': 'dryRun'},
+  ],
+};
+
+/// Descriptor for `SetMyRegraTransferenciaAtivaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setMyRegraTransferenciaAtivaRequestDescriptor =
+    $convert.base64Decode(
+        'CiNTZXRNeVJlZ3JhVHJhbnNmZXJlbmNpYUF0aXZhUmVxdWVzdBIOCgJpZBgBIAEoA1ICaWQSFA'
+        'oFYXRpdmEYAiABKAhSBWF0aXZhEhwKCWNvbmZpcm1hchgDIAEoCVIJY29uZmlybWFyEhcKB2Ry'
+        'eV9ydW4YBCABKAhSBmRyeVJ1bg==');
+
+@$core.Deprecated('Use setMyRegraTransferenciaAtivaResponseDescriptor instead')
+const SetMyRegraTransferenciaAtivaResponse$json = {
+  '1': 'SetMyRegraTransferenciaAtivaResponse',
+  '2': [
+    {
+      '1': 'regra',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.RegraTransferencia',
+      '10': 'regra'
+    },
+    {'1': 'simulacao', '3': 2, '4': 1, '5': 8, '10': 'simulacao'},
+  ],
+};
+
+/// Descriptor for `SetMyRegraTransferenciaAtivaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setMyRegraTransferenciaAtivaResponseDescriptor =
+    $convert.base64Decode(
+        'CiRTZXRNeVJlZ3JhVHJhbnNmZXJlbmNpYUF0aXZhUmVzcG9uc2USRQoFcmVncmEYASABKAsyLy'
+        '5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuUmVncmFUcmFuc2ZlcmVuY2lhUgVyZWdyYRIc'
+        'CglzaW11bGFjYW8YAiABKAhSCXNpbXVsYWNhbw==');
+
+@$core.Deprecated('Use sinalTransferenciaDescriptor instead')
+const SinalTransferencia$json = {
+  '1': 'SinalTransferencia',
+  '2': [
+    {'1': 'nome', '3': 1, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'ativo', '3': 2, '4': 1, '5': 8, '10': 'ativo'},
+    {'1': 'sensibilidade', '3': 3, '4': 1, '5': 9, '10': 'sensibilidade'},
+  ],
+};
+
+/// Descriptor for `SinalTransferencia`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List sinalTransferenciaDescriptor = $convert.base64Decode(
+    'ChJTaW5hbFRyYW5zZmVyZW5jaWESEgoEbm9tZRgBIAEoCVIEbm9tZRIUCgVhdGl2bxgCIAEoCF'
+    'IFYXRpdm8SJAoNc2Vuc2liaWxpZGFkZRgDIAEoCVINc2Vuc2liaWxpZGFkZQ==');
+
+@$core.Deprecated('Use configTransferenciaDescriptor instead')
+const ConfigTransferencia$json = {
+  '1': 'ConfigTransferencia',
+  '2': [
+    {
+      '1': 'sinais',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.SinalTransferencia',
+      '10': 'sinais'
+    },
+    {'1': 'fluxo_padrao_id', '3': 2, '4': 1, '5': 5, '10': 'fluxoPadraoId'},
+    {
+      '1': 'msg_transferencia',
+      '3': 3,
+      '4': 1,
+      '5': 9,
+      '10': 'msgTransferencia'
+    },
+    {'1': 'motor_analise', '3': 4, '4': 1, '5': 9, '10': 'motorAnalise'},
+  ],
+};
+
+/// Descriptor for `ConfigTransferencia`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List configTransferenciaDescriptor = $convert.base64Decode(
+    'ChNDb25maWdUcmFuc2ZlcmVuY2lhEkcKBnNpbmFpcxgBIAMoCzIvLnNtYXJ0Y29yZS5jb250cm'
+    'FjdHMucXVlcmllcy5TaW5hbFRyYW5zZmVyZW5jaWFSBnNpbmFpcxImCg9mbHV4b19wYWRyYW9f'
+    'aWQYAiABKAVSDWZsdXhvUGFkcmFvSWQSKwoRbXNnX3RyYW5zZmVyZW5jaWEYAyABKAlSEG1zZ1'
+    'RyYW5zZmVyZW5jaWESIwoNbW90b3JfYW5hbGlzZRgEIAEoCVIMbW90b3JBbmFsaXNl');
+
+@$core.Deprecated('Use getMyConfigTransferenciaRequestDescriptor instead')
+const GetMyConfigTransferenciaRequest$json = {
+  '1': 'GetMyConfigTransferenciaRequest',
+};
+
+/// Descriptor for `GetMyConfigTransferenciaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getMyConfigTransferenciaRequestDescriptor =
+    $convert.base64Decode('Ch9HZXRNeUNvbmZpZ1RyYW5zZmVyZW5jaWFSZXF1ZXN0');
+
+@$core.Deprecated('Use setMySinaisTransferenciaRequestDescriptor instead')
+const SetMySinaisTransferenciaRequest$json = {
+  '1': 'SetMySinaisTransferenciaRequest',
+  '2': [
+    {
+      '1': 'sinais',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.SinalTransferencia',
+      '10': 'sinais'
+    },
+    {
+      '1': 'alterar_fluxo_padrao',
+      '3': 2,
+      '4': 1,
+      '5': 8,
+      '10': 'alterarFluxoPadrao'
+    },
+    {'1': 'fluxo_padrao_id', '3': 3, '4': 1, '5': 5, '10': 'fluxoPadraoId'},
+    {'1': 'dry_run', '3': 4, '4': 1, '5': 8, '10': 'dryRun'},
+  ],
+};
+
+/// Descriptor for `SetMySinaisTransferenciaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setMySinaisTransferenciaRequestDescriptor = $convert.base64Decode(
+    'Ch9TZXRNeVNpbmFpc1RyYW5zZmVyZW5jaWFSZXF1ZXN0EkcKBnNpbmFpcxgBIAMoCzIvLnNtYX'
+    'J0Y29yZS5jb250cmFjdHMucXVlcmllcy5TaW5hbFRyYW5zZmVyZW5jaWFSBnNpbmFpcxIwChRh'
+    'bHRlcmFyX2ZsdXhvX3BhZHJhbxgCIAEoCFISYWx0ZXJhckZsdXhvUGFkcmFvEiYKD2ZsdXhvX3'
+    'BhZHJhb19pZBgDIAEoBVINZmx1eG9QYWRyYW9JZBIXCgdkcnlfcnVuGAQgASgIUgZkcnlSdW4=');
+
+@$core.Deprecated('Use configTransferenciaResponseDescriptor instead')
+const ConfigTransferenciaResponse$json = {
+  '1': 'ConfigTransferenciaResponse',
+  '2': [
+    {
+      '1': 'config',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.ConfigTransferencia',
+      '10': 'config'
+    },
+    {'1': 'simulacao', '3': 2, '4': 1, '5': 8, '10': 'simulacao'},
+  ],
+};
+
+/// Descriptor for `ConfigTransferenciaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List configTransferenciaResponseDescriptor =
+    $convert.base64Decode(
+        'ChtDb25maWdUcmFuc2ZlcmVuY2lhUmVzcG9uc2USSAoGY29uZmlnGAEgASgLMjAuc21hcnRjb3'
+        'JlLmNvbnRyYWN0cy5xdWVyaWVzLkNvbmZpZ1RyYW5zZmVyZW5jaWFSBmNvbmZpZxIcCglzaW11'
+        'bGFjYW8YAiABKAhSCXNpbXVsYWNhbw==');
+
+@$core.Deprecated('Use sinalValorDescriptor instead')
+const SinalValor$json = {
+  '1': 'SinalValor',
+  '2': [
+    {'1': 'nome', '3': 1, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'valor', '3': 2, '4': 1, '5': 1, '10': 'valor'},
+    {'1': 'limiar', '3': 3, '4': 1, '5': 1, '10': 'limiar'},
+  ],
+};
+
+/// Descriptor for `SinalValor`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List sinalValorDescriptor = $convert.base64Decode(
+    'CgpTaW5hbFZhbG9yEhIKBG5vbWUYASABKAlSBG5vbWUSFAoFdmFsb3IYAiABKAFSBXZhbG9yEh'
+    'YKBmxpbWlhchgDIAEoAVIGbGltaWFy');
+
+@$core.Deprecated('Use transferenciaIaDescriptor instead')
+const TransferenciaIa$json = {
+  '1': 'TransferenciaIa',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'atendimento_id', '3': 2, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'motor', '3': 3, '4': 1, '5': 9, '10': 'motor'},
+    {'1': 'modelo', '3': 4, '4': 1, '5': 9, '10': 'modelo'},
+    {'1': 'motivo', '3': 5, '4': 1, '5': 9, '10': 'motivo'},
+    {'1': 'regra_id', '3': 6, '4': 1, '5': 3, '10': 'regraId'},
+    {'1': 'fluxo_id', '3': 7, '4': 1, '5': 5, '10': 'fluxoId'},
+    {'1': 'fluxo_nome', '3': 8, '4': 1, '5': 9, '10': 'fluxoNome'},
+    {
+      '1': 'sinais',
+      '3': 9,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.SinalValor',
+      '10': 'sinais'
+    },
+    {'1': 'criado_em', '3': 10, '4': 1, '5': 3, '10': 'criadoEm'},
+  ],
+};
+
+/// Descriptor for `TransferenciaIa`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List transferenciaIaDescriptor = $convert.base64Decode(
+    'Cg9UcmFuc2ZlcmVuY2lhSWESDgoCaWQYASABKANSAmlkEiUKDmF0ZW5kaW1lbnRvX2lkGAIgAS'
+    'gFUg1hdGVuZGltZW50b0lkEhQKBW1vdG9yGAMgASgJUgVtb3RvchIWCgZtb2RlbG8YBCABKAlS'
+    'Bm1vZGVsbxIWCgZtb3Rpdm8YBSABKAlSBm1vdGl2bxIZCghyZWdyYV9pZBgGIAEoA1IHcmVncm'
+    'FJZBIZCghmbHV4b19pZBgHIAEoBVIHZmx1eG9JZBIdCgpmbHV4b19ub21lGAggASgJUglmbHV4'
+    'b05vbWUSPwoGc2luYWlzGAkgAygLMicuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNpbm'
+    'FsVmFsb3JSBnNpbmFpcxIbCgljcmlhZG9fZW0YCiABKANSCGNyaWFkb0Vt');
+
+@$core.Deprecated('Use listMyTransferenciasRequestDescriptor instead')
+const ListMyTransferenciasRequest$json = {
+  '1': 'ListMyTransferenciasRequest',
+  '2': [
+    {'1': 'limite', '3': 1, '4': 1, '5': 5, '10': 'limite'},
+  ],
+};
+
+/// Descriptor for `ListMyTransferenciasRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyTransferenciasRequestDescriptor =
+    $convert.base64Decode(
+        'ChtMaXN0TXlUcmFuc2ZlcmVuY2lhc1JlcXVlc3QSFgoGbGltaXRlGAEgASgFUgZsaW1pdGU=');
+
+@$core.Deprecated('Use listMyTransferenciasResponseDescriptor instead')
+const ListMyTransferenciasResponse$json = {
+  '1': 'ListMyTransferenciasResponse',
+  '2': [
+    {
+      '1': 'transferencias',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.TransferenciaIa',
+      '10': 'transferencias'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyTransferenciasResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyTransferenciasResponseDescriptor =
+    $convert.base64Decode(
+        'ChxMaXN0TXlUcmFuc2ZlcmVuY2lhc1Jlc3BvbnNlElQKDnRyYW5zZmVyZW5jaWFzGAEgAygLMi'
+        'wuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlRyYW5zZmVyZW5jaWFJYVIOdHJhbnNmZXJl'
+        'bmNpYXM=');
+
+@$core.Deprecated('Use testarMyRegraTransferenciaRequestDescriptor instead')
+const TestarMyRegraTransferenciaRequest$json = {
+  '1': 'TestarMyRegraTransferenciaRequest',
+  '2': [
+    {'1': 'frase', '3': 1, '4': 1, '5': 9, '10': 'frase'},
+    {'1': 'regra_id', '3': 2, '4': 1, '5': 3, '10': 'regraId'},
+    {
+      '1': 'regra',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.RegraTransferencia',
+      '10': 'regra'
+    },
+  ],
+};
+
+/// Descriptor for `TestarMyRegraTransferenciaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List testarMyRegraTransferenciaRequestDescriptor =
+    $convert.base64Decode(
+        'CiFUZXN0YXJNeVJlZ3JhVHJhbnNmZXJlbmNpYVJlcXVlc3QSFAoFZnJhc2UYASABKAlSBWZyYX'
+        'NlEhkKCHJlZ3JhX2lkGAIgASgDUgdyZWdyYUlkEkUKBXJlZ3JhGAMgASgLMi8uc21hcnRjb3Jl'
+        'LmNvbnRyYWN0cy5xdWVyaWVzLlJlZ3JhVHJhbnNmZXJlbmNpYVIFcmVncmE=');
+
+@$core.Deprecated('Use testarMyRegraTransferenciaResponseDescriptor instead')
+const TestarMyRegraTransferenciaResponse$json = {
+  '1': 'TestarMyRegraTransferenciaResponse',
+  '2': [
+    {'1': 'probabilidade', '3': 1, '4': 1, '5': 1, '10': 'probabilidade'},
+    {'1': 'limiar', '3': 2, '4': 1, '5': 1, '10': 'limiar'},
+    {'1': 'dispararia', '3': 3, '4': 1, '5': 8, '10': 'dispararia'},
+    {'1': 'modelo', '3': 4, '4': 1, '5': 9, '10': 'modelo'},
+  ],
+};
+
+/// Descriptor for `TestarMyRegraTransferenciaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List testarMyRegraTransferenciaResponseDescriptor =
+    $convert.base64Decode(
+        'CiJUZXN0YXJNeVJlZ3JhVHJhbnNmZXJlbmNpYVJlc3BvbnNlEiQKDXByb2JhYmlsaWRhZGUYAS'
+        'ABKAFSDXByb2JhYmlsaWRhZGUSFgoGbGltaWFyGAIgASgBUgZsaW1pYXISHgoKZGlzcGFyYXJp'
+        'YRgDIAEoCFIKZGlzcGFyYXJpYRIWCgZtb2RlbG8YBCABKAlSBm1vZGVsbw==');
+
+@$core.Deprecated('Use gerarMySugestoesTransferenciaRequestDescriptor instead')
+const GerarMySugestoesTransferenciaRequest$json = {
+  '1': 'GerarMySugestoesTransferenciaRequest',
+};
+
+/// Descriptor for `GerarMySugestoesTransferenciaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List gerarMySugestoesTransferenciaRequestDescriptor =
+    $convert
+        .base64Decode('CiRHZXJhck15U3VnZXN0b2VzVHJhbnNmZXJlbmNpYVJlcXVlc3Q=');
+
+@$core.Deprecated('Use gerarMySugestoesTransferenciaResponseDescriptor instead')
+const GerarMySugestoesTransferenciaResponse$json = {
+  '1': 'GerarMySugestoesTransferenciaResponse',
+  '2': [
+    {'1': 'criadas', '3': 1, '4': 1, '5': 5, '10': 'criadas'},
+  ],
+};
+
+/// Descriptor for `GerarMySugestoesTransferenciaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List gerarMySugestoesTransferenciaResponseDescriptor =
+    $convert.base64Decode(
+        'CiVHZXJhck15U3VnZXN0b2VzVHJhbnNmZXJlbmNpYVJlc3BvbnNlEhgKB2NyaWFkYXMYASABKA'
+        'VSB2NyaWFkYXM=');
+
+@$core.Deprecated('Use definirMotorTenantRequestDescriptor instead')
+const DefinirMotorTenantRequest$json = {
+  '1': 'DefinirMotorTenantRequest',
+  '2': [
+    {'1': 'tenant_id', '3': 1, '4': 1, '5': 9, '10': 'tenantId'},
+    {'1': 'motor', '3': 2, '4': 1, '5': 9, '10': 'motor'},
+  ],
+};
+
+/// Descriptor for `DefinirMotorTenantRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirMotorTenantRequestDescriptor =
+    $convert.base64Decode(
+        'ChlEZWZpbmlyTW90b3JUZW5hbnRSZXF1ZXN0EhsKCXRlbmFudF9pZBgBIAEoCVIIdGVuYW50SW'
+        'QSFAoFbW90b3IYAiABKAlSBW1vdG9y');
+
+@$core.Deprecated('Use definirMotorTenantResponseDescriptor instead')
+const DefinirMotorTenantResponse$json = {
+  '1': 'DefinirMotorTenantResponse',
+  '2': [
+    {'1': 'anterior', '3': 1, '4': 1, '5': 9, '10': 'anterior'},
+    {'1': 'atual', '3': 2, '4': 1, '5': 9, '10': 'atual'},
+  ],
+};
+
+/// Descriptor for `DefinirMotorTenantResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirMotorTenantResponseDescriptor =
+    $convert.base64Decode(
+        'ChpEZWZpbmlyTW90b3JUZW5hbnRSZXNwb25zZRIaCghhbnRlcmlvchgBIAEoCVIIYW50ZXJpb3'
+        'ISFAoFYXR1YWwYAiABKAlSBWF0dWFs');
 
 @$core.Deprecated('Use registrarFeedbackTesteRequestDescriptor instead')
 const RegistrarFeedbackTesteRequest$json = {

@@ -1,0 +1,303 @@
+"""Ramos de erro/degradação graciosa dos RPCs (`servicer.py`).
+
+Complementa `test_server_roundtrip.py` (que cobre o caminho feliz de todos
+os RPCs): aqui cada teste força a `Failure` de uma feature diferente,
+contra um `grpc.aio.server` real, e verifica que o RPC aborta com o
+`grpc.StatusCode` correto — uma falha da IA nunca trava o servidor, só o
+RPC em questão retorna erro ao chamador. Mock só na fronteira externa (chat
+model/embeddings/transcriber fakes, download de mídia monkeypatchado).
+"""
+
+from __future__ import annotations
+
+import itertools
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
+
+import grpc
+import pytest
+from langchain_core.messages import AIMessage
+
+from ia_engine_jev.contracts import ai_engine_pb2 as pb
+from ia_engine_jev.contracts import ai_engine_pb2_grpc as pbg
+from ia_engine_jev.domain.errors import InvalidRequestError
+from ia_engine_jev.servicer import IaEngineServicer
+from tests.conftest import (
+    FakeChatModel,
+    FakeConfigCache,
+    FakeEmbeddings,
+)
+
+
+@asynccontextmanager
+async def _stub_for(
+    servicer: IaEngineServicer,
+) -> AsyncIterator[pbg.IaEngineServiceStub]:
+    """Sobe um `grpc.aio.server` real com o servicer já configurado."""
+    server = grpc.aio.server()
+    pbg.add_IaEngineServiceServicer_to_server(servicer, server)
+    port = server.add_insecure_port("127.0.0.1:0")
+    await server.start()
+    try:
+        async with grpc.aio.insecure_channel(f"127.0.0.1:{port}") as channel:
+            yield pbg.IaEngineServiceStub(channel)
+    finally:
+        await server.stop(None)
+
+
+# ------------------------------------------------------------------ Transcribe
+class _FakeTranscriberVazio:
+    """Simula todos os provedores falhando: degrada para texto vazio."""
+
+    async def __call__(
+        self, _audio_bytes: bytes, _mimetype: str, _language: str
+    ) -> str:
+        return ""
+
+
+def _transcribe_request() -> pb.TranscribeRequest:
+    return pb.TranscribeRequest(
+        tenant_id="t1",
+        media=pb.MediaRef(url="https://r2.example/audio.ogg", mimetype="audio/ogg"),
+        language="pt",
+    )
+
+
+@pytest.mark.asyncio
+async def test_transcribe_desligada_por_flag_curto_circuita_vazio(
+    fake_chat_factory,
+):
+    """Flag global off (padrão): o RPC não chama provedor nenhum, devolve
+    resposta vazia sem erro (kill-switch de custo/latência)."""
+    servicer = IaEngineServicer(
+        chat_model_factory=fake_chat_factory,
+        transcriber_factory=lambda _spec: _FakeTranscriberVazio(),
+        # transcription_enabled=False por padrão (kill-switch do processo)
+        config_cache=FakeConfigCache(),
+    )
+    async with _stub_for(servicer) as stub:
+        resp = await stub.Transcribe(_transcribe_request())
+    assert resp.transcricao == ""
+    assert resp.resumo == ""
+
+
+@pytest.mark.asyncio
+async def test_transcribe_provedores_falham_degrada_e_aborta_internal(
+    fake_chat_factory,
+):
+    """Com a flag ligada, se todos os provedores degradam (texto vazio), o
+    usecase falha com `TranscricaoVaziaError` — o RPC não trava, aborta com
+    INTERNAL."""
+    servicer = IaEngineServicer(
+        chat_model_factory=fake_chat_factory,
+        transcriber_factory=lambda _spec: _FakeTranscriberVazio(),
+        transcription_enabled=True,
+        config_cache=FakeConfigCache(),
+    )
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.Transcribe(_transcribe_request())
+    assert exc_info.value.code() == grpc.StatusCode.INTERNAL
+
+
+# -------------------------------------------------------------- InterpretMedia
+@pytest.mark.asyncio
+async def test_interpret_media_download_falho_aborta_com_failed_precondition(
+    fake_chat_factory, monkeypatch: pytest.MonkeyPatch
+):
+    from ia_engine_jev.shared.media import MediaDownloadException
+
+    async def _fake_download_falho(_url: str, **_kwargs: Any) -> bytes:
+        raise MediaDownloadException("HTTP 404 ao baixar mídia")
+
+    monkeypatch.setattr(
+        "ia_engine_jev.features.interpret_media.datasources"
+        ".interpret_media_datasource.download_media",
+        _fake_download_falho,
+    )
+    servicer = IaEngineServicer(
+        chat_model_factory=fake_chat_factory, config_cache=FakeConfigCache()
+    )
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.InterpretMedia(
+                pb.InterpretMediaRequest(
+                    tenant_id="t1",
+                    media=pb.MediaRef(
+                        url="https://r2.example/img.jpg", mimetype="image/jpeg"
+                    ),
+                    media_type="imageMessage",
+                )
+            )
+    assert exc_info.value.code() == grpc.StatusCode.FAILED_PRECONDITION
+    assert "404" in exc_info.value.details()
+
+
+# -------------------------------------------------------------------- Analyse
+@pytest.mark.asyncio
+async def test_analyse_llm_devolve_tipo_inesperado_aborta_com_internal(
+    fake_embeddings_factory,
+):
+    chat = FakeChatModel(
+        messages=itertools.cycle([AIMessage(content="")]),
+        analyse_value="texto solto, não é dict nem schema",
+    )
+    servicer = IaEngineServicer(
+        chat_model_factory=lambda _spec: chat,
+        embeddings_factory=fake_embeddings_factory,
+        config_cache=FakeConfigCache(),
+    )
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.Analyse(
+                pb.AnalyseRequest(
+                    tenant_id="t1",
+                    mensagem="oi",
+                    valid_intent_types="saudacao",
+                )
+            )
+    assert exc_info.value.code() == grpc.StatusCode.INTERNAL
+
+
+# ---------------------------------------------------------------------- Embed
+@pytest.mark.asyncio
+async def test_embed_sem_textos_aborta_com_invalid_argument(fake_embeddings_factory):
+    servicer = IaEngineServicer(
+        embeddings_factory=fake_embeddings_factory,
+        config_cache=FakeConfigCache(),
+    )
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.Embed(pb.EmbedRequest(tenant_id="t1", textos=[]))
+    assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+@pytest.mark.asyncio
+async def test_embed_dimensao_errada_aborta_com_internal():
+    """Provedor devolve vetores fora do schema `vector(1536)` — o RPC não
+    grava lixo no pgvector, aborta com INTERNAL."""
+    servicer = IaEngineServicer(
+        embeddings_factory=lambda _spec: FakeEmbeddings(dim=8),
+        config_cache=FakeConfigCache(),
+    )
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.Embed(
+                pb.EmbedRequest(
+                    tenant_id="t1",
+                    textos=["texto um"],
+                )
+            )
+    assert exc_info.value.code() == grpc.StatusCode.INTERNAL
+
+
+# ----------------------------------------------------------------- Responder
+@pytest.mark.asyncio
+async def test_responder_llm_devolve_tipo_inesperado_aborta_com_internal(
+    fake_embeddings_factory,
+):
+    chat = FakeChatModel(
+        messages=itertools.cycle([AIMessage(content="")]), resposta_bot=None
+    )
+    servicer = IaEngineServicer(
+        chat_model_factory=lambda _spec: chat,
+        embeddings_factory=fake_embeddings_factory,
+        config_cache=FakeConfigCache(),
+    )
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.Responder(
+                pb.ResponderRequest(
+                    tenant_id="t1",
+                    mensagem="Olá",
+                )
+            )
+    assert exc_info.value.code() == grpc.StatusCode.INTERNAL
+
+
+# ----------------------------------------------------------------- Sentimento
+@pytest.mark.asyncio
+async def test_sentimento_llm_devolve_tipo_inesperado_aborta_com_internal():
+    chat = FakeChatModel(
+        messages=itertools.cycle([AIMessage(content="")]), avaliacao=None
+    )
+    servicer = IaEngineServicer(
+        chat_model_factory=lambda _spec: chat, config_cache=FakeConfigCache()
+    )
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.Sentimento(
+                pb.SentimentoRequest(
+                    tenant_id="t1",
+                    historico=pb.ChatHistory(
+                        turnos=[pb.ChatTurn(role="human", conteudo="oi")]
+                    ),
+                )
+            )
+    assert exc_info.value.code() == grpc.StatusCode.INTERNAL
+
+
+@pytest.mark.asyncio
+async def test_sentimento_sem_historico_aborta_com_invalid_argument(
+    fake_chat_factory,
+):
+    """Sem turnos não há resposta do cliente a avaliar: falha antes de gastar
+    uma chamada de LLM que devolveria nota inventada."""
+    servicer = IaEngineServicer(chat_model_factory=fake_chat_factory)
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.Sentimento(pb.SentimentoRequest(tenant_id="t1"))
+    assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert "histórico" in exc_info.value.details()
+
+
+# ------------------------------------------------------- degradação graciosa
+@pytest.mark.asyncio
+async def test_erro_tecnico_inesperado_nao_vaza_detalhe_ao_cliente():
+    """Uma exceção técnica não prevista (bug/instabilidade do provedor) vira
+    `ErrorGeneric` — o cliente recebe uma mensagem genérica, nunca o texto
+    bruto da exceção (que poderia conter fragmento sensível do provedor)."""
+
+    def _chat_model_factory_com_bug(_spec: Any) -> Any:
+        raise RuntimeError("token interno do provedor: xyz-123")
+
+    servicer = IaEngineServicer(
+        chat_model_factory=_chat_model_factory_com_bug,
+        config_cache=FakeConfigCache(),
+    )
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.Sentimento(
+                pb.SentimentoRequest(
+                    tenant_id="t1",
+                    historico=pb.ChatHistory(
+                        turnos=[pb.ChatTurn(role="human", conteudo="oi")]
+                    ),
+                )
+            )
+    assert exc_info.value.code() == grpc.StatusCode.INTERNAL
+    assert exc_info.value.details() == "erro interno no ia_engine_jev"
+    assert "xyz-123" not in exc_info.value.details()
+
+
+# --------------------------------------------------- defensivo (_abort)
+class _ContextQueNaoPropaga:
+    """Fake de `ServicerContext` cujo `abort` não levanta — simula uma
+    implementação de transporte não conforme, para provar que `_abort`
+    garante `NoReturn` mesmo nesse cenário defensivo."""
+
+    async def abort(self, _code: grpc.StatusCode, _detail: str) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_abort_e_defensivo_quando_context_abort_nao_propaga():
+    servicer = IaEngineServicer(config_cache=FakeConfigCache())
+    with pytest.raises(RuntimeError):
+        await servicer._abort(  # type: ignore[arg-type]
+            _ContextQueNaoPropaga(),
+            InvalidRequestError(message="campo obrigatório ausente"),
+            "Rpc",
+            "t1",
+        )

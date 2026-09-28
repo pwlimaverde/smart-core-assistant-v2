@@ -936,6 +936,7 @@ table ListMyAuditLogRequest {
   desde:long;
   limit:int;
   offset:int;
+  evento_prefixo:string;
 }
 
 table MyAuditLogEntry {
@@ -1318,7 +1319,7 @@ table ItemExcluido {
 }
 
 table ListMyExcluidosResponse {
-  itens:[smartcore.contracts.queries.ItemExcluido];
+  itens:[ItemExcluido];
 }
 
 table DadosMyCliente {
@@ -1787,6 +1788,150 @@ table TestarPerguntaResponse {
   confiabilidade:double;
   transferiria:bool;
   fluxo_transferencia:string;
+  motor:string;
+  modelo:string;
+  motivo_transferencia:string;
+  sinais:[SinalValor];
+  intencao_principal:string;
+  confianca_intencao:double;
+  decisao:string;
+  trechos_aprovados:[string];
+}
+
+table RegraTransferencia {
+  id:long;
+  nome:string;
+  gatilho_tipo:string;
+  condicao:string;
+  intencao_tag:string;
+  exemplos_sim:[string];
+  exemplos_nao:[string];
+  momento:string;
+  campos_coleta:[string];
+  destino_tipo:string;
+  destino_fluxo_id:int;
+  mensagem:string;
+  sensibilidade:string;
+  ativa:bool;
+  sugestao:bool;
+  criado_em:long;
+  atualizado_em:long;
+}
+
+table ListMyRegrasTransferenciaRequest {
+}
+
+table ListMyRegrasTransferenciaResponse {
+  regras:[RegraTransferencia];
+}
+
+table SalvarMyRegraTransferenciaRequest {
+  id:long;
+  regra:RegraTransferencia;
+  dry_run:bool;
+}
+
+table SalvarMyRegraTransferenciaResponse {
+  regra:RegraTransferencia;
+  simulacao:bool;
+  campos_alterados:[string];
+}
+
+table SetMyRegraTransferenciaAtivaRequest {
+  id:long;
+  ativa:bool;
+  confirmar:string;
+  dry_run:bool;
+}
+
+table SetMyRegraTransferenciaAtivaResponse {
+  regra:RegraTransferencia;
+  simulacao:bool;
+}
+
+table SinalTransferencia {
+  nome:string;
+  ativo:bool;
+  sensibilidade:string;
+}
+
+table ConfigTransferencia {
+  sinais:[SinalTransferencia];
+  fluxo_padrao_id:int;
+  msg_transferencia:string;
+  motor_analise:string;
+}
+
+table GetMyConfigTransferenciaRequest {
+}
+
+table SetMySinaisTransferenciaRequest {
+  sinais:[SinalTransferencia];
+  alterar_fluxo_padrao:bool;
+  fluxo_padrao_id:int;
+  dry_run:bool;
+}
+
+table ConfigTransferenciaResponse {
+  config:ConfigTransferencia;
+  simulacao:bool;
+}
+
+table SinalValor {
+  nome:string;
+  valor:double;
+  limiar:double;
+}
+
+table TransferenciaIa {
+  id:long;
+  atendimento_id:int;
+  motor:string;
+  modelo:string;
+  motivo:string;
+  regra_id:long;
+  fluxo_id:int;
+  fluxo_nome:string;
+  sinais:[SinalValor];
+  criado_em:long;
+}
+
+table ListMyTransferenciasRequest {
+  limite:int;
+}
+
+table ListMyTransferenciasResponse {
+  transferencias:[TransferenciaIa];
+}
+
+table TestarMyRegraTransferenciaRequest {
+  frase:string;
+  regra_id:long;
+  regra:RegraTransferencia;
+}
+
+table TestarMyRegraTransferenciaResponse {
+  probabilidade:double;
+  limiar:double;
+  dispararia:bool;
+  modelo:string;
+}
+
+table GerarMySugestoesTransferenciaRequest {
+}
+
+table GerarMySugestoesTransferenciaResponse {
+  criadas:int;
+}
+
+table DefinirMotorTenantRequest {
+  tenant_id:string;
+  motor:string;
+}
+
+table DefinirMotorTenantResponse {
+  anterior:string;
+  atual:string;
 }
 
 table RegistrarFeedbackTesteRequest {
@@ -1896,6 +2041,61 @@ table ChatHistory {
   turnos:[ChatTurn];
 }
 
+table IntentDef {
+  tag:string;
+  grupo:string;
+  descricao:string;
+  exemplo:string;
+  comportamento:string;
+}
+
+table EntidadeDef {
+  tipo:string;
+  descricao:string;
+  estrategia:string;
+  opcoes:[string];
+}
+
+table Trecho {
+  id:string;
+  conteudo:string;
+  distancia:double;
+}
+
+table SinalDaDecisao {
+  nome:string;
+  valor:double;
+  limiar:double;
+}
+
+table TrechoAvaliado {
+  id:string;
+  aprovado:bool;
+  conflito:bool;
+}
+
+table UsoDoMotor {
+  tokens_entrada:long;
+  requisicoes:int;
+  duracao_ms:long;
+}
+
+table TestarRegraTransferenciaRequest {
+  tenant_id:string;
+  frase:string;
+  condicao:string;
+  exemplos_sim:[string];
+  exemplos_nao:[string];
+  sensibilidade:string;
+}
+
+table TestarRegraTransferenciaResponse {
+  probabilidade:double;
+  limiar:double;
+  dispararia:bool;
+  modelo:string;
+}
+
 table TranscribeRequest {
   tenant_id:string;
   media:MediaRef;
@@ -1924,6 +2124,8 @@ table AnalyseRequest {
   historico:ChatHistory;
   valid_intent_types:string;
   valid_entity_types:[string];
+  intents:[IntentDef];
+  entidades:[EntidadeDef];
 }
 
 table Intent {
@@ -1940,6 +2142,12 @@ table Entidade {
 table AnalyseResponse {
   intents:[Intent];
   entidades:[Entidade];
+  intent_principal:string;
+  confianca_principal:double;
+  intents_a_revisar:[string];
+  motor:string;
+  modelo:string;
+  uso:UsoDoMotor;
 }
 
 table ExtrairTextoDocumentoRequest {
@@ -1988,6 +2196,9 @@ table ResponderRequest {
   dados_treinamento:string;
   campos_coletados:[CampoColetado];
   campos_pendentes:[CampoPendente];
+  intents:[IntentDef];
+  trechos:[Trecho];
+  comportamento:string;
 }
 
 table CampoExtraido {
@@ -2002,6 +2213,17 @@ table ResponderResponse {
   fluxo_transferencia:string;
   confiabilidade:double;
   campos_extraidos:[CampoExtraido];
+  motivo_transferencia:string;
+  sinais:[SinalDaDecisao];
+  motor:string;
+  modelo:string;
+  uso:UsoDoMotor;
+  trechos:[TrechoAvaliado];
+  intencao_principal:string;
+  confianca_intencao:double;
+  decisao:string;
+  regra_id:long;
+  regerada:bool;
 }
 
 table SentimentoRequest {

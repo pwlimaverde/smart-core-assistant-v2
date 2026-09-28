@@ -12,6 +12,9 @@ use infrastructure_postgres::{DbError, RequestContext};
 /// distância de cosseno (quanto menor, mais similar).
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct DocumentoTrecho {
+    /// Plano ia-engine-jev: o motor Jev julga e registra cada trecho pelo id.
+    #[serde(default)]
+    pub id: i32,
     pub conteudo: Option<String>,
     pub distancia: f64,
 }

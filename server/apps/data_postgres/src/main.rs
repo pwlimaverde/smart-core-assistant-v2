@@ -103,6 +103,7 @@ mod adapters;
 mod mcp_grants;
 mod onboarding;
 mod ports;
+mod transferencia_rpc;
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -132,6 +133,9 @@ struct AppState {
     mcp_grants: std::sync::Arc<dyn ports::McpGrantStore>,
     /// Exclusão definitiva, desativar/reativar e a lista de excluídos (doc 39).
     exclusao: std::sync::Arc<dyn ports::ExclusaoStore>,
+    /// Plano ia-engine-jev: regras de transferência, sinais, motor por tenant
+    /// e o registro das decisões da IA.
+    transferencia: std::sync::Arc<dyn ports::TransferenciaStore>,
 }
 
 #[tokio::main]
@@ -288,6 +292,7 @@ async fn main() -> anyhow::Result<()> {
         adapters::PgMcpGrantStore::new(pool.clone(), admin_pool.clone()),
     );
 
+    let config_cache_transferencia = config_cache.clone();
     let state = AppState {
         pool: pool.clone(),
         admin_pool: admin_pool.clone(),
@@ -308,6 +313,13 @@ async fn main() -> anyhow::Result<()> {
         vouchers: voucher_store,
         mcp_grants: mcp_grant_store,
         exclusao: std::sync::Arc::new(adapters::PgExclusaoStore::new(pool.clone())),
+        transferencia: std::sync::Arc::new(adapters::PgTransferenciaStore::new(
+            pool.clone(),
+            admin_pool.clone(),
+            config_cache_transferencia,
+            bus_conn.clone(),
+            cache_conn.clone(),
+        )),
     };
 
     // Logger dedicado à supervisão das tasks de background. O `AuditPort` acima
@@ -1846,6 +1858,10 @@ async fn main() -> anyhow::Result<()> {
     // Consentimentos OAuth dos clientes MCP (N13.2) — mesmo motivo de estarem à
     // parte: seis rotas novas não cabem na cadeia acima sem torná-la ilegível.
     let server = registrar_rotas_mcp(server, state.clone());
+
+    // Plano ia-engine-jev — transferência para atendente, motor por tenant e o
+    // registro das decisões da IA.
+    let server = transferencia_rpc::registrar_rotas(server, state.clone());
 
     tracing::info!("Servidor RPC configurado e pronto.");
 

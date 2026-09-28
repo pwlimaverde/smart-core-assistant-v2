@@ -1109,6 +1109,9 @@ message ListMyAuditLogRequest {
   // Teto de 200 no servidor.
   int32 limit = 4;
   int32 offset = 5;
+  // Só eventos que começam com isto (ex.: "transferencia_regra.",
+  // "atendimento.transferido"). Vazio = todos.
+  string evento_prefixo = 6;
 }
 
 // Sem a mensagem do evento, de propósito: alguns eventos guardam nome ou
@@ -1567,6 +1570,22 @@ service AdminService {
   rpc UpdateMyEtapaFluxo(UpdateMyEtapaFluxoRequest) returns (SimpleOkResponse);
   rpc DesativarMyEtapaFluxo(MyEtapaFluxoIdRequest) returns (SimpleOkResponse);
   rpc MoverMyEtapaFluxo(MoverMyEtapaFluxoRequest) returns (SimpleOkResponse);
+
+  // Plano ia-engine-jev — "Transferência para atendente": o cadastro de regras
+  // do tenant, os sinais automáticos, o teste de uma regra contra uma frase e
+  // as últimas transferências com o motivo. A transferência é decisão do
+  // tenant: este cadastro é a única fonte de quando o bot transfere no motor Jev.
+  rpc ListMyRegrasTransferencia(ListMyRegrasTransferenciaRequest) returns (ListMyRegrasTransferenciaResponse);
+  rpc SalvarMyRegraTransferencia(SalvarMyRegraTransferenciaRequest) returns (SalvarMyRegraTransferenciaResponse);
+  rpc SetMyRegraTransferenciaAtiva(SetMyRegraTransferenciaAtivaRequest) returns (SetMyRegraTransferenciaAtivaResponse);
+  rpc GetMyConfigTransferencia(GetMyConfigTransferenciaRequest) returns (ConfigTransferenciaResponse);
+  rpc SetMySinaisTransferencia(SetMySinaisTransferenciaRequest) returns (ConfigTransferenciaResponse);
+  rpc ListMyTransferencias(ListMyTransferenciasRequest) returns (ListMyTransferenciasResponse);
+  rpc TestarMyRegraTransferencia(TestarMyRegraTransferenciaRequest) returns (TestarMyRegraTransferenciaResponse);
+  rpc GerarMySugestoesTransferencia(GerarMySugestoesTransferenciaRequest) returns (GerarMySugestoesTransferenciaResponse);
+  // Superusuário: o motor das decisões da IA de um tenant (llm | sombra | jev;
+  // vazio herda o global MOTOR_ANALISE). Auditado como tenant_config.motor_alterado.
+  rpc DefinirMotorTenant(DefinirMotorTenantRequest) returns (DefinirMotorTenantResponse);
 }
 
 // --- Fluxos de atendimento ---
@@ -2419,6 +2438,154 @@ message TestarPerguntaResponse {
   // `true` quando a IA decidiu transferir em vez de responder.
   bool transferiria = 5;
   string fluxo_transferencia = 6;
+  // Plano ia-engine-jev — por que decidiu assim. Vazios no motor atual.
+  string motor = 7;
+  string modelo = 8;
+  string motivo_transferencia = 9;
+  repeated SinalValor sinais = 10;
+  string intencao_principal = 11;
+  double confianca_intencao = 12;
+  // automatica | transferida | sem_info | a_revisar | reserva
+  string decisao = 13;
+  // Ids dos trechos aprovados como evidência (os demais foram descartados).
+  repeated string trechos_aprovados = 14;
+}
+
+// --- Plano ia-engine-jev: transferência para atendente ---
+
+// Uma regra do cadastro. `gatilho_tipo`: condicao (frase exata, lida ao pé da
+// letra) ou intencao (a intenção escolhida pelo Jev). `momento`: imediato ou
+// apos_coleta (só depois de preenchidos `campos_coleta`). `destino_tipo`:
+// fluxo (destino_fluxo_id), setor_jev (o setor que o Jev escolher) ou padrao.
+message RegraTransferencia {
+  int64 id = 1;
+  string nome = 2;
+  string gatilho_tipo = 3;
+  string condicao = 4;
+  string intencao_tag = 5;
+  repeated string exemplos_sim = 6;
+  repeated string exemplos_nao = 7;
+  string momento = 8;
+  repeated string campos_coleta = 9;
+  string destino_tipo = 10;
+  int32 destino_fluxo_id = 11;   // 0 = nenhum
+  string mensagem = 12;          // vazio = a mensagem padrão de transferência
+  string sensibilidade = 13;     // baixa | media | alta
+  bool ativa = 14;
+  bool sugestao = 15;            // criada pela migração do texto antigo
+  int64 criado_em = 16;
+  int64 atualizado_em = 17;
+}
+
+message ListMyRegrasTransferenciaRequest {}
+message ListMyRegrasTransferenciaResponse {
+  repeated RegraTransferencia regras = 1;
+}
+
+// id = 0 cria; senão atualiza a regra inteira com o que vier.
+message SalvarMyRegraTransferenciaRequest {
+  int64 id = 1;
+  RegraTransferencia regra = 2;
+  bool dry_run = 3;
+}
+message SalvarMyRegraTransferenciaResponse {
+  RegraTransferencia regra = 1;
+  bool simulacao = 2;
+  repeated string campos_alterados = 3;
+}
+
+// Desativar exige `confirmar` = nome da regra (vazio só para ativar).
+message SetMyRegraTransferenciaAtivaRequest {
+  int64 id = 1;
+  bool ativa = 2;
+  string confirmar = 3;
+  bool dry_run = 4;
+}
+message SetMyRegraTransferenciaAtivaResponse {
+  RegraTransferencia regra = 1;
+  bool simulacao = 2;
+}
+
+// Sinais automáticos: pede_humano, irritacao, duvida_transfere,
+// base_sem_resposta, resposta_sem_apoio.
+message SinalTransferencia {
+  string nome = 1;
+  bool ativo = 2;
+  string sensibilidade = 3;
+}
+
+message ConfigTransferencia {
+  repeated SinalTransferencia sinais = 1;
+  int32 fluxo_padrao_id = 2;     // 0 = nenhum
+  string msg_transferencia = 3;
+  // llm | sombra | jev — o efetivo, já com o global aplicado. Só leitura aqui.
+  string motor_analise = 4;
+}
+
+message GetMyConfigTransferenciaRequest {}
+message SetMySinaisTransferenciaRequest {
+  repeated SinalTransferencia sinais = 1;
+  bool alterar_fluxo_padrao = 2;
+  int32 fluxo_padrao_id = 3;     // 0 limpa, quando alterar_fluxo_padrao
+  bool dry_run = 4;
+}
+message ConfigTransferenciaResponse {
+  ConfigTransferencia config = 1;
+  bool simulacao = 2;
+}
+
+message SinalValor {
+  string nome = 1;
+  double valor = 2;
+  double limiar = 3;
+}
+
+// Uma transferência decidida pela IA — sem texto da conversa.
+message TransferenciaIa {
+  int64 id = 1;
+  int32 atendimento_id = 2;
+  string motor = 3;
+  string modelo = 4;
+  string motivo = 5;
+  int64 regra_id = 6;
+  int32 fluxo_id = 7;
+  string fluxo_nome = 8;
+  repeated SinalValor sinais = 9;
+  int64 criado_em = 10;
+}
+message ListMyTransferenciasRequest {
+  int32 limite = 1;
+}
+message ListMyTransferenciasResponse {
+  repeated TransferenciaIa transferencias = 1;
+}
+
+// Uma frase contra uma regra (a salva, por `regra_id`, ou a do formulário,
+// ainda não salva). Nada é gravado.
+message TestarMyRegraTransferenciaRequest {
+  string frase = 1;
+  int64 regra_id = 2;
+  RegraTransferencia regra = 3;
+}
+message TestarMyRegraTransferenciaResponse {
+  double probabilidade = 1;
+  double limiar = 2;
+  bool dispararia = 3;
+  string modelo = 4;
+}
+
+message GerarMySugestoesTransferenciaRequest {}
+message GerarMySugestoesTransferenciaResponse {
+  int32 criadas = 1;
+}
+
+message DefinirMotorTenantRequest {
+  string tenant_id = 1;
+  string motor = 2;              // llm | sombra | jev | "" (herda o global)
+}
+message DefinirMotorTenantResponse {
+  string anterior = 1;
+  string atual = 2;
 }
 
 // B9 (N10 E6) - a avaliacao de um ensaio, com a resposta correta. E correcao

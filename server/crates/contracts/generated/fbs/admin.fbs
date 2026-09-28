@@ -934,6 +934,7 @@ table ListMyAuditLogRequest {
   desde:long;
   limit:int;
   offset:int;
+  evento_prefixo:string;
 }
 
 table MyAuditLogEntry {
@@ -1786,6 +1787,150 @@ table TestarPerguntaResponse {
   confiabilidade:double;
   transferiria:bool;
   fluxo_transferencia:string;
+  motor:string;
+  modelo:string;
+  motivo_transferencia:string;
+  sinais:[smartcore.contracts.queries.SinalValor];
+  intencao_principal:string;
+  confianca_intencao:double;
+  decisao:string;
+  trechos_aprovados:[string];
+}
+
+table RegraTransferencia {
+  id:long;
+  nome:string;
+  gatilho_tipo:string;
+  condicao:string;
+  intencao_tag:string;
+  exemplos_sim:[string];
+  exemplos_nao:[string];
+  momento:string;
+  campos_coleta:[string];
+  destino_tipo:string;
+  destino_fluxo_id:int;
+  mensagem:string;
+  sensibilidade:string;
+  ativa:bool;
+  sugestao:bool;
+  criado_em:long;
+  atualizado_em:long;
+}
+
+table ListMyRegrasTransferenciaRequest {
+}
+
+table ListMyRegrasTransferenciaResponse {
+  regras:[smartcore.contracts.queries.RegraTransferencia];
+}
+
+table SalvarMyRegraTransferenciaRequest {
+  id:long;
+  regra:smartcore.contracts.queries.RegraTransferencia;
+  dry_run:bool;
+}
+
+table SalvarMyRegraTransferenciaResponse {
+  regra:smartcore.contracts.queries.RegraTransferencia;
+  simulacao:bool;
+  campos_alterados:[string];
+}
+
+table SetMyRegraTransferenciaAtivaRequest {
+  id:long;
+  ativa:bool;
+  confirmar:string;
+  dry_run:bool;
+}
+
+table SetMyRegraTransferenciaAtivaResponse {
+  regra:smartcore.contracts.queries.RegraTransferencia;
+  simulacao:bool;
+}
+
+table SinalTransferencia {
+  nome:string;
+  ativo:bool;
+  sensibilidade:string;
+}
+
+table ConfigTransferencia {
+  sinais:[smartcore.contracts.queries.SinalTransferencia];
+  fluxo_padrao_id:int;
+  msg_transferencia:string;
+  motor_analise:string;
+}
+
+table GetMyConfigTransferenciaRequest {
+}
+
+table SetMySinaisTransferenciaRequest {
+  sinais:[smartcore.contracts.queries.SinalTransferencia];
+  alterar_fluxo_padrao:bool;
+  fluxo_padrao_id:int;
+  dry_run:bool;
+}
+
+table ConfigTransferenciaResponse {
+  config:smartcore.contracts.queries.ConfigTransferencia;
+  simulacao:bool;
+}
+
+table SinalValor {
+  nome:string;
+  valor:double;
+  limiar:double;
+}
+
+table TransferenciaIa {
+  id:long;
+  atendimento_id:int;
+  motor:string;
+  modelo:string;
+  motivo:string;
+  regra_id:long;
+  fluxo_id:int;
+  fluxo_nome:string;
+  sinais:[smartcore.contracts.queries.SinalValor];
+  criado_em:long;
+}
+
+table ListMyTransferenciasRequest {
+  limite:int;
+}
+
+table ListMyTransferenciasResponse {
+  transferencias:[smartcore.contracts.queries.TransferenciaIa];
+}
+
+table TestarMyRegraTransferenciaRequest {
+  frase:string;
+  regra_id:long;
+  regra:smartcore.contracts.queries.RegraTransferencia;
+}
+
+table TestarMyRegraTransferenciaResponse {
+  probabilidade:double;
+  limiar:double;
+  dispararia:bool;
+  modelo:string;
+}
+
+table GerarMySugestoesTransferenciaRequest {
+}
+
+table GerarMySugestoesTransferenciaResponse {
+  criadas:int;
+}
+
+table DefinirMotorTenantRequest {
+  tenant_id:string;
+  motor:string;
+}
+
+table DefinirMotorTenantResponse {
+  anterior:string;
+  atual:string;
 }
 
 table RegistrarFeedbackTesteRequest {

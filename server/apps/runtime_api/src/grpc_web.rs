@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use application::auth::login::AuthDeps;
+use contracts::grpc::queries as q;
 use contracts::grpc::queries::admin_service_server::{AdminService, AdminServiceServer};
 use contracts::grpc::queries::auth_service_server::{AuthService, AuthServiceServer};
 use contracts::grpc::queries::{
@@ -715,6 +716,187 @@ fn exigir_escopo_de_rota(claims: &application::jwt::Claims, metodo: &str) -> Res
     Err(Status::permission_denied("errors.auth.forbidden"))
 }
 
+// --- Plano ia-engine-jev: conversões JSON ⇄ proto da transferência ---
+
+fn texto_de(v: &serde_json::Value, k: &str) -> String {
+    v.get(k)
+        .and_then(|x| x.as_str())
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn lista_de(v: &serde_json::Value, k: &str) -> Vec<String> {
+    v.get(k)
+        .and_then(|x| x.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|s| s.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn regra_do_json(v: &serde_json::Value) -> q::RegraTransferencia {
+    q::RegraTransferencia {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0),
+        nome: texto_de(v, "nome"),
+        gatilho_tipo: texto_de(v, "gatilho_tipo"),
+        condicao: texto_de(v, "condicao"),
+        intencao_tag: texto_de(v, "intencao_tag"),
+        exemplos_sim: lista_de(v, "exemplos_sim"),
+        exemplos_nao: lista_de(v, "exemplos_nao"),
+        momento: texto_de(v, "momento"),
+        campos_coleta: lista_de(v, "campos_coleta"),
+        destino_tipo: texto_de(v, "destino_tipo"),
+        destino_fluxo_id: v
+            .get("destino_fluxo_id")
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0) as i32,
+        mensagem: texto_de(v, "mensagem"),
+        sensibilidade: texto_de(v, "sensibilidade"),
+        ativa: v.get("ativa").and_then(|x| x.as_bool()).unwrap_or(false),
+        sugestao: v.get("sugestao").and_then(|x| x.as_bool()).unwrap_or(false),
+        criado_em: v.get("criado_em").and_then(|x| x.as_i64()).unwrap_or(0),
+        atualizado_em: v.get("atualizado_em").and_then(|x| x.as_i64()).unwrap_or(0),
+    }
+}
+
+fn regra_para_json(r: &q::RegraTransferencia) -> serde_json::Value {
+    serde_json::json!({
+        "id": r.id,
+        "nome": r.nome,
+        "gatilho_tipo": r.gatilho_tipo,
+        "condicao": r.condicao,
+        "intencao_tag": r.intencao_tag,
+        "exemplos_sim": r.exemplos_sim,
+        "exemplos_nao": r.exemplos_nao,
+        "momento": r.momento,
+        "campos_coleta": r.campos_coleta,
+        "destino_tipo": r.destino_tipo,
+        // 0 = nenhum: vai como null para o servidor limpar o destino.
+        "destino_fluxo_id": (r.destino_fluxo_id > 0).then_some(r.destino_fluxo_id),
+        "mensagem": r.mensagem,
+        "sensibilidade": r.sensibilidade,
+    })
+}
+
+fn config_transferencia_do_json(v: &serde_json::Value) -> q::ConfigTransferencia {
+    q::ConfigTransferencia {
+        sinais: v
+            .get("sinais")
+            .and_then(|x| x.as_array())
+            .map(|a| {
+                a.iter()
+                    .map(|s| q::SinalTransferencia {
+                        nome: texto_de(s, "nome"),
+                        ativo: s.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
+                        sensibilidade: texto_de(s, "sensibilidade"),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        fluxo_padrao_id: v
+            .get("fluxo_padrao_id")
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0) as i32,
+        msg_transferencia: texto_de(v, "msg_transferencia"),
+        motor_analise: texto_de(v, "motor_analise"),
+    }
+}
+
+fn transferencia_do_json(v: &serde_json::Value) -> q::TransferenciaIa {
+    q::TransferenciaIa {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0),
+        atendimento_id: v
+            .get("atendimento_id")
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0) as i32,
+        motor: texto_de(v, "motor"),
+        modelo: texto_de(v, "modelo"),
+        motivo: texto_de(v, "motivo"),
+        regra_id: v.get("regra_id").and_then(|x| x.as_i64()).unwrap_or(0),
+        fluxo_id: v.get("fluxo_id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        fluxo_nome: texto_de(v, "fluxo_nome"),
+        sinais: v
+            .get("sinais")
+            .and_then(|x| x.as_array())
+            .map(|a| {
+                a.iter()
+                    .map(|s| q::SinalValor {
+                        nome: texto_de(s, "nome"),
+                        valor: s.get("valor").and_then(|x| x.as_f64()).unwrap_or(0.0),
+                        limiar: s.get("limiar").and_then(|x| x.as_f64()).unwrap_or(0.0),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        criado_em: v.get("criado_em").and_then(|x| x.as_i64()).unwrap_or(0),
+    }
+}
+
+/// O catálogo de intenções do `ListIntentsReply`, como o motor Jev o recebe.
+fn intents_do_catalogo(v: &serde_json::Value) -> Vec<ia_client::client::IntentDefInput> {
+    v.get("intents")
+        .and_then(|x| x.as_array())
+        .map(|a| {
+            a.iter()
+                .map(|i| ia_client::client::IntentDefInput {
+                    tag: texto_de(i, "tag").trim().to_string(),
+                    grupo: texto_de(i, "grupo"),
+                    descricao: texto_de(i, "descricao"),
+                    exemplo: texto_de(i, "exemplo"),
+                    comportamento: texto_de(i, "comportamento"),
+                })
+                .filter(|i| !i.tag.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests_transferencia {
+    use super::*;
+
+    #[test]
+    fn regra_ida_e_volta_sem_destino_vira_null() {
+        let r = q::RegraTransferencia {
+            id: 4,
+            nome: "Fechar".into(),
+            condicao: "o cliente quer fechar".into(),
+            exemplos_sim: vec!["pode fechar".into()],
+            destino_fluxo_id: 0,
+            ..Default::default()
+        };
+        let j = regra_para_json(&r);
+        assert!(j["destino_fluxo_id"].is_null());
+        let volta = regra_do_json(&j);
+        assert_eq!(volta.nome, "Fechar");
+        assert_eq!(volta.exemplos_sim, vec!["pode fechar"]);
+    }
+
+    #[test]
+    fn config_e_transferencias_do_json() {
+        let c = config_transferencia_do_json(&serde_json::json!({
+            "sinais": [{ "nome": "pede_humano", "ativo": true, "sensibilidade": "alta" }],
+            "fluxo_padrao_id": null,
+            "motor_analise": "sombra",
+        }));
+        assert_eq!(c.sinais[0].sensibilidade, "alta");
+        assert_eq!(c.fluxo_padrao_id, 0);
+        assert_eq!(c.motor_analise, "sombra");
+        let t = transferencia_do_json(&serde_json::json!({
+            "id": 1, "motivo": "regra:Fechar", "sinais": [{ "nome": "pede_humano", "valor": 0.9, "limiar": 0.8 }],
+        }));
+        assert_eq!(t.motivo, "regra:Fechar");
+        assert_eq!(t.sinais[0].valor, 0.9);
+        let intents = intents_do_catalogo(
+            &serde_json::json!({ "intents": [{ "tag": " a " }, { "tag": "" }] }),
+        );
+        assert_eq!(intents.len(), 1);
+        assert_eq!(intents[0].tag, "a");
+    }
+}
+
 /// Os fluxos do tenant no formato que o `Responder` espera: chave
 /// "Setor - descrição" (na falta da descrição, o nome do fluxo) e o id como
 /// valor — a mesma convenção do worker, para o ensaio e a conversa real
@@ -1385,6 +1567,10 @@ pub struct AdminFacade {
     /// a mesma crate, então timeout, retry e degradação são configurados num
     /// lugar só.
     ia: Arc<dyn ia_client::IaEngineClient>,
+    /// Plano ia-engine-jev — o motor Jev (`SMARTCORE_IA_ENGINE_JEV_ENDPOINT`),
+    /// para o teste de regra e para o ensaio de pergunta de quem já está no
+    /// motor Jev ou na sombra. `None` = não configurado.
+    ia_jev: Option<Arc<dyn ia_client::IaEngineClient>>,
     /// Os mesmos provedores de pagamento do wizard público.
     ///
     /// Compartilhar o registro é o ponto: quitar depois do login e pagar durante
@@ -1454,8 +1640,59 @@ impl AdminFacade {
             realtime,
             whatsapp,
             ia,
+            ia_jev: None,
             provedores,
             email: infrastructure_email::Enviador::do_ambiente(),
+        }
+    }
+
+    /// Liga o motor Jev ao facade (opcional, lido do ambiente no boot).
+    pub fn com_ia_jev(mut self, ia_jev: Option<Arc<dyn ia_client::IaEngineClient>>) -> Self {
+        self.ia_jev = ia_jev;
+        self
+    }
+
+    /// O motor efetivo do tenant (`llm` | `sombra` | `jev`). Leitura interna,
+    /// sem o RBAC da rota: quem testa a pergunta tem `treinamento:read`, e o
+    /// motor não é segredo. Falha = `llm`.
+    async fn motor_do_tenant(&self, tenant_id: &str, traceparent: &str) -> String {
+        let env_req = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            traceparent: traceparent.to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "GetConfigTransferencia".to_string(),
+            payload: b"{}".to_vec(),
+            ..Default::default()
+        };
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) if resp.kind != MessageKind::Error as i32 => {
+                serde_json::from_slice::<serde_json::Value>(&resp.payload)
+                    .ok()
+                    .and_then(|v| {
+                        v.get("motor_analise")
+                            .and_then(|m| m.as_str())
+                            .map(str::to_string)
+                    })
+                    .unwrap_or_else(|| "llm".into())
+            }
+            _ => "llm".into(),
+        }
+    }
+
+    /// O cliente que responde pelo motor do tenant. Na sombra, o ensaio mostra
+    /// o que o Jev faria — é para isso que a sombra existe.
+    fn ia_do_motor(&self, motor: &str) -> Arc<dyn ia_client::IaEngineClient> {
+        match (motor, self.ia_jev.as_ref()) {
+            ("jev" | "sombra", Some(jev)) => jev.clone(),
+            _ => self.ia.clone(),
         }
     }
 
@@ -4023,8 +4260,46 @@ impl AdminService for AdminFacade {
 
         // 4. Resposta. Sem histórico: o ensaio é de uma pergunta isolada, e
         // inventar uma conversa anterior mudaria o que a IA responderia.
-        let saida = self
-            .ia
+        //
+        // Plano ia-engine-jev: pelo motor do tenant, com os trechos separados
+        // (o Jev julga cada um), o catálogo de intenções e o comportamento à
+        // parte — do mesmo jeito que o worker manda na conversa real.
+        let motor = self.motor_do_tenant(&claims.tenant_id, &traceparent).await;
+        let ia = self.ia_do_motor(&motor);
+        let trechos_ia: Vec<ia_client::client::TrechoInput> = contexto
+            .get("documentos")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|d| {
+                        Some(ia_client::client::TrechoInput {
+                            id: d
+                                .get("id")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0)
+                                .to_string(),
+                            conteudo: d.get("conteudo")?.as_str()?.to_string(),
+                            distancia: d.get("distancia").and_then(|c| c.as_f64()).unwrap_or(0.0),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let intents = if motor == "llm" {
+            Vec::new()
+        } else {
+            match self
+                .encaminhar_tenant(&req, &self.deps.pg, "ListIntents", serde_json::json!({}))
+                .await
+            {
+                Ok(resp) => intents_do_catalogo(&resp),
+                Err(e) => {
+                    tracing::warn!(erro = %e, "ListIntents falhou; ensaio sem catálogo");
+                    Vec::new()
+                }
+            }
+        };
+        let saida = ia
             .responder(
                 ia_client::ResponderInput {
                     tenant_id: claims.tenant_id.clone(),
@@ -4032,6 +4307,9 @@ impl AdminService for AdminFacade {
                     mensagem: pergunta,
                     fluxos_disponiveis,
                     dados_treinamento: partes.join("\n\n"),
+                    intents,
+                    trechos: trechos_ia,
+                    comportamento: comportamento.clone(),
                     ..Default::default()
                 },
                 &traceparent,
@@ -4046,6 +4324,361 @@ impl AdminService for AdminFacade {
             confiabilidade: saida.confiabilidade,
             transferiria: saida.transferir_atendimento,
             fluxo_transferencia: saida.fluxo_transferencia,
+            motor: if saida.motor.is_empty() {
+                "llm".into()
+            } else {
+                saida.motor
+            },
+            modelo: saida.modelo,
+            motivo_transferencia: saida.motivo_transferencia,
+            sinais: saida
+                .sinais
+                .into_iter()
+                .map(|s| q::SinalValor {
+                    nome: s.nome,
+                    valor: s.valor,
+                    limiar: s.limiar,
+                })
+                .collect(),
+            intencao_principal: saida.intencao_principal,
+            confianca_intencao: saida.confianca_intencao,
+            decisao: saida.decisao,
+            trechos_aprovados: saida
+                .trechos
+                .into_iter()
+                .filter(|t| t.aprovado)
+                .map(|t| t.id)
+                .collect(),
+        }))
+    }
+
+    // ------------------------------------------------------------------
+    // Plano ia-engine-jev — transferência para atendente.
+    // ------------------------------------------------------------------
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ListMyRegrasTransferencia",
+            traceparent
+        )
+    )]
+    async fn list_my_regras_transferencia(
+        &self,
+        req: Request<q::ListMyRegrasTransferenciaRequest>,
+    ) -> Result<Response<q::ListMyRegrasTransferenciaResponse>, Status> {
+        let val = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListRegrasTransferencia",
+                serde_json::json!({}),
+            )
+            .await?;
+        let regras = val
+            .get("regras")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().map(regra_do_json).collect())
+            .unwrap_or_default();
+        Ok(Response::new(q::ListMyRegrasTransferenciaResponse {
+            regras,
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "SalvarMyRegraTransferencia",
+            traceparent
+        )
+    )]
+    async fn salvar_my_regra_transferencia(
+        &self,
+        req: Request<q::SalvarMyRegraTransferenciaRequest>,
+    ) -> Result<Response<q::SalvarMyRegraTransferenciaResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let regra = inner
+            .regra
+            .ok_or_else(|| Status::invalid_argument("envie a regra"))?;
+        let mut payload = regra_para_json(&regra);
+        if let Some(obj) = payload.as_object_mut() {
+            obj.remove("id");
+            if inner.id > 0 {
+                obj.insert("id".into(), serde_json::json!(inner.id));
+            }
+            obj.insert("dry_run".into(), serde_json::json!(inner.dry_run));
+        }
+        let val = self
+            .encaminhar_tenant(&req, &self.deps.pg, "SalvarRegraTransferencia", payload)
+            .await?;
+        Ok(Response::new(q::SalvarMyRegraTransferenciaResponse {
+            regra: val.get("regra").map(regra_do_json),
+            simulacao: val
+                .get("simulacao")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            campos_alterados: val
+                .get("campos_alterados")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|c| c.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "SetMyRegraTransferenciaAtiva",
+            traceparent
+        )
+    )]
+    async fn set_my_regra_transferencia_ativa(
+        &self,
+        req: Request<q::SetMyRegraTransferenciaAtivaRequest>,
+    ) -> Result<Response<q::SetMyRegraTransferenciaAtivaResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let val = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "SetRegraTransferenciaAtiva",
+                serde_json::json!({
+                    "id": inner.id,
+                    "ativa": inner.ativa,
+                    "confirmar": inner.confirmar,
+                    "dry_run": inner.dry_run,
+                }),
+            )
+            .await?;
+        Ok(Response::new(q::SetMyRegraTransferenciaAtivaResponse {
+            regra: val.get("regra").map(regra_do_json),
+            simulacao: val
+                .get("simulacao")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetMyConfigTransferencia", traceparent)
+    )]
+    async fn get_my_config_transferencia(
+        &self,
+        req: Request<q::GetMyConfigTransferenciaRequest>,
+    ) -> Result<Response<q::ConfigTransferenciaResponse>, Status> {
+        let val = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "GetConfigTransferencia",
+                serde_json::json!({}),
+            )
+            .await?;
+        Ok(Response::new(q::ConfigTransferenciaResponse {
+            config: Some(config_transferencia_do_json(&val)),
+            simulacao: false,
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "SetMySinaisTransferencia", traceparent)
+    )]
+    async fn set_my_sinais_transferencia(
+        &self,
+        req: Request<q::SetMySinaisTransferenciaRequest>,
+    ) -> Result<Response<q::ConfigTransferenciaResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let mut payload = serde_json::json!({ "dry_run": inner.dry_run });
+        if !inner.sinais.is_empty() {
+            payload["sinais"] = serde_json::Value::Array(
+                inner
+                    .sinais
+                    .iter()
+                    .map(|s| {
+                        serde_json::json!({
+                            "nome": s.nome,
+                            "ativo": s.ativo,
+                            "sensibilidade": s.sensibilidade,
+                        })
+                    })
+                    .collect(),
+            );
+        }
+        if inner.alterar_fluxo_padrao {
+            payload["fluxo_padrao_id"] = serde_json::json!(inner.fluxo_padrao_id);
+        }
+        let val = self
+            .encaminhar_tenant(&req, &self.deps.pg, "SetSinaisTransferencia", payload)
+            .await?;
+        Ok(Response::new(q::ConfigTransferenciaResponse {
+            config: Some(config_transferencia_do_json(&val)),
+            simulacao: val
+                .get("simulacao")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyTransferencias", traceparent)
+    )]
+    async fn list_my_transferencias(
+        &self,
+        req: Request<q::ListMyTransferenciasRequest>,
+    ) -> Result<Response<q::ListMyTransferenciasResponse>, Status> {
+        let limite = req.get_ref().limite;
+        let val = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListTransferencias",
+                serde_json::json!({ "limite": limite }),
+            )
+            .await?;
+        let transferencias = val
+            .get("transferencias")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().map(transferencia_do_json).collect())
+            .unwrap_or_default();
+        Ok(Response::new(q::ListMyTransferenciasResponse {
+            transferencias,
+        }))
+    }
+
+    /// Uma frase contra uma regra (salva ou do formulário). Pelo motor Jev,
+    /// mesmo que o tenant ainda esteja no motor atual: é assim que ele testa
+    /// antes de ligar. Nada é gravado — nem a frase, nem o resultado.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "TestarMyRegraTransferencia",
+            traceparent
+        )
+    )]
+    async fn testar_my_regra_transferencia(
+        &self,
+        req: Request<q::TestarMyRegraTransferenciaRequest>,
+    ) -> Result<Response<q::TestarMyRegraTransferenciaResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["configuracoes:read"], "TestarRegraTransferencia")?;
+        let traceparent = traceparent_do_metadata(&req);
+        let inner = req.get_ref().clone();
+        let frase = inner.frase.trim().to_string();
+        if frase.is_empty() {
+            return Err(Status::invalid_argument("escreva a frase a testar"));
+        }
+        let regra = if inner.regra_id > 0 {
+            let val = self
+                .encaminhar_tenant(
+                    &req,
+                    &self.deps.pg,
+                    "GetRegraTransferencia",
+                    serde_json::json!({ "id": inner.regra_id }),
+                )
+                .await?;
+            val.get("regra").map(regra_do_json).unwrap_or_default()
+        } else {
+            inner
+                .regra
+                .ok_or_else(|| Status::invalid_argument("informe a regra ou o regra_id"))?
+        };
+        if regra.gatilho_tipo == "intencao" {
+            return Err(Status::invalid_argument(
+                "regra por intenção se testa no \"Testar pergunta\" do treinamento",
+            ));
+        }
+        if regra.condicao.trim().is_empty() {
+            return Err(Status::invalid_argument("a regra não tem condição"));
+        }
+        let Some(jev) = self.ia_jev.as_ref() else {
+            return Err(Status::failed_precondition(
+                "o motor Jev não está configurado neste ambiente",
+            ));
+        };
+        let saida = jev
+            .testar_regra_transferencia(
+                ia_client::client::TestarRegraInput {
+                    tenant_id: claims.tenant_id.clone(),
+                    frase,
+                    condicao: regra.condicao,
+                    exemplos_sim: regra.exemplos_sim,
+                    exemplos_nao: regra.exemplos_nao,
+                    sensibilidade: regra.sensibilidade,
+                },
+                &traceparent,
+            )
+            .await
+            .map_err(|e| Status::unavailable(format!("o Jev não respondeu: {e}")))?;
+        Ok(Response::new(q::TestarMyRegraTransferenciaResponse {
+            probabilidade: saida.probabilidade,
+            limiar: saida.limiar,
+            dispararia: saida.dispararia,
+            modelo: saida.modelo,
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "GerarMySugestoesTransferencia",
+            traceparent
+        )
+    )]
+    async fn gerar_my_sugestoes_transferencia(
+        &self,
+        req: Request<q::GerarMySugestoesTransferenciaRequest>,
+    ) -> Result<Response<q::GerarMySugestoesTransferenciaResponse>, Status> {
+        let val = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "GerarSugestoesTransferencia",
+                serde_json::json!({}),
+            )
+            .await?;
+        Ok(Response::new(q::GerarMySugestoesTransferenciaResponse {
+            criadas: val.get("criadas").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+        }))
+    }
+
+    /// Superusuário: o motor das decisões da IA de um tenant.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DefinirMotorTenant", traceparent)
+    )]
+    async fn definir_motor_tenant(
+        &self,
+        req: Request<q::DefinirMotorTenantRequest>,
+    ) -> Result<Response<q::DefinirMotorTenantResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let val = self
+            .encaminhar_admin(
+                &req,
+                "DefinirMotorTenant",
+                serde_json::json!({ "tenant_id": inner.tenant_id, "motor": inner.motor }),
+            )
+            .await?;
+        let texto = |k: &str| {
+            val.get(k)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        Ok(Response::new(q::DefinirMotorTenantResponse {
+            anterior: texto("anterior"),
+            atual: texto("atual"),
         }))
     }
 
@@ -9293,6 +9926,7 @@ impl AdminService for AdminFacade {
                 "desde": inner.desde,
                 "limit": inner.limit,
                 "offset": inner.offset,
+                "evento_prefixo": inner.evento_prefixo,
             }))
             .unwrap_or_default(),
             auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
@@ -10507,15 +11141,30 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
         ia_client::TonicIaEngineClient::connect_lazy(&ia_endpoint)?,
     ));
 
-    let facade_admin = AdminServiceServer::new(AdminFacade::new(
-        deps,
-        bus,
-        control,
-        realtime,
-        whatsapp,
-        ia,
-        provedores.clone(),
-    ));
+    // Plano ia-engine-jev — o motor Jev, opcional: teste de regra e ensaio de
+    // pergunta de quem está no motor Jev ou na sombra.
+    let ia_jev: Option<Arc<dyn ia_client::IaEngineClient>> =
+        match std::env::var("SMARTCORE_IA_ENGINE_JEV_ENDPOINT") {
+            Ok(endpoint) if !endpoint.trim().is_empty() => {
+                Some(Arc::new(ia_client::ResilientIaEngine::new(
+                    ia_client::TonicIaEngineClient::connect_lazy(endpoint.trim())?,
+                )))
+            }
+            _ => None,
+        };
+
+    let facade_admin = AdminServiceServer::new(
+        AdminFacade::new(
+            deps,
+            bus,
+            control,
+            realtime,
+            whatsapp,
+            ia,
+            provedores.clone(),
+        )
+        .com_ia_jev(ia_jev),
+    );
 
     // CORS restritivo (defesa em profundidade mesmo servindo na mesma origem que o WASM).
     let cors = tower_http::cors::CorsLayer::new()

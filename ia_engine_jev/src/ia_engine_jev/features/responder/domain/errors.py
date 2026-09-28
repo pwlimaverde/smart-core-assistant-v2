@@ -1,0 +1,12 @@
+"""União fechada de erros da feature Responder."""
+
+from __future__ import annotations
+
+from py_return_success_or_error import ErrorGeneric
+
+from ia_engine_jev.domain.errors import (
+    LlmRespostaInvalidaError,
+    ProviderConfigError,
+)
+
+type ResponderError = ProviderConfigError | LlmRespostaInvalidaError | ErrorGeneric

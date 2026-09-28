@@ -1185,6 +1185,87 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$moverMyEtapaFluxo, request, options: options);
   }
 
+  /// Plano ia-engine-jev — "Transferência para atendente": o cadastro de regras
+  /// do tenant, os sinais automáticos, o teste de uma regra contra uma frase e
+  /// as últimas transferências com o motivo. A transferência é decisão do
+  /// tenant: este cadastro é a única fonte de quando o bot transfere no motor Jev.
+  $grpc.ResponseFuture<$0.ListMyRegrasTransferenciaResponse>
+      listMyRegrasTransferencia(
+    $0.ListMyRegrasTransferenciaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyRegrasTransferencia, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SalvarMyRegraTransferenciaResponse>
+      salvarMyRegraTransferencia(
+    $0.SalvarMyRegraTransferenciaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$salvarMyRegraTransferencia, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SetMyRegraTransferenciaAtivaResponse>
+      setMyRegraTransferenciaAtiva(
+    $0.SetMyRegraTransferenciaAtivaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$setMyRegraTransferenciaAtiva, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ConfigTransferenciaResponse> getMyConfigTransferencia(
+    $0.GetMyConfigTransferenciaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getMyConfigTransferencia, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ConfigTransferenciaResponse> setMySinaisTransferencia(
+    $0.SetMySinaisTransferenciaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$setMySinaisTransferencia, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListMyTransferenciasResponse> listMyTransferencias(
+    $0.ListMyTransferenciasRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyTransferencias, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.TestarMyRegraTransferenciaResponse>
+      testarMyRegraTransferencia(
+    $0.TestarMyRegraTransferenciaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$testarMyRegraTransferencia, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.GerarMySugestoesTransferenciaResponse>
+      gerarMySugestoesTransferencia(
+    $0.GerarMySugestoesTransferenciaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$gerarMySugestoesTransferencia, request,
+        options: options);
+  }
+
+  /// Superusuário: o motor das decisões da IA de um tenant (llm | sombra | jev;
+  /// vazio herda o global MOTOR_ANALISE). Auditado como tenant_config.motor_alterado.
+  $grpc.ResponseFuture<$0.DefinirMotorTenantResponse> definirMotorTenant(
+    $0.DefinirMotorTenantRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$definirMotorTenant, request, options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -1932,6 +2013,56 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/MoverMyEtapaFluxo',
           ($0.MoverMyEtapaFluxoRequest value) => value.writeToBuffer(),
           $0.SimpleOkResponse.fromBuffer);
+  static final _$listMyRegrasTransferencia = $grpc.ClientMethod<
+          $0.ListMyRegrasTransferenciaRequest,
+          $0.ListMyRegrasTransferenciaResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyRegrasTransferencia',
+      ($0.ListMyRegrasTransferenciaRequest value) => value.writeToBuffer(),
+      $0.ListMyRegrasTransferenciaResponse.fromBuffer);
+  static final _$salvarMyRegraTransferencia = $grpc.ClientMethod<
+          $0.SalvarMyRegraTransferenciaRequest,
+          $0.SalvarMyRegraTransferenciaResponse>(
+      '/smartcore.contracts.queries.AdminService/SalvarMyRegraTransferencia',
+      ($0.SalvarMyRegraTransferenciaRequest value) => value.writeToBuffer(),
+      $0.SalvarMyRegraTransferenciaResponse.fromBuffer);
+  static final _$setMyRegraTransferenciaAtiva = $grpc.ClientMethod<
+          $0.SetMyRegraTransferenciaAtivaRequest,
+          $0.SetMyRegraTransferenciaAtivaResponse>(
+      '/smartcore.contracts.queries.AdminService/SetMyRegraTransferenciaAtiva',
+      ($0.SetMyRegraTransferenciaAtivaRequest value) => value.writeToBuffer(),
+      $0.SetMyRegraTransferenciaAtivaResponse.fromBuffer);
+  static final _$getMyConfigTransferencia = $grpc.ClientMethod<
+          $0.GetMyConfigTransferenciaRequest, $0.ConfigTransferenciaResponse>(
+      '/smartcore.contracts.queries.AdminService/GetMyConfigTransferencia',
+      ($0.GetMyConfigTransferenciaRequest value) => value.writeToBuffer(),
+      $0.ConfigTransferenciaResponse.fromBuffer);
+  static final _$setMySinaisTransferencia = $grpc.ClientMethod<
+          $0.SetMySinaisTransferenciaRequest, $0.ConfigTransferenciaResponse>(
+      '/smartcore.contracts.queries.AdminService/SetMySinaisTransferencia',
+      ($0.SetMySinaisTransferenciaRequest value) => value.writeToBuffer(),
+      $0.ConfigTransferenciaResponse.fromBuffer);
+  static final _$listMyTransferencias = $grpc.ClientMethod<
+          $0.ListMyTransferenciasRequest, $0.ListMyTransferenciasResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyTransferencias',
+      ($0.ListMyTransferenciasRequest value) => value.writeToBuffer(),
+      $0.ListMyTransferenciasResponse.fromBuffer);
+  static final _$testarMyRegraTransferencia = $grpc.ClientMethod<
+          $0.TestarMyRegraTransferenciaRequest,
+          $0.TestarMyRegraTransferenciaResponse>(
+      '/smartcore.contracts.queries.AdminService/TestarMyRegraTransferencia',
+      ($0.TestarMyRegraTransferenciaRequest value) => value.writeToBuffer(),
+      $0.TestarMyRegraTransferenciaResponse.fromBuffer);
+  static final _$gerarMySugestoesTransferencia = $grpc.ClientMethod<
+          $0.GerarMySugestoesTransferenciaRequest,
+          $0.GerarMySugestoesTransferenciaResponse>(
+      '/smartcore.contracts.queries.AdminService/GerarMySugestoesTransferencia',
+      ($0.GerarMySugestoesTransferenciaRequest value) => value.writeToBuffer(),
+      $0.GerarMySugestoesTransferenciaResponse.fromBuffer);
+  static final _$definirMotorTenant = $grpc.ClientMethod<
+          $0.DefinirMotorTenantRequest, $0.DefinirMotorTenantResponse>(
+      '/smartcore.contracts.queries.AdminService/DefinirMotorTenant',
+      ($0.DefinirMotorTenantRequest value) => value.writeToBuffer(),
+      $0.DefinirMotorTenantResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AdminService')
@@ -3236,6 +3367,91 @@ abstract class AdminServiceBase extends $grpc.Service {
             ($core.List<$core.int> value) =>
                 $0.MoverMyEtapaFluxoRequest.fromBuffer(value),
             ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyRegrasTransferenciaRequest,
+            $0.ListMyRegrasTransferenciaResponse>(
+        'ListMyRegrasTransferencia',
+        listMyRegrasTransferencia_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyRegrasTransferenciaRequest.fromBuffer(value),
+        ($0.ListMyRegrasTransferenciaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SalvarMyRegraTransferenciaRequest,
+            $0.SalvarMyRegraTransferenciaResponse>(
+        'SalvarMyRegraTransferencia',
+        salvarMyRegraTransferencia_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SalvarMyRegraTransferenciaRequest.fromBuffer(value),
+        ($0.SalvarMyRegraTransferenciaResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SetMyRegraTransferenciaAtivaRequest,
+            $0.SetMyRegraTransferenciaAtivaResponse>(
+        'SetMyRegraTransferenciaAtiva',
+        setMyRegraTransferenciaAtiva_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SetMyRegraTransferenciaAtivaRequest.fromBuffer(value),
+        ($0.SetMyRegraTransferenciaAtivaResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetMyConfigTransferenciaRequest,
+            $0.ConfigTransferenciaResponse>(
+        'GetMyConfigTransferencia',
+        getMyConfigTransferencia_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetMyConfigTransferenciaRequest.fromBuffer(value),
+        ($0.ConfigTransferenciaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SetMySinaisTransferenciaRequest,
+            $0.ConfigTransferenciaResponse>(
+        'SetMySinaisTransferencia',
+        setMySinaisTransferencia_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SetMySinaisTransferenciaRequest.fromBuffer(value),
+        ($0.ConfigTransferenciaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyTransferenciasRequest,
+            $0.ListMyTransferenciasResponse>(
+        'ListMyTransferencias',
+        listMyTransferencias_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyTransferenciasRequest.fromBuffer(value),
+        ($0.ListMyTransferenciasResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TestarMyRegraTransferenciaRequest,
+            $0.TestarMyRegraTransferenciaResponse>(
+        'TestarMyRegraTransferencia',
+        testarMyRegraTransferencia_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.TestarMyRegraTransferenciaRequest.fromBuffer(value),
+        ($0.TestarMyRegraTransferenciaResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GerarMySugestoesTransferenciaRequest,
+            $0.GerarMySugestoesTransferenciaResponse>(
+        'GerarMySugestoesTransferencia',
+        gerarMySugestoesTransferencia_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GerarMySugestoesTransferenciaRequest.fromBuffer(value),
+        ($0.GerarMySugestoesTransferenciaResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DefinirMotorTenantRequest,
+            $0.DefinirMotorTenantResponse>(
+        'DefinirMotorTenant',
+        definirMotorTenant_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DefinirMotorTenantRequest.fromBuffer(value),
+        ($0.DefinirMotorTenantResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -4537,4 +4753,93 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> moverMyEtapaFluxo(
       $grpc.ServiceCall call, $0.MoverMyEtapaFluxoRequest request);
+
+  $async.Future<$0.ListMyRegrasTransferenciaResponse>
+      listMyRegrasTransferencia_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ListMyRegrasTransferenciaRequest> $request) async {
+    return listMyRegrasTransferencia($call, await $request);
+  }
+
+  $async.Future<$0.ListMyRegrasTransferenciaResponse> listMyRegrasTransferencia(
+      $grpc.ServiceCall call, $0.ListMyRegrasTransferenciaRequest request);
+
+  $async.Future<$0.SalvarMyRegraTransferenciaResponse>
+      salvarMyRegraTransferencia_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.SalvarMyRegraTransferenciaRequest> $request) async {
+    return salvarMyRegraTransferencia($call, await $request);
+  }
+
+  $async.Future<$0.SalvarMyRegraTransferenciaResponse>
+      salvarMyRegraTransferencia(
+          $grpc.ServiceCall call, $0.SalvarMyRegraTransferenciaRequest request);
+
+  $async.Future<$0.SetMyRegraTransferenciaAtivaResponse>
+      setMyRegraTransferenciaAtiva_Pre(
+          $grpc.ServiceCall $call,
+          $async.Future<$0.SetMyRegraTransferenciaAtivaRequest>
+              $request) async {
+    return setMyRegraTransferenciaAtiva($call, await $request);
+  }
+
+  $async.Future<$0.SetMyRegraTransferenciaAtivaResponse>
+      setMyRegraTransferenciaAtiva($grpc.ServiceCall call,
+          $0.SetMyRegraTransferenciaAtivaRequest request);
+
+  $async.Future<$0.ConfigTransferenciaResponse> getMyConfigTransferencia_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetMyConfigTransferenciaRequest> $request) async {
+    return getMyConfigTransferencia($call, await $request);
+  }
+
+  $async.Future<$0.ConfigTransferenciaResponse> getMyConfigTransferencia(
+      $grpc.ServiceCall call, $0.GetMyConfigTransferenciaRequest request);
+
+  $async.Future<$0.ConfigTransferenciaResponse> setMySinaisTransferencia_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.SetMySinaisTransferenciaRequest> $request) async {
+    return setMySinaisTransferencia($call, await $request);
+  }
+
+  $async.Future<$0.ConfigTransferenciaResponse> setMySinaisTransferencia(
+      $grpc.ServiceCall call, $0.SetMySinaisTransferenciaRequest request);
+
+  $async.Future<$0.ListMyTransferenciasResponse> listMyTransferencias_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyTransferenciasRequest> $request) async {
+    return listMyTransferencias($call, await $request);
+  }
+
+  $async.Future<$0.ListMyTransferenciasResponse> listMyTransferencias(
+      $grpc.ServiceCall call, $0.ListMyTransferenciasRequest request);
+
+  $async.Future<$0.TestarMyRegraTransferenciaResponse>
+      testarMyRegraTransferencia_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.TestarMyRegraTransferenciaRequest> $request) async {
+    return testarMyRegraTransferencia($call, await $request);
+  }
+
+  $async.Future<$0.TestarMyRegraTransferenciaResponse>
+      testarMyRegraTransferencia(
+          $grpc.ServiceCall call, $0.TestarMyRegraTransferenciaRequest request);
+
+  $async.Future<$0.GerarMySugestoesTransferenciaResponse>
+      gerarMySugestoesTransferencia_Pre(
+          $grpc.ServiceCall $call,
+          $async.Future<$0.GerarMySugestoesTransferenciaRequest>
+              $request) async {
+    return gerarMySugestoesTransferencia($call, await $request);
+  }
+
+  $async.Future<$0.GerarMySugestoesTransferenciaResponse>
+      gerarMySugestoesTransferencia($grpc.ServiceCall call,
+          $0.GerarMySugestoesTransferenciaRequest request);
+
+  $async.Future<$0.DefinirMotorTenantResponse> definirMotorTenant_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DefinirMotorTenantRequest> $request) async {
+    return definirMotorTenant($call, await $request);
+  }
+
+  $async.Future<$0.DefinirMotorTenantResponse> definirMotorTenant(
+      $grpc.ServiceCall call, $0.DefinirMotorTenantRequest request);
 }
