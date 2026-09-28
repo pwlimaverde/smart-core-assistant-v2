@@ -1010,6 +1010,34 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$definirMyContatoAtivo, request, options: options);
   }
 
+  /// Doc 39 — excluir é DEFINITIVO: o item some do painel, das seleções, da IA e
+  /// das estatísticas, não volta, e a linha fica só para a auditoria. Desativar
+  /// é o reversível. Os tipos: contato, cliente, atendimento, departamento,
+  /// fluxo, etapa, atendente, campo, etiqueta, nota, intencao, treinamento,
+  /// numero_ignorado (conexão se exclui por DeleteMyWhatsappInstance, que apaga
+  /// no provedor antes).
+  $grpc.ResponseFuture<$0.ExcluirMyItemResponse> excluirMyItem(
+    $0.ExcluirMyItemRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$excluirMyItem, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> definirMyItemAtivo(
+    $0.DefinirMyItemAtivoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$definirMyItemAtivo, request, options: options);
+  }
+
+  /// Somente leitura, só tenant:admin — a aba "Excluídos" da auditoria.
+  $grpc.ResponseFuture<$0.ListMyExcluidosResponse> listMyExcluidos(
+    $0.ListMyExcluidosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyExcluidos, request, options: options);
+  }
+
   /// B10 (N11 E5): clientes (PJ/PF) e o vinculo com os contatos.
   $grpc.ResponseFuture<$0.ListMyClientesResponse> listMyClientes(
     $0.ListMyClientesRequest request, {
@@ -1789,6 +1817,21 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/DefinirMyContatoAtivo',
           ($0.DefinirMyContatoAtivoRequest value) => value.writeToBuffer(),
           $0.SimpleOkResponse.fromBuffer);
+  static final _$excluirMyItem =
+      $grpc.ClientMethod<$0.ExcluirMyItemRequest, $0.ExcluirMyItemResponse>(
+          '/smartcore.contracts.queries.AdminService/ExcluirMyItem',
+          ($0.ExcluirMyItemRequest value) => value.writeToBuffer(),
+          $0.ExcluirMyItemResponse.fromBuffer);
+  static final _$definirMyItemAtivo =
+      $grpc.ClientMethod<$0.DefinirMyItemAtivoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DefinirMyItemAtivo',
+          ($0.DefinirMyItemAtivoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$listMyExcluidos =
+      $grpc.ClientMethod<$0.ListMyExcluidosRequest, $0.ListMyExcluidosResponse>(
+          '/smartcore.contracts.queries.AdminService/ListMyExcluidos',
+          ($0.ListMyExcluidosRequest value) => value.writeToBuffer(),
+          $0.ListMyExcluidosResponse.fromBuffer);
   static final _$listMyClientes =
       $grpc.ClientMethod<$0.ListMyClientesRequest, $0.ListMyClientesResponse>(
           '/smartcore.contracts.queries.AdminService/ListMyClientes',
@@ -2992,6 +3035,33 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.DefinirMyContatoAtivoRequest.fromBuffer(value),
         ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.ExcluirMyItemRequest, $0.ExcluirMyItemResponse>(
+            'ExcluirMyItem',
+            excluirMyItem_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.ExcluirMyItemRequest.fromBuffer(value),
+            ($0.ExcluirMyItemResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.DefinirMyItemAtivoRequest, $0.SimpleOkResponse>(
+            'DefinirMyItemAtivo',
+            definirMyItemAtivo_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.DefinirMyItemAtivoRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyExcluidosRequest,
+            $0.ListMyExcluidosResponse>(
+        'ListMyExcluidos',
+        listMyExcluidos_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyExcluidosRequest.fromBuffer(value),
+        ($0.ListMyExcluidosResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ListMyClientesRequest,
             $0.ListMyClientesResponse>(
         'ListMyClientes',
@@ -4264,6 +4334,33 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> definirMyContatoAtivo(
       $grpc.ServiceCall call, $0.DefinirMyContatoAtivoRequest request);
+
+  $async.Future<$0.ExcluirMyItemResponse> excluirMyItem_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ExcluirMyItemRequest> $request) async {
+    return excluirMyItem($call, await $request);
+  }
+
+  $async.Future<$0.ExcluirMyItemResponse> excluirMyItem(
+      $grpc.ServiceCall call, $0.ExcluirMyItemRequest request);
+
+  $async.Future<$0.SimpleOkResponse> definirMyItemAtivo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DefinirMyItemAtivoRequest> $request) async {
+    return definirMyItemAtivo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> definirMyItemAtivo(
+      $grpc.ServiceCall call, $0.DefinirMyItemAtivoRequest request);
+
+  $async.Future<$0.ListMyExcluidosResponse> listMyExcluidos_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyExcluidosRequest> $request) async {
+    return listMyExcluidos($call, await $request);
+  }
+
+  $async.Future<$0.ListMyExcluidosResponse> listMyExcluidos(
+      $grpc.ServiceCall call, $0.ListMyExcluidosRequest request);
 
   $async.Future<$0.ListMyClientesResponse> listMyClientes_Pre(
       $grpc.ServiceCall $call,

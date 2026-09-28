@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../../shared/permissoes.dart';
+import '../../../../shared/exclusao.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/campo_personalizado.dart';
 import '../controllers/campos_controller.dart';
@@ -212,6 +213,18 @@ class _Linha extends StatelessWidget {
               icon: const Icon(Icons.visibility_off_outlined),
               tooltip: 'Desativar',
               onPressed: () => abrirDesativacao(context, campo, controller),
+            ),
+          if (sessaoPodeAlterar('/tenant/campos'))
+            IconButton(
+              icon: const Icon(Icons.delete_forever_outlined),
+              tooltip: 'Excluir definitivamente',
+              onPressed: () => excluirDefinitivamente(
+                context,
+                tipo: 'campo',
+                id: campo.id,
+                oQue: 'o campo',
+                aoExcluir: controller.carregar,
+              ),
             ),
         ],
       ),

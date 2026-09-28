@@ -4332,6 +4332,119 @@ final $typed_data.Uint8List definirMyContatoAtivoRequestDescriptor =
         'ChxEZWZpbmlyTXlDb250YXRvQXRpdm9SZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBIUCgVhdGl2bx'
         'gCIAEoCFIFYXRpdm8=');
 
+@$core.Deprecated('Use excluirMyItemRequestDescriptor instead')
+const ExcluirMyItemRequest$json = {
+  '1': 'ExcluirMyItemRequest',
+  '2': [
+    {'1': 'tipo', '3': 1, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'id', '3': 2, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'confirmar', '3': 3, '4': 1, '5': 9, '10': 'confirmar'},
+    {'1': 'dry_run', '3': 4, '4': 1, '5': 8, '10': 'dryRun'},
+  ],
+};
+
+/// Descriptor for `ExcluirMyItemRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List excluirMyItemRequestDescriptor = $convert.base64Decode(
+    'ChRFeGNsdWlyTXlJdGVtUmVxdWVzdBISCgR0aXBvGAEgASgJUgR0aXBvEg4KAmlkGAIgASgDUg'
+    'JpZBIcCgljb25maXJtYXIYAyABKAlSCWNvbmZpcm1hchIXCgdkcnlfcnVuGAQgASgIUgZkcnlS'
+    'dW4=');
+
+@$core.Deprecated('Use excluirMyItemResponseDescriptor instead')
+const ExcluirMyItemResponse$json = {
+  '1': 'ExcluirMyItemResponse',
+  '2': [
+    {'1': 'sucesso', '3': 1, '4': 1, '5': 8, '10': 'sucesso'},
+    {
+      '1': 'atendimentos_excluidos',
+      '3': 2,
+      '4': 3,
+      '5': 3,
+      '10': 'atendimentosExcluidos'
+    },
+    {'1': 'simulacao', '3': 3, '4': 1, '5': 8, '10': 'simulacao'},
+    {'1': 'rotulo', '3': 4, '4': 1, '5': 9, '10': 'rotulo'},
+    {'1': 'conversas', '3': 5, '4': 1, '5': 3, '10': 'conversas'},
+    {'1': 'em_uso', '3': 6, '4': 1, '5': 9, '10': 'emUso'},
+  ],
+};
+
+/// Descriptor for `ExcluirMyItemResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List excluirMyItemResponseDescriptor = $convert.base64Decode(
+    'ChVFeGNsdWlyTXlJdGVtUmVzcG9uc2USGAoHc3VjZXNzbxgBIAEoCFIHc3VjZXNzbxI1ChZhdG'
+    'VuZGltZW50b3NfZXhjbHVpZG9zGAIgAygDUhVhdGVuZGltZW50b3NFeGNsdWlkb3MSHAoJc2lt'
+    'dWxhY2FvGAMgASgIUglzaW11bGFjYW8SFgoGcm90dWxvGAQgASgJUgZyb3R1bG8SHAoJY29udm'
+    'Vyc2FzGAUgASgDUgljb252ZXJzYXMSFQoGZW1fdXNvGAYgASgJUgVlbVVzbw==');
+
+@$core.Deprecated('Use definirMyItemAtivoRequestDescriptor instead')
+const DefinirMyItemAtivoRequest$json = {
+  '1': 'DefinirMyItemAtivoRequest',
+  '2': [
+    {'1': 'tipo', '3': 1, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'id', '3': 2, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'ativo', '3': 3, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `DefinirMyItemAtivoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirMyItemAtivoRequestDescriptor =
+    $convert.base64Decode(
+        'ChlEZWZpbmlyTXlJdGVtQXRpdm9SZXF1ZXN0EhIKBHRpcG8YASABKAlSBHRpcG8SDgoCaWQYAi'
+        'ABKANSAmlkEhQKBWF0aXZvGAMgASgIUgVhdGl2bw==');
+
+@$core.Deprecated('Use listMyExcluidosRequestDescriptor instead')
+const ListMyExcluidosRequest$json = {
+  '1': 'ListMyExcluidosRequest',
+  '2': [
+    {'1': 'tipo', '3': 1, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'limite', '3': 2, '4': 1, '5': 5, '10': 'limite'},
+  ],
+};
+
+/// Descriptor for `ListMyExcluidosRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyExcluidosRequestDescriptor =
+    $convert.base64Decode(
+        'ChZMaXN0TXlFeGNsdWlkb3NSZXF1ZXN0EhIKBHRpcG8YASABKAlSBHRpcG8SFgoGbGltaXRlGA'
+        'IgASgFUgZsaW1pdGU=');
+
+@$core.Deprecated('Use itemExcluidoDescriptor instead')
+const ItemExcluido$json = {
+  '1': 'ItemExcluido',
+  '2': [
+    {'1': 'tipo', '3': 1, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'id', '3': 2, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'rotulo', '3': 3, '4': 1, '5': 9, '10': 'rotulo'},
+    {'1': 'excluido_em', '3': 4, '4': 1, '5': 3, '10': 'excluidoEm'},
+    {'1': 'excluido_por', '3': 5, '4': 1, '5': 9, '10': 'excluidoPor'},
+  ],
+};
+
+/// Descriptor for `ItemExcluido`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List itemExcluidoDescriptor = $convert.base64Decode(
+    'CgxJdGVtRXhjbHVpZG8SEgoEdGlwbxgBIAEoCVIEdGlwbxIOCgJpZBgCIAEoA1ICaWQSFgoGcm'
+    '90dWxvGAMgASgJUgZyb3R1bG8SHwoLZXhjbHVpZG9fZW0YBCABKANSCmV4Y2x1aWRvRW0SIQoM'
+    'ZXhjbHVpZG9fcG9yGAUgASgJUgtleGNsdWlkb1Bvcg==');
+
+@$core.Deprecated('Use listMyExcluidosResponseDescriptor instead')
+const ListMyExcluidosResponse$json = {
+  '1': 'ListMyExcluidosResponse',
+  '2': [
+    {
+      '1': 'itens',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.ItemExcluido',
+      '10': 'itens'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyExcluidosResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyExcluidosResponseDescriptor =
+    $convert.base64Decode(
+        'ChdMaXN0TXlFeGNsdWlkb3NSZXNwb25zZRI/CgVpdGVucxgBIAMoCzIpLnNtYXJ0Y29yZS5jb2'
+        '50cmFjdHMucXVlcmllcy5JdGVtRXhjbHVpZG9SBWl0ZW5z');
+
 @$core.Deprecated('Use dadosMyClienteDescriptor instead')
 const DadosMyCliente$json = {
   '1': 'DadosMyCliente',

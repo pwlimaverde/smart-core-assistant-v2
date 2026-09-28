@@ -412,8 +412,9 @@ Future<void> abrirRemocao(
     builder: (dialogContext) => AlertDialog(
       title: const Text('Remover este material?'),
       content: Text(
-        'O assistente deixa de usar "${item.tag}" nas respostas. '
-        'Isto não pode ser desfeito.',
+        'Exclusão definitiva: o assistente deixa de usar "${item.tag}" nas '
+        'respostas e o material não pode ser restaurado (o registro fica na '
+        'auditoria).',
       ),
       actions: [
         TextButton(

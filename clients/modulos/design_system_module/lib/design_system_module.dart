@@ -18,6 +18,7 @@ export 'src/widgets/app_scaffold.dart';
 export 'src/widgets/app_error_view.dart';
 export 'src/widgets/app_empty_view.dart';
 export 'src/widgets/dialogo_com_campos.dart';
+export 'src/widgets/dialogo_exclusao_definitiva.dart';
 export 'src/widgets/app_logo.dart';
 
 // Widgets de Kanban (fila/board — WS-6.2)

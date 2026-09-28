@@ -197,7 +197,8 @@ Future<void> abrirRemocaoIntent(
     builder: (dialogContext) => AlertDialog(
       title: Text('Remover a intenção "${item.tag}"?'),
       content: const Text(
-        'A IA deixa de seguir este comportamento nas próximas conversas. '
+        'Exclusão definitiva: a IA deixa de seguir este comportamento e a '
+        'intenção não pode ser restaurada (o registro fica na auditoria). '
         'O material treinado não é afetado.',
       ),
       actions: [

@@ -548,8 +548,10 @@ class _Linha extends StatelessWidget {
       builder: (dialogContext) => AlertDialog(
         title: Text('Remover "${conexao.nome}"?'),
         content: const Text(
-          'As mensagens já recebidas continuam no histórico, mas esta conexão '
-          'para de receber novas. Isto não pode ser desfeito.',
+          'Exclusão definitiva: a sessão é apagada no WhatsApp e a conexão '
+          'não volta — para usar o número de novo, crie outra e leia o QR '
+          'Code. As mensagens já recebidas continuam no histórico, e o '
+          'registro fica na auditoria.',
         ),
         actions: [
           TextButton(

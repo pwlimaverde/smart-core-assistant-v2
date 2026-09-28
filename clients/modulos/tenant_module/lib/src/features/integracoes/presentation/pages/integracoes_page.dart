@@ -7,6 +7,7 @@ import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/mcp_grant.dart';
 import '../controllers/integracoes_controller.dart';
 import '../widgets/aba_atividade.dart';
+import '../widgets/aba_excluidos.dart';
 
 /// URL do servidor MCP que o usuário cola no conector do cliente de IA.
 ///
@@ -92,7 +93,7 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
         ),
       ],
       body: DefaultTabController(
-        length: 2,
+        length: 3,
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
@@ -120,12 +121,18 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
                 tabs: [
                   Tab(text: 'Conectados'),
                   Tab(text: 'Atividade'),
+                  // Doc 39: o registro do que foi excluído definitivamente.
+                  Tab(text: 'Excluídos'),
                 ],
               ),
               const SizedBox(height: 16),
               Expanded(
                 child: TabBarView(
-                  children: [_abaConectados(context), const AbaAtividade()],
+                  children: [
+                    _abaConectados(context),
+                    const AbaAtividade(),
+                    const AbaExcluidos(),
+                  ],
                 ),
               ),
             ],

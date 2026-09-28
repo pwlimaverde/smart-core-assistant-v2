@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../../shared/permissoes.dart';
+import '../../../../shared/exclusao.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/cliente.dart';
 import '../controllers/clientes_controllers.dart';
@@ -229,6 +230,17 @@ class _LinhaCliente extends StatelessWidget {
               tooltip: item.ativo ? 'Tirar da lista' : 'Devolver à lista',
               onPressed: () =>
                   controller.definirAtivo(id: item.id, ativo: !item.ativo),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_forever_outlined),
+              tooltip: 'Excluir definitivamente',
+              onPressed: () => excluirDefinitivamente(
+                context,
+                tipo: 'cliente',
+                id: item.id,
+                oQue: 'o cliente',
+                aoExcluir: controller.carregar,
+              ),
             ),
           ],
         ],

@@ -16999,6 +16999,516 @@ class DefinirMyContatoAtivoRequest extends $pb.GeneratedMessage {
   void clearAtivo() => $_clearField(2);
 }
 
+class ExcluirMyItemRequest extends $pb.GeneratedMessage {
+  factory ExcluirMyItemRequest({
+    $core.String? tipo,
+    $fixnum.Int64? id,
+    $core.String? confirmar,
+    $core.bool? dryRun,
+  }) {
+    final result = create();
+    if (tipo != null) result.tipo = tipo;
+    if (id != null) result.id = id;
+    if (confirmar != null) result.confirmar = confirmar;
+    if (dryRun != null) result.dryRun = dryRun;
+    return result;
+  }
+
+  ExcluirMyItemRequest._();
+
+  factory ExcluirMyItemRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ExcluirMyItemRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ExcluirMyItemRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tipo')
+    ..aInt64(2, _omitFieldNames ? '' : 'id')
+    ..aOS(3, _omitFieldNames ? '' : 'confirmar')
+    ..aOB(4, _omitFieldNames ? '' : 'dryRun')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExcluirMyItemRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExcluirMyItemRequest copyWith(void Function(ExcluirMyItemRequest) updates) =>
+      super.copyWith((message) => updates(message as ExcluirMyItemRequest))
+          as ExcluirMyItemRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ExcluirMyItemRequest create() => ExcluirMyItemRequest._();
+  @$core.override
+  ExcluirMyItemRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ExcluirMyItemRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ExcluirMyItemRequest>(create);
+  static ExcluirMyItemRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tipo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tipo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTipo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTipo() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get id => $_getI64(1);
+  @$pb.TagNumber(2)
+  set id($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearId() => $_clearField(2);
+
+  /// O nome do item, digitado por quem pede — obrigatório para excluir de fato.
+  @$pb.TagNumber(3)
+  $core.String get confirmar => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set confirmar($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasConfirmar() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearConfirmar() => $_clearField(3);
+
+  /// true = só descreve (rótulo, conversas que vão junto, se está em uso).
+  @$pb.TagNumber(4)
+  $core.bool get dryRun => $_getBF(3);
+  @$pb.TagNumber(4)
+  set dryRun($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDryRun() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDryRun() => $_clearField(4);
+}
+
+class ExcluirMyItemResponse extends $pb.GeneratedMessage {
+  factory ExcluirMyItemResponse({
+    $core.bool? sucesso,
+    $core.Iterable<$fixnum.Int64>? atendimentosExcluidos,
+    $core.bool? simulacao,
+    $core.String? rotulo,
+    $fixnum.Int64? conversas,
+    $core.String? emUso,
+  }) {
+    final result = create();
+    if (sucesso != null) result.sucesso = sucesso;
+    if (atendimentosExcluidos != null)
+      result.atendimentosExcluidos.addAll(atendimentosExcluidos);
+    if (simulacao != null) result.simulacao = simulacao;
+    if (rotulo != null) result.rotulo = rotulo;
+    if (conversas != null) result.conversas = conversas;
+    if (emUso != null) result.emUso = emUso;
+    return result;
+  }
+
+  ExcluirMyItemResponse._();
+
+  factory ExcluirMyItemResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ExcluirMyItemResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ExcluirMyItemResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'sucesso')
+    ..p<$fixnum.Int64>(
+        2, _omitFieldNames ? '' : 'atendimentosExcluidos', $pb.PbFieldType.K6)
+    ..aOB(3, _omitFieldNames ? '' : 'simulacao')
+    ..aOS(4, _omitFieldNames ? '' : 'rotulo')
+    ..aInt64(5, _omitFieldNames ? '' : 'conversas')
+    ..aOS(6, _omitFieldNames ? '' : 'emUso')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExcluirMyItemResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ExcluirMyItemResponse copyWith(
+          void Function(ExcluirMyItemResponse) updates) =>
+      super.copyWith((message) => updates(message as ExcluirMyItemResponse))
+          as ExcluirMyItemResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ExcluirMyItemResponse create() => ExcluirMyItemResponse._();
+  @$core.override
+  ExcluirMyItemResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ExcluirMyItemResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ExcluirMyItemResponse>(create);
+  static ExcluirMyItemResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get sucesso => $_getBF(0);
+  @$pb.TagNumber(1)
+  set sucesso($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSucesso() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSucesso() => $_clearField(1);
+
+  /// Conversas excluídas junto (só na exclusão de contato).
+  @$pb.TagNumber(2)
+  $pb.PbList<$fixnum.Int64> get atendimentosExcluidos => $_getList(1);
+
+  /// Preenchidos na simulação (dry_run).
+  @$pb.TagNumber(3)
+  $core.bool get simulacao => $_getBF(2);
+  @$pb.TagNumber(3)
+  set simulacao($core.bool value) => $_setBool(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasSimulacao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearSimulacao() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get rotulo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set rotulo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasRotulo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearRotulo() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $fixnum.Int64 get conversas => $_getI64(4);
+  @$pb.TagNumber(5)
+  set conversas($fixnum.Int64 value) => $_setInt64(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasConversas() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearConversas() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get emUso => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set emUso($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasEmUso() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearEmUso() => $_clearField(6);
+}
+
+/// false = desativar; true = reativar. Excluído não reativa.
+class DefinirMyItemAtivoRequest extends $pb.GeneratedMessage {
+  factory DefinirMyItemAtivoRequest({
+    $core.String? tipo,
+    $fixnum.Int64? id,
+    $core.bool? ativo,
+  }) {
+    final result = create();
+    if (tipo != null) result.tipo = tipo;
+    if (id != null) result.id = id;
+    if (ativo != null) result.ativo = ativo;
+    return result;
+  }
+
+  DefinirMyItemAtivoRequest._();
+
+  factory DefinirMyItemAtivoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DefinirMyItemAtivoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DefinirMyItemAtivoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tipo')
+    ..aInt64(2, _omitFieldNames ? '' : 'id')
+    ..aOB(3, _omitFieldNames ? '' : 'ativo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirMyItemAtivoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirMyItemAtivoRequest copyWith(
+          void Function(DefinirMyItemAtivoRequest) updates) =>
+      super.copyWith((message) => updates(message as DefinirMyItemAtivoRequest))
+          as DefinirMyItemAtivoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DefinirMyItemAtivoRequest create() => DefinirMyItemAtivoRequest._();
+  @$core.override
+  DefinirMyItemAtivoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DefinirMyItemAtivoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DefinirMyItemAtivoRequest>(create);
+  static DefinirMyItemAtivoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tipo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tipo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTipo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTipo() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get id => $_getI64(1);
+  @$pb.TagNumber(2)
+  set id($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.bool get ativo => $_getBF(2);
+  @$pb.TagNumber(3)
+  set ativo($core.bool value) => $_setBool(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasAtivo() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearAtivo() => $_clearField(3);
+}
+
+class ListMyExcluidosRequest extends $pb.GeneratedMessage {
+  factory ListMyExcluidosRequest({
+    $core.String? tipo,
+    $core.int? limite,
+  }) {
+    final result = create();
+    if (tipo != null) result.tipo = tipo;
+    if (limite != null) result.limite = limite;
+    return result;
+  }
+
+  ListMyExcluidosRequest._();
+
+  factory ListMyExcluidosRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyExcluidosRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyExcluidosRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tipo')
+    ..aI(2, _omitFieldNames ? '' : 'limite')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyExcluidosRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyExcluidosRequest copyWith(
+          void Function(ListMyExcluidosRequest) updates) =>
+      super.copyWith((message) => updates(message as ListMyExcluidosRequest))
+          as ListMyExcluidosRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyExcluidosRequest create() => ListMyExcluidosRequest._();
+  @$core.override
+  ListMyExcluidosRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyExcluidosRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyExcluidosRequest>(create);
+  static ListMyExcluidosRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tipo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tipo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTipo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTipo() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get limite => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set limite($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasLimite() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearLimite() => $_clearField(2);
+}
+
+class ItemExcluido extends $pb.GeneratedMessage {
+  factory ItemExcluido({
+    $core.String? tipo,
+    $fixnum.Int64? id,
+    $core.String? rotulo,
+    $fixnum.Int64? excluidoEm,
+    $core.String? excluidoPor,
+  }) {
+    final result = create();
+    if (tipo != null) result.tipo = tipo;
+    if (id != null) result.id = id;
+    if (rotulo != null) result.rotulo = rotulo;
+    if (excluidoEm != null) result.excluidoEm = excluidoEm;
+    if (excluidoPor != null) result.excluidoPor = excluidoPor;
+    return result;
+  }
+
+  ItemExcluido._();
+
+  factory ItemExcluido.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ItemExcluido.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ItemExcluido',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tipo')
+    ..aInt64(2, _omitFieldNames ? '' : 'id')
+    ..aOS(3, _omitFieldNames ? '' : 'rotulo')
+    ..aInt64(4, _omitFieldNames ? '' : 'excluidoEm')
+    ..aOS(5, _omitFieldNames ? '' : 'excluidoPor')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ItemExcluido clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ItemExcluido copyWith(void Function(ItemExcluido) updates) =>
+      super.copyWith((message) => updates(message as ItemExcluido))
+          as ItemExcluido;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ItemExcluido create() => ItemExcluido._();
+  @$core.override
+  ItemExcluido createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ItemExcluido getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ItemExcluido>(create);
+  static ItemExcluido? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tipo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tipo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTipo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTipo() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get id => $_getI64(1);
+  @$pb.TagNumber(2)
+  set id($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get rotulo => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set rotulo($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRotulo() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRotulo() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $fixnum.Int64 get excluidoEm => $_getI64(3);
+  @$pb.TagNumber(4)
+  set excluidoEm($fixnum.Int64 value) => $_setInt64(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasExcluidoEm() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearExcluidoEm() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get excluidoPor => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set excluidoPor($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasExcluidoPor() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearExcluidoPor() => $_clearField(5);
+}
+
+class ListMyExcluidosResponse extends $pb.GeneratedMessage {
+  factory ListMyExcluidosResponse({
+    $core.Iterable<ItemExcluido>? itens,
+  }) {
+    final result = create();
+    if (itens != null) result.itens.addAll(itens);
+    return result;
+  }
+
+  ListMyExcluidosResponse._();
+
+  factory ListMyExcluidosResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyExcluidosResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyExcluidosResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<ItemExcluido>(1, _omitFieldNames ? '' : 'itens',
+        subBuilder: ItemExcluido.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyExcluidosResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyExcluidosResponse copyWith(
+          void Function(ListMyExcluidosResponse) updates) =>
+      super.copyWith((message) => updates(message as ListMyExcluidosResponse))
+          as ListMyExcluidosResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyExcluidosResponse create() => ListMyExcluidosResponse._();
+  @$core.override
+  ListMyExcluidosResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyExcluidosResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyExcluidosResponse>(create);
+  static ListMyExcluidosResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<ItemExcluido> get itens => $_getList(0);
+}
+
 /// --- B10 (N11 E5): clientes (PJ/PF) ---
 /// CNPJ/CPF e endereco sao dado protegido: nunca em log.
 class DadosMyCliente extends $pb.GeneratedMessage {

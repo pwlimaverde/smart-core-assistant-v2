@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../../shared/permissoes.dart';
+import '../../../../shared/exclusao.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/equipe.dart';
 import '../controllers/equipe_controllers.dart';
@@ -203,6 +204,18 @@ class _LinhaDepartamento extends StatelessWidget {
               onPressed: () =>
                   abrirDesativacaoDepartamento(context, item, controller),
             ),
+          if (sessaoPodeAlterar('/tenant/equipe'))
+            IconButton(
+              icon: const Icon(Icons.delete_forever_outlined),
+              tooltip: 'Excluir definitivamente',
+              onPressed: () => excluirDefinitivamente(
+                context,
+                tipo: 'departamento',
+                id: item.id,
+                oQue: 'o departamento',
+                aoExcluir: controller.carregar,
+              ),
+            ),
         ],
       ),
     );
@@ -345,6 +358,18 @@ class _LinhaAtendente extends StatelessWidget {
               tooltip: 'Desativar',
               onPressed: () =>
                   abrirDesativacaoAtendente(context, a, controller),
+            ),
+          if (sessaoPodeAlterar('/tenant/equipe'))
+            IconButton(
+              icon: const Icon(Icons.delete_forever_outlined),
+              tooltip: 'Excluir definitivamente',
+              onPressed: () => excluirDefinitivamente(
+                context,
+                tipo: 'atendente',
+                id: a.id,
+                oQue: 'o atendente',
+                aoExcluir: controller.carregar,
+              ),
             ),
         ],
       ),

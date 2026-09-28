@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../../shared/permissoes.dart';
+import '../../../../shared/exclusao.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/contato.dart';
 import '../controllers/contatos_controllers.dart';
@@ -220,6 +221,17 @@ class _LinhaContato extends StatelessWidget {
                 onPressed: () =>
                     controller.definirAtivo(id: item.id, ativo: true),
               ),
+            IconButton(
+              icon: const Icon(Icons.delete_forever_outlined),
+              tooltip: 'Excluir definitivamente',
+              onPressed: () => excluirDefinitivamente(
+                context,
+                tipo: 'contato',
+                id: item.id,
+                oQue: 'o contato',
+                aoExcluir: controller.carregar,
+              ),
+            ),
           ],
         ],
       ),

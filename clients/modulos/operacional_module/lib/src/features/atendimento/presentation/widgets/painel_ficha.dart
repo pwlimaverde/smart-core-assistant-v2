@@ -1427,7 +1427,10 @@ Future<void> _excluirNota(
     context: context,
     builder: (dialogo) => AlertDialog(
       title: const Text('Excluir a anotação?'),
-      content: const Text('Ela some para todos os atendentes.'),
+      content: const Text(
+        'Exclusão definitiva: ela some para todos os atendentes e não pode '
+        'ser restaurada. O registro fica na auditoria.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogo).pop(false),

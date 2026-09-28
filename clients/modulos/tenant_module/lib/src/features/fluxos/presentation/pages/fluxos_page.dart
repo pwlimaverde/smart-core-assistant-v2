@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../../shared/permissoes.dart';
+import '../../../../shared/exclusao.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/fluxo.dart';
 import '../controllers/fluxos_controllers.dart';
@@ -173,6 +174,18 @@ class _LinhaFluxo extends StatelessWidget {
               onPressed: item.podeDesativar
                   ? () => abrirDesativacaoFluxo(context, item, controller)
                   : null,
+            ),
+          if (sessaoPodeAlterar('/tenant/fluxos'))
+            IconButton(
+              icon: const Icon(Icons.delete_forever_outlined),
+              tooltip: 'Excluir definitivamente',
+              onPressed: () => excluirDefinitivamente(
+                context,
+                tipo: 'fluxo',
+                id: item.id,
+                oQue: 'o fluxo',
+                aoExcluir: controller.carregar,
+              ),
             ),
         ],
       ),

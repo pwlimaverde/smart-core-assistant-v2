@@ -191,8 +191,9 @@ Future<void> abrirRemocaoEtapa(
     builder: (dialogContext) => AlertDialog(
       title: Text('Remover a coluna "${item.nome}"?'),
       content: const Text(
-        'Ela some do quadro. O histórico das conversas que passaram por ela '
-        'continua no atendimento.',
+        'Ela é desativada e some do quadro. O histórico das conversas que '
+        'passaram por ela continua no atendimento. Para apagá-la de vez, use '
+        '"Excluir definitivamente".',
       ),
       actions: [
         TextButton(

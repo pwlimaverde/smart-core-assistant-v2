@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../../shared/permissoes.dart';
+import '../../../../shared/exclusao.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/fluxo.dart';
 import '../controllers/fluxos_controllers.dart';
@@ -173,6 +174,17 @@ class _LinhaEtapa extends StatelessWidget {
               icon: const Icon(Icons.delete_outline),
               tooltip: 'Remover',
               onPressed: () => abrirRemocaoEtapa(context, item, controller),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_forever_outlined),
+              tooltip: 'Excluir definitivamente',
+              onPressed: () => excluirDefinitivamente(
+                context,
+                tipo: 'etapa',
+                id: item.id,
+                oQue: 'a coluna',
+                aoExcluir: () => controller.carregar(item.fluxoId),
+              ),
             ),
           ],
         ],

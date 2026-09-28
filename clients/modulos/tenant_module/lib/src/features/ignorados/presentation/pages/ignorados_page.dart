@@ -190,8 +190,9 @@ class _IgnoradosPageState extends State<IgnoradosPage> {
         // dizer isso: quem só quer voltar a atender a pessoa não precisa
         // apagar o registro.
         content: const Text(
-          'O número volta a ser atendido e some da lista. Para voltar a '
-          'atendê-lo sem perder o registro, desligue em vez de remover.',
+          'Exclusão definitiva: o número volta a ser atendido, some da lista '
+          'e não pode ser restaurado (o registro fica na auditoria). Para '
+          'voltar a atendê-lo com volta, desligue em vez de remover.',
         ),
         actions: [
           TextButton(
