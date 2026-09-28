@@ -1,6 +1,6 @@
 # 39 — Desativar × Excluir: exclusão definitiva com registro para auditoria
 
-> **Status:** PLANEJAMENTO — aguardando aprovação. Nada implementado.
+> **Status:** APROVADO em 27/09/2026 com as recomendações D1–D9; implementado na branch (ver §7).
 > **Branch:** `feat/exclusao-definitiva` (a partir da `dev` em `6c27f678`).
 > **Origem:** pedido do responsável em 27/09/2026, após o relatório de migração
 > da Ecoprint e a entrega "excluir = desativar" (`6c27f678`), que ele considerou
@@ -201,3 +201,34 @@ branch. Assim as consultas mantêm a checagem em tempo de compilação.
 
 Usuários/logins, tenants, planos, convites (têm ciclo próprio), purga física
 programada de excluídos, e anonimização LGPD (D8).
+
+## 7. Implementação (27–28/09/2026)
+
+| Fase | Onde | Estado |
+|---|---|---|
+| F1 Banco | `0045_exclusao_definitiva.sql` | feito; validada aplicando 0001–0045 num banco temporário |
+| F2 Leitura | filtros nas consultas (contato, cliente, atendimento, departamento, fluxo, etapa, atendente, campo, etiqueta, nota, intenção, treinamento, número ignorado, conexão) e nas estatísticas da §3.4 | feito |
+| F3 Escrita | `infrastructure_postgres::exclusao` + rotas `ExcluirItem`, `DefinirItemAtivo`, `ListarExcluidos` + RPCs `ExcluirMyItem` (com `dry_run` e `confirmar` conferidos no servidor), `DefinirMyItemAtivo`, `ListMyExcluidos` | feito |
+| F4 MCP | `excluir_item`, `reativar_item`, `list_excluidos`, `excluir_conexao_whatsapp`; saem os `remover_*` e os `restaurar_*` | feito |
+| F5 App | diálogo com nome digitado, botão "Excluir definitivamente" nas telas de gestão, textos dos "remover" antigos, aba "Excluídos" em Aplicativos conectados | feito |
+| F6 Dados | converter os 6 contatos de teste inativos da Ecoprint (D7) | depois do deploy da 0045 na dev |
+
+Decisões de implementação:
+
+- **Excluir também desliga o `ativo`** onde a tabela o tem: todo filtro "só
+  ativos" que já existia esconde o excluído sem mudança; o filtro explícito de
+  `excluido_em` só entrou onde inativos aparecem (listas de gestão), onde se
+  edita ou reativa, e nas tabelas sem `ativo`.
+- **A confirmação é do servidor**: `ExcluirMyItem` exige `confirmar` igual ao
+  rótulo do item, e o `dry_run` devolve esse rótulo. App e MCP usam o mesmo
+  caminho, e um id errado não exclui outra coisa.
+- **Conexão** continua pelo `DeleteMyWhatsappInstance` (apaga no provedor antes
+  e depois marca a linha como excluída).
+- **`.sqlx`** regenerado pelo workflow `sqlx-prepare.yml` (commit com
+  `[sqlx-prepare]`), com `-- --all-targets` para incluir as consultas dos testes.
+- **Stubs Dart** gerados com `protoc_plugin 25.0.0`, a versão que reproduz os
+  atuais sem diferença (Dart SDK em `/opt/dart-sdk`, só para isso — D9).
+
+Fica para depois: botão de excluir etiqueta e conversa no app (hoje só pelo
+MCP), e a reativação de etapa/departamento pelo app (as listas dessas duas
+mostram só ativos; a volta existe no servidor via `DefinirMyItemAtivo`).
