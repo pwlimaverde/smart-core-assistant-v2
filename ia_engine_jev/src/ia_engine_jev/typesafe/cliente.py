@@ -255,6 +255,24 @@ class TypeSafeJev:
                 if isinstance(erro, JevLimite):
                     m.limite.add(1, {"etapa": etapa})
                 span.set_status(Status(StatusCode.ERROR, erro.codigo))
+                # Chave recusada é erro de configuração da plataforma (ERROR,
+                # dispara alerta); o resto é transitório ou bug pontual.
+                nivel = "ERROR" if isinstance(erro, JevChaveInvalida) else "WARNING"
+                logger.log(
+                    nivel,
+                    "requisição ao Jev falhou",
+                    etapa=etapa,
+                    error_code=erro.codigo,
+                    erro=type(exc).__name__,
+                )
+                raise erro from None
+            except Exception as exc:
+                # Falha fora da hierarquia do SDK (transporte do httpx2,
+                # resposta inesperada): sem isto a métrica sairia `ok` e a
+                # exceção crua, com mensagem de terceiros, subiria ao usecase.
+                erro = JevIndisponivel(f"Jev indisponível ({type(exc).__name__})")
+                status = erro.codigo
+                span.set_status(Status(StatusCode.ERROR, erro.codigo))
                 logger.warning(
                     "requisição ao Jev falhou",
                     etapa=etapa,

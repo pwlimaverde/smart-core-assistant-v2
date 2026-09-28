@@ -740,6 +740,7 @@ mod tests_decisao {
         transferida = tracing::field::Empty,
         motivo = tracing::field::Empty,
         llm_chamada = tracing::field::Empty,
+        regerada = tracing::field::Empty,
     )
 )]
 async fn responder_via_ia(
@@ -1121,7 +1122,13 @@ async fn responder_via_ia(
     // A confiança entra no span: é número, não revela conteúdo, e é o que
     // permitirá calibrar os limiares antes de ligar o veto.
     span.record("confianca", resposta.confiabilidade);
-    let motor = if resposta.motor.is_empty() {
+    // Reserva do motor Jev: quem escreveu e decidiu foi a LLM com schema, e a
+    // confiança está na escala dela (cosseno). Marcar "jev" na mensagem e na
+    // `resposta_apoiada` misturaria as escalas que o `motor` existe para
+    // separar; o fato de ter caído na reserva segue em `decisao_motor`.
+    let motor = if resposta.decisao == "reserva" {
+        "llm".to_string()
+    } else if resposta.motor.is_empty() {
         motores.decide_nome.to_string()
     } else {
         resposta.motor.clone()
@@ -1142,6 +1149,8 @@ async fn responder_via_ia(
         || resposta.decisao == "reserva"
         || resposta.uso.requisicoes as usize > 1 + n_trechos;
     span.record("llm_chamada", llm_chamada);
+    // A LLM prometeu transferir sem regra e a resposta foi gerada de novo.
+    span.record("regerada", resposta.regerada);
 
     Ok(RespostaIa {
         texto: resposta.resposta_texto,

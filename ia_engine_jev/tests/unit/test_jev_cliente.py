@@ -117,3 +117,55 @@ async def test_perguntar_converte_e_traduz(monkeypatch: pytest.MonkeyPatch):
         await cliente.perguntar(
             "analise", {"mensagem": "oi"}, {"n": PerguntaNoul("é?")}
         )
+
+
+async def test_erro_do_jev_nao_leva_mensagem_nem_chave_ao_log(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import loguru
+
+    chave = "ts-chave-sentinela-123"
+    texto = "meu cpf e 123.456.789-00"
+    cliente = TypeSafeJev(chave, "jev-1.13.0")
+
+    async def falha(**_kw: Any) -> Any:
+        # O corpo do erro ecoa o `state` — é o que não pode vazar.
+        raise TypeSafeAuthenticationError(
+            401, {"message": texto, "key": chave}, httpx2.Headers({})
+        )
+
+    monkeypatch.setattr(cliente._cliente, "system_one", falha)
+    capturado: list[str] = []
+    sink = loguru.logger.add(lambda m: capturado.append(str(m)), level="DEBUG")
+    try:
+        with pytest.raises(JevChaveInvalida) as exc:
+            await cliente.perguntar(
+                "antes", {"mensagem": texto}, {"n": PerguntaNoul("é?")}
+            )
+    finally:
+        loguru.logger.remove(sink)
+    assert capturado, "o erro deveria ter sido logado"
+    assert all(texto not in linha and chave not in linha for linha in capturado)
+    assert texto not in str(exc.value) and chave not in str(exc.value)
+
+
+async def test_falha_fora_do_sdk_vira_indisponivel(monkeypatch: pytest.MonkeyPatch):
+    cliente = TypeSafeJev("ts-chave", "jev-1.13.0")
+
+    async def quebra(**_kw: Any) -> Any:
+        raise RuntimeError("detalhe de terceiro com dado do cliente")
+
+    monkeypatch.setattr(cliente._cliente, "system_one", quebra)
+    with pytest.raises(JevIndisponivel) as exc:
+        await cliente.perguntar("antes", {}, {"n": PerguntaNoul("é?")})
+    assert "detalhe" not in str(exc.value)
+
+
+def test_motivo_da_metrica_sem_nome_de_regra():
+    from ia_engine_jev.telemetry import motivo_da_metrica
+
+    assert motivo_da_metrica("regra:Fechar pedido") == "regra"
+    assert motivo_da_metrica("duvida:regra:Fechar pedido") == "duvida_regra"
+    assert motivo_da_metrica("duvida:pede_humano") == "duvida_pede_humano"
+    assert motivo_da_metrica("irritacao") == "irritacao"
+    assert motivo_da_metrica("") == "desconhecido"

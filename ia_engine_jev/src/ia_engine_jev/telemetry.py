@@ -278,3 +278,33 @@ def contar_reserva(motivo: str) -> None:
             description="Respostas do motor Jev que caíram no caminho de reserva (LLM)",
         )
     _reserva.add(1, {"motivo": motivo})
+
+
+# -------------------------------------------------------- transferências
+_transferencias: Any = None
+
+
+def motivo_da_metrica(motivo: str) -> str:
+    """O tipo do motivo, com cardinalidade fechada: `regra:<nome>` vira
+    `regra` (o nome é do tenant e fica só na trilha); a faixa de dúvida ganha
+    o prefixo `duvida_`."""
+    duvida = motivo.startswith("duvida:")
+    base = motivo.removeprefix("duvida:")
+    tipo = "regra" if base.startswith("regra:") else (base or "desconhecido")
+    return f"duvida_{tipo}" if duvida else tipo
+
+
+def contar_transferencia(motivo: str) -> None:
+    """`smartcore_transferencias_total{motivo}`: transferências decididas.
+
+    Conta a decisão deste serviço — na sombra, inclusive a que não valeu (o
+    `ia_engine_jev` não sabe se é sombra); a que valeu está no worker, na
+    trilha `atendimento.transferido_por_ia`.
+    """
+    global _transferencias
+    if _transferencias is None:
+        _transferencias = metrics.get_meter(_SERVICE_NAME).create_counter(
+            "smartcore_transferencias_total",
+            description="Transferências para atendente decididas, por tipo de motivo",
+        )
+    _transferencias.add(1, {"motivo": motivo_da_metrica(motivo)})

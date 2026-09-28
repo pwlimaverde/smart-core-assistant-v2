@@ -589,18 +589,20 @@ pub async fn handler_definir_motor(
     };
     match store.definir_motor(tenant_id, motor.clone()).await {
         Ok(anterior) => {
+            // Pelo `publish` (e não `publish_security`) com o envelope apontado
+            // para o tenant alvo: assim a trilha leva também o `user_agent` de
+            // quem trocou (08 §4.2), além do `user_id` do superusuário.
+            let mut env_auditoria = env.clone();
+            env_auditoria.tenant_id = tenant_id.to_string();
             audit
-                .publish_security(
-                    &env.traceparent,
-                    Some(tenant_id),
-                    "WARN",
+                .publish(
+                    &env_auditoria,
                     "tenant_config.motor_alterado",
                     "Motor das decisões da IA alterado pelo superusuário".to_string(),
                     serde_json::json!({
                         "antes": anterior.as_deref().unwrap_or("global"),
                         "depois": motor.as_deref().unwrap_or("global"),
                     }),
-                    Some(env.auth_user_id),
                 )
                 .await;
             ok_reply(
@@ -844,17 +846,22 @@ mod tests {
         store
             .expect_definir_motor()
             .returning(|_, _| Ok(Some("llm".into())));
+        let alvo = Uuid::now_v7().to_string();
+        let alvo_auditoria = alvo.clone();
         let mut audit = MockAuditPort::new();
         audit
-            .expect_publish_security()
-            .withf(|_, _, _, evento, _, ctx, _| {
-                evento == "tenant_config.motor_alterado" && ctx["depois"] == "jev"
+            .expect_publish()
+            .withf(move |env, evento, _, ctx| {
+                evento == "tenant_config.motor_alterado"
+                    && ctx["depois"] == "jev"
+                    && env.tenant_id == alvo_auditoria
+                    && env.auth_user_id == 7
             })
             .times(1)
-            .returning(|_, _, _, _, _, _, _| ());
+            .returning(|_, _, _, _| ());
         let mut env = envelope(
             "DefinirMotorTenant",
-            serde_json::json!({ "tenant_id": Uuid::now_v7().to_string(), "motor": "jev" }),
+            serde_json::json!({ "tenant_id": alvo, "motor": "jev" }),
         );
         env.auth_is_superuser = true;
         let resp = handler_definir_motor(&store, &audit, env).await;

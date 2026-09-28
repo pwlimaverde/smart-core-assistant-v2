@@ -136,8 +136,11 @@ def perguntas_antes(p: ResponderJevParameters) -> dict[str, Pergunta]:
     }
     if p.fluxos:
         perguntas[pt.SETOR] = pt.pergunta_setor(p.fluxos)
-    if p.intents:
+    if p.intents and not pi.precisa_de_dois_estagios(p.intents):
         # A mesma do `Analyse`: ele roda em paralelo e não chega a tempo.
+        # Catálogo acima do limite do `Choice` ficaria sem resposta (422 → a
+        # reserva em toda mensagem): sem a pergunta, o comportamento vem do
+        # vetor e as regras por intenção não disparam — o resto segue.
         perguntas[pi.PRINCIPAL] = pi.pergunta_principal(p.intents)
     for regra in p.regras:
         if regra.gatilho_tipo == "condicao" and regra.condicao.strip():

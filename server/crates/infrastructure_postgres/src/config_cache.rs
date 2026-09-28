@@ -152,3 +152,59 @@ impl TenantConfigCache {
         crate::tenants::config::resolve_runtime_config(&self.pool, &self.cipher, tenant_id).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Plano ia-engine-jev (J0.1, c): a chave da plataforma na TypeSafe nunca
+    /// aparece no `Debug` da config — um `?cfg` num log não pode vazá-la.
+    #[test]
+    fn debug_da_config_nao_mostra_a_chave_typesafe() {
+        let chave = "ts-chave-sentinela-da-plataforma";
+        let cfg = RuntimeConfig {
+            tenant_id: Uuid::nil(),
+            dados_empresa: String::new(),
+            persona_bot: String::new(),
+            bot_agent_name: String::new(),
+            msg_fallback: String::new(),
+            msg_sem_info: String::new(),
+            msg_transferencia: String::new(),
+            msg_pesquisa_satisfacao: String::new(),
+            pesquisa_satisfacao_ativa: false,
+            llm_class: String::new(),
+            model: String::new(),
+            llm_temperature: 0.0,
+            transcription_provider: String::new(),
+            transcription_model: String::new(),
+            transcription_enabled: false,
+            analise_previa_habilitada: false,
+            entity_types: Vec::new(),
+            vision_provider: String::new(),
+            vision_model: String::new(),
+            embeddings_class: String::new(),
+            embeddings_model: String::new(),
+            chunk_size: 0,
+            chunk_overlap: 0,
+            similarity_threshold: 0.0,
+            vector_distance_threshold: 0.0,
+            confianca_minima_transferencia: None,
+            confianca_minima_automatica: 0.8,
+            openai_api_key: SecretString::from(String::new()),
+            groq_api_key: SecretString::from(String::new()),
+            google_api_key: SecretString::from(String::new()),
+            prompts: std::collections::HashMap::new(),
+            typesafe_api_key: SecretString::from(chave.to_string()),
+            jev_modelo: "jev-1.13.0".to_string(),
+            motor_analise: "llm".to_string(),
+            entity_descricoes: std::collections::HashMap::new(),
+            jev_config: serde_json::json!({}),
+            transferencia_sinais: serde_json::json!({}),
+            transferencia_fluxo_padrao_id: None,
+            regras_transferencia: Vec::new(),
+        };
+        let depurado = format!("{cfg:?}");
+        assert!(depurado.contains("typesafe_api_key"));
+        assert!(!depurado.contains(chave));
+    }
+}

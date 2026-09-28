@@ -126,7 +126,8 @@ class RuntimeConfig(BaseModel):
     # --- Motor Jev (plano ia-engine-jev) ---------------------------------
     # Chave da PLATAFORMA (CoreSetting `TYPESAFE_API_KEY`, configuração
     # geral): uma conta para todos os tenants, sem override por tenant.
-    typesafe_api_key: str = ""
+    # Fora do `repr`: um log do objeto de config não pode levar a chave.
+    typesafe_api_key: str = Field(default="", repr=False)
     # Versão fixa do Jev (CoreSetting `JEV_MODELO`, tenant pode sobrepor).
     jev_modelo: str = "jev-1.13.0"
     # llm | sombra | jev — lido pelo worker, que escolhe o motor.

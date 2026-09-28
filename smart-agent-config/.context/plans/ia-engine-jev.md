@@ -5,7 +5,7 @@ planSlug: ia-engine-jev
 description: "Serviço Python ia_engine_jev, derivado do ia_engine, com o mesmo contrato IaEngineService (plugar = trocar o endpoint). Toda decisão sobre a mensagem — intenção, entidades, sentimento, transferência para atendente, relevância dos trechos do RAG e conferência da resposta — passa ao Jev (TypeSafe System One), com a regra final em código; a LLM só escreve a resposta e extrai valor livre. A transferência passa a ser governada por um cadastro de regras do tenant, visível nas configurações, auditado e operável pelo MCP. A chave TypeSafe é da plataforma e fica na configuração geral (CoreSettings TYPESAFE_API_KEY, cifrada), junto com as demais chaves."
 summary: "J0.1 põe a chave e o modelo na configuração geral; J0 mede o Jev em português no VPS e decide go/no-go; J1 esqueleto do serviço com análise e sentimento; J2 contrato aditivo e modo sombra; J3 transferência pelo Jev com cadastro de regras, tela, MCP e auditoria; J4 entidades por candidatos; J5 troca e remoção do motor antigo. Nenhum teste roda na máquina local: CI e VPS."
 status: filled
-progress: 0
+progress: 20
 generated: "2026-09-28"
 scaffoldVersion: "2.0.0"
 agents:
@@ -51,7 +51,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "pending"
-lastUpdated: "2026-09-28T09:55:39.102Z"
+lastUpdated: "2026-09-28T21:13:10.372Z"
 ---
 
 # ia_engine_jev — decisões da IA pelo Jev, geração pela LLM
@@ -92,4 +92,8 @@ por fase. Detalhe no plano completo §3.
 
 ## Execution History
 
-> Last updated: 2026-09-28T09:55:39.102Z | Progress: 0%
+> Last updated: 2026-09-28T21:13:10.372Z | Progress: 20%
+
+### phase-e [DONE]
+- Started: 2026-09-28T21:13:07.134Z
+- Completed: 2026-09-28T21:13:07.134Z

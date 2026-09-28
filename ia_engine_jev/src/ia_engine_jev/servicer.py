@@ -124,7 +124,11 @@ from ia_engine_jev.features.transcribe import (
 from ia_engine_jev.llm.embeddings_factory import build_embeddings
 from ia_engine_jev.llm.provider_factory import build_chat_model
 from ia_engine_jev.shared.history import ChatTurnTuple
-from ia_engine_jev.telemetry import contar_reserva, observar_rpc
+from ia_engine_jev.telemetry import (
+    contar_reserva,
+    contar_transferencia,
+    observar_rpc,
+)
 from ia_engine_jev.typesafe import ClienteJev, FabricaJev, JevNaoConfigurado
 
 ChatModelFactory = Callable[[LlmProviderSpec], BaseChatModel]
@@ -433,6 +437,8 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         )
         match result:
             case Success(final):
+                if reserva and final.transferir_atendimento:
+                    contar_transferencia("reserva")
                 return pb.ResponderResponse(
                     resposta_texto=final.resposta_texto,
                     transferir_atendimento=final.transferir_atendimento,
@@ -513,6 +519,8 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         )
         match result:
             case Success(d):
+                if d.transferir:
+                    contar_transferencia(d.motivo)
                 return pb.ResponderResponse(
                     resposta_texto=d.resposta_texto,
                     transferir_atendimento=d.transferir,
