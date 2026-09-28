@@ -4,8 +4,9 @@
 > **Data:** 2026-09-28 (revisado no mesmo dia contra a documentação e o código — ver §12)
 > **Base:** estudo `37-estudo-ia-engine-jev.md` (fontes e raciocínio completos) e
 > referência da lib `../libs/python/typesafe_sdk.md`.
-> **Depois de aprovado:** canonizar em `.context/plans/ia-engine-jev/` via
-> `/plan-restructuring`.
+> **Canonizado em 2026-09-28:** a fonte da verdade passou a ser
+> `.context/plans/ia-engine-jev.md` (plano completo e info_aux na pasta
+> `.context/plans/ia-engine-jev/`); este arquivo fica como histórico.
 
 ---
 
@@ -353,7 +354,9 @@ sem rede.
   `confianca_resposta`, para não comparar cosseno com probabilidade.
 - Cadastro de regras de transferência (§4.3): tabela, CRUD, gRPC-Web, MCP, auditoria, tela
   "Transferência para atendente" e publicação das regras ativas no Redis.
-- Config **global** (plataforma): `typesafe_api_key`, cifrada como as outras chaves.
+- Configuração geral (CoreSettings, painel do superusuário): `TYPESAFE_API_KEY` cifrada, junto
+  com `OPENAI_API_KEY`/`GROQ_API_KEY`/`GOOGLE_API_KEY`, sem override por tenant; e
+  `JEV_MODELO`, `MOTOR_ANALISE` como padrão global.
 - Config do tenant: `motor_analise` (`llm` | `sombra` | `jev`), `jev_modelo` (padrão `jev-1.13.0`),
   liga/desliga e sensibilidade dos sinais automáticos, destino e mensagem padrão da
   transferência, `piso_setor`, estratégia por tipo de entidade.
@@ -464,7 +467,7 @@ fora do MCP do tenant: é decisão de plataforma, no painel do superusuário.
 |---|---|---|
 | **J0 — Avaliação** | conjunto rotulado, script de métricas, rodada das 3 variantes de idioma | relatório com acurácia, calibração, latência e custo; decisão go/no-go |
 | **J1 — Esqueleto** | `ia_engine_jev` com o contrato completo; features inalteradas copiadas; `Analyse` e `Sentimento` pelo Jev; testes das perguntas e decisões; telemetria (span `jev.requisicao`, logs JSON, métricas do Jev) | CI verde; análise com intenção principal, multi-intenção e confiança real |
-| **J2 — Contrato e sombra** | proto aditivo; worker com intenções completas, histórico e descrições de entidade; `motor_analise = sombra`; chave TypeSafe na config global; tabela `oraculo_decisao_ia`; `motor`/`modelo` em `bot.respondeu` e nos spans do worker; troca de motor no painel do superusuário, auditada | sombra rodando num tenant; Jev ≥ atual na intenção principal |
+| **J2 — Contrato e sombra** | proto aditivo; worker com intenções completas, histórico e descrições de entidade; `motor_analise = sombra`; tabela `oraculo_decisao_ia`; `motor`/`modelo` em `bot.respondeu` e nos spans do worker; troca de motor no painel do superusuário, auditada | sombra rodando num tenant; Jev ≥ atual na intenção principal |
 | **J3 — Transferência pelo Jev** | requisições antes/depois da geração; **cadastro e tela de regras de transferência** (sinais, regras com gatilho, momento e destino, teste); migração do texto atual em sugestões inativas; eventos de auditoria das regras e da transferência com motivo; filtro por evento na trilha; ferramentas MCP de transferência; filtro dos trechos da base; LLM só texto; motivo no `testar_pergunta` e na auditoria; trechos separados no contrato; limiares separados por escala; `RespostaBot` só como reserva | as 6 perguntas do relatório com a transferência certa; toda transferência com motivo; sombra com menos transferências indevidas que o motor atual |
 | **J4 — Entidades** | candidatos por estratégia; LLM pequena só em `livre`, conferida; `campos_extraidos` pelo mesmo caminho | acerto por tipo medido; nenhum valor fora do texto |
 | **J5 — Troca** | endpoint → `ia_engine_jev` por tenant, depois todos; alertas no Grafana (429, reserva, p95, custo diário) | uma semana sem regressão e sem cair na reserva; `ia_engine` antigo e `RespostaBot` removidos |
@@ -529,8 +532,8 @@ Consequências no desenho:
   (`confianca_minima_transferencia`) continua disponível para o tenant ligar.
 - Com irritação ligada e dúvida transferindo, o bot fica conservador: a J0 mede quantas
   transferências a mais isso gera antes de fixar os limiares.
-- A chave `typesafe_api_key` passa a ser **da plataforma** (config global cifrada), não do
-  tenant; o termo do tenant ganha a TypeSafe como suboperador.
+- A chave passa a ser **da plataforma**: CoreSetting `TYPESAFE_API_KEY` cifrada na
+  configuração geral, não do tenant (entra na J0.1, antes da avaliação); o termo do tenant ganha a TypeSafe como suboperador.
 
 ---
 

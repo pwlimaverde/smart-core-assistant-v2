@@ -1,8 +1,8 @@
 # typesafe-sdk (TypeSafe System One / Jev)
 
 - **Versão Recomendada:** 0.7.2 (SDK) · modelo `jev-1.13.0` (fixar a versão, não o alias)
-- **Status de Atualização:** 🧪 EM AVALIAÇÃO (estudo 37 — ainda não é dependência de runtime)
-- **Última Verificação:** 2026-09-27
+- **Status de Atualização:** 🔍 EM_HOMOLOGACAO (plano `ia-engine-jev`; entra como dependência do `ia_engine_jev` na J1)
+- **Última Verificação:** 2026-09-28 (PyPI JSON API: 0.7.2 ainda é a última)
 - **Propósito no Projeto:** decisões estruturadas sobre mensagens (intenção, presença de
   entidade, sentimento, pedido de humano, relevância de trecho do RAG) no lugar de chamadas
   de LLM com *structured output*. Ver `planejamento/37-estudo-ia-engine-jev.md`.
@@ -14,6 +14,9 @@
 
 ## Histórico de Atualizações
 
+- **2026-09-28** — Chave passa a ser da plataforma (CoreSettings `TYPESAFE_API_KEY`), não
+  do tenant; dependências do SDK registradas (`httpx2`, `tenacity`, pydantic ≥ 2.12);
+  status → EM_HOMOLOGACAO com a canonização do plano `ia-engine-jev`.
 - **2026-09-27** — Documentação inicial, lida por completo a partir da doc oficial
   (conceitos, primitivas, confiança, modelos, jaggedness do Jev 1.13, API HTTP, SDK
   Python e os cookbooks de roteamento, classificação, extração e RAG).
@@ -42,6 +45,13 @@ continua sendo trabalho de uma LLM.
 - Referência a partes do `state` por caminho entre crases: `` `conversa.ultima` ``.
 - Uma resposta sempre cai dentro das opções dadas — nunca inventa valor fora do schema.
 
+## 1.1 Dependências que o SDK traz (PyPI, 0.7.2)
+
+`httpx2>=2.0.0` (**não** é o `httpx` que o `ia_engine` usa; os dois convivem),
+`pydantic>=2.12.0`, `pydantic-core>=2.41.1`, `tenacity>=9.0.0`,
+`typing-extensions>=4.13.0`; o extra `http2` puxa `httpx2[http2]`. O piso de pydantic
+sobe de 2.9 (o do `ia_engine`) para 2.12 — a central recomenda 2.13.5, sem conflito.
+
 ## 2. Instalação
 
 ```bash
@@ -53,9 +63,12 @@ Variáveis lidas pelo SDK: `TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL`,
 `TYPESAFE_DEFAULT_MODEL`, `TYPESAFE_LOG_LEVEL`. Padrões: base `https://api.typesafe.ai`,
 modelo `jev-latest`, timeout 10 s por operação HTTP.
 
-> No projeto a chave **não** vem de variável de ambiente global: vem da config do tenant
-> (mesmo caminho das chaves de LLM, decifradas pelo Rust e publicadas no Redis).
-> Construir o cliente com `api_key=` explícito.
+> No projeto a chave **não** vem de variável de ambiente: é uma chave **da plataforma**,
+> guardada com as outras chaves globais nas CoreSettings (`TYPESAFE_API_KEY`, cifrada,
+> editada no painel do superusuário). O Rust a decifra e a publica no Redis junto com a
+> config de cada tenant, como faz com `OPENAI_API_KEY`. Diferente das chaves de LLM, **não
+> há chave por tenant** (decisão de 2026-09-28: uma conta da plataforma). Construir o
+> cliente com `api_key=` explícito.
 
 ## 3. Uso (assíncrono — é o que o servidor gRPC usa)
 
