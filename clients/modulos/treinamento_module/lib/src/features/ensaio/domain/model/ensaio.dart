@@ -18,6 +18,22 @@ class TrechoUsado {
   int get semelhanca => ((1 - distancia).clamp(0, 1) * 100).round();
 }
 
+/// Um sinal que pesou na decisão do motor Jev: valor medido e limiar.
+@immutable
+class SinalDoEnsaio {
+  final String nome;
+  final double valor;
+  final double limiar;
+
+  const SinalDoEnsaio({
+    required this.nome,
+    required this.valor,
+    required this.limiar,
+  });
+
+  bool get passou => valor >= limiar;
+}
+
 /// O que a IA responderia a uma pergunta, e com base em quê.
 @immutable
 class Ensaio {
@@ -32,6 +48,17 @@ class Ensaio {
   final bool transferiria;
   final String fluxoTransferencia;
 
+  /// Plano ia-engine-jev — `llm` ou `jev`; no motor Jev, o porquê da decisão.
+  final String motor;
+  final String modelo;
+  final String motivoTransferencia;
+  final List<SinalDoEnsaio> sinais;
+  final String intencaoPrincipal;
+  final double confiancaIntencao;
+
+  /// automatica | transferida | sem_info | a_revisar | reserva
+  final String decisao;
+
   const Ensaio({
     required this.resposta,
     required this.comportamentoAplicado,
@@ -39,7 +66,16 @@ class Ensaio {
     required this.confiabilidade,
     required this.transferiria,
     required this.fluxoTransferencia,
+    this.motor = 'llm',
+    this.modelo = '',
+    this.motivoTransferencia = '',
+    this.sinais = const [],
+    this.intencaoPrincipal = '',
+    this.confiancaIntencao = 0,
+    this.decisao = '',
   });
+
+  bool get peloJev => motor == 'jev';
 
   /// A IA respondeu sem material nenhum e sem intenção.
   ///

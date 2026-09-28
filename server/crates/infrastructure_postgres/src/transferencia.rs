@@ -740,8 +740,10 @@ pub fn sugestoes_do_texto(
     intents: &[(String, String)],
     prompt_transferencia: &str,
 ) -> Vec<DadosRegra> {
-    const PALAVRAS: [&str; 5] = [
+    // "transfir" cobre "transfira"/"transfiro", que não contêm "transfer".
+    const PALAVRAS: [&str; 6] = [
         "transfer",
+        "transfir",
         "encaminh",
         "atendente",
         "passe para",

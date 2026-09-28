@@ -52,6 +52,39 @@ final class GetTenantConfigUsecase
   ) => Success(data);
 }
 
+/// Plano ia-engine-jev — troca o motor da IA do tenant (auditado no servidor
+/// como `tenant_config.motor_alterado`).
+final class DefinirMotorUsecase
+    extends
+        UsecaseBaseCallData<
+          (String, String),
+          (String, String),
+          DefinirMotorParameters,
+          TenantConfigError
+        > {
+  const DefinirMotorUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    (String, String),
+    (String, String),
+    DefinirMotorParameters,
+    TenantConfigError
+  >
+  get process => _process;
+
+  @override
+  TenantConfigError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('definirMotorTenant', exception, stackTrace);
+    return const TenantConfigInesperado();
+  }
+
+  static ReturnSuccessOrError<(String, String), TenantConfigError> _process(
+    (String, String) data,
+    DefinirMotorParameters parameters,
+  ) => Success(data);
+}
+
 /// Grava a configuração de IA/persona de um tenant.
 final class UpdateTenantConfigUsecase
     extends

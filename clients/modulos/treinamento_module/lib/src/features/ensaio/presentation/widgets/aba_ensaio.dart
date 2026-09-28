@@ -170,6 +170,18 @@ class _Resultado extends StatelessWidget {
                 ? 'A IA transferiria esta conversa em vez de responder.'
                 : 'A IA transferiria para "${ensaio.fluxoTransferencia}".',
           ),
+          if (ensaio.motivoTransferencia.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Motivo: ${ensaio.motivoTransferencia}',
+              key: const ValueKey('motivo-transferencia'),
+            ),
+          ],
+        ],
+        // Plano ia-engine-jev — o porquê da decisão, sinal por sinal.
+        if (ensaio.peloJev) ...[
+          const SizedBox(height: AppSpacing.md),
+          _PorqueDaDecisao(ensaio: ensaio),
         ],
         if (ensaio.semContexto) ...[
           const SizedBox(height: AppSpacing.md),
@@ -260,6 +272,65 @@ class _Aviso extends StatelessWidget {
 /// A correção é o que dá valor ao registro: um "ruim" sozinho diz que algo está
 /// errado, a correção diz o quê. Por isso o campo abre ao escolher "Ruim", em vez
 /// de ficar escondido atrás de outro clique.
+/// Os sinais que o motor Jev mediu, com o limiar de cada um.
+class _PorqueDaDecisao extends StatelessWidget {
+  final Ensaio ensaio;
+
+  const _PorqueDaDecisao({required this.ensaio});
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = context.colors.fgMuted;
+    return AppCard(
+      key: const ValueKey('porque-da-decisao'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Por que decidiu assim',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            [
+              'Decisão: ${ensaio.decisao.isEmpty ? '—' : ensaio.decisao}',
+              if (ensaio.intencaoPrincipal.isNotEmpty)
+                'intenção: ${ensaio.intencaoPrincipal} '
+                    '(${(ensaio.confiancaIntencao * 100).round()}%)',
+              if (ensaio.modelo.isNotEmpty) ensaio.modelo,
+            ].join(' · '),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final s in ensaio.sinais)
+            Row(
+              children: [
+                Icon(
+                  s.passou
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  size: 14,
+                  color: s.passou
+                      ? Theme.of(context).colorScheme.primary
+                      : muted,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(child: Text(s.nome)),
+                Text(
+                  '${(s.valor * 100).round()}% / ${(s.limiar * 100).round()}%',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AvaliacaoDoEnsaio extends StatefulWidget {
   final Ensaio ensaio;
   final EnsaioController controller;

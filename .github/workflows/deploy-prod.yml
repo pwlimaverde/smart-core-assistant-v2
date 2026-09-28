@@ -214,6 +214,35 @@ jobs:
           cache-from: type=gha,scope=ia-engine
           cache-to: type=gha,mode=max,scope=ia-engine
 
+  # Plano ia-engine-jev — o motor Jev, paridade com o dev.
+  build-ia-engine-jev:
+    name: Build IA Engine Jev (PROD)
+    needs: verifica-ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/smartcore-ia-engine-jev
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ia_engine_jev/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=ia-engine-jev
+          cache-to: type=gha,mode=max,scope=ia-engine-jev
+
   # Imagem Python do mcp_server (N13), paridade com o dev.
   build-mcp-server:
     name: Build MCP Server (PROD)
@@ -245,7 +274,7 @@ jobs:
 
   deploy-prod:
     name: Deploy PROD (compose)
-    needs: [build-server, build-web, build-web-tenant, build-ia-engine, build-mcp-server]
+    needs: [build-server, build-web, build-web-tenant, build-ia-engine, build-ia-engine-jev, build-mcp-server]
     runs-on: [self-hosted, hostinger]
     environment: production
     steps:
@@ -378,7 +407,7 @@ jobs:
         run: |
           set -u
           sleep 25
-          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine watchdog pg_backup"
+          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine ia_engine_jev watchdog pg_backup"
           falhas=""
           for svc in $servicos; do
             cid=$(docker compose --env-file .env ps -q "$svc" || true)

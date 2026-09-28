@@ -25,6 +25,7 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
       edge: ${{ steps.filter.outputs.edge }}
       ia_engine: ${{ steps.filter.outputs.ia_engine }}
+      ia_engine_jev: ${{ steps.filter.outputs.ia_engine_jev }}
       mcp_server: ${{ steps.filter.outputs.mcp_server }}
       compose: ${{ steps.filter.outputs.compose }}
     steps:
@@ -47,6 +48,10 @@ jobs:
             ia_engine:
               - 'ia_engine/**'
               # Os stubs gRPC do ia_engine são gerados do .proto canônico do contracts.
+              - 'server/crates/contracts/**'
+              - '.github/workflows/deploy-dev.yml'
+            ia_engine_jev:
+              - 'ia_engine_jev/**'
               - 'server/crates/contracts/**'
               - '.github/workflows/deploy-dev.yml'
             mcp_server:
@@ -285,6 +290,38 @@ jobs:
           cache-from: type=gha,scope=ia-engine
           cache-to: type=gha,mode=max,scope=ia-engine
 
+  # Plano ia-engine-jev — imagem do motor Jev, no mesmo molde do ia_engine. O
+  # compose referencia ghcr.io/.../smartcore-ia-engine-jev:dev; sem este job o
+  # "Compose pull & up" falha com "not found".
+  build-ia-engine-jev:
+    name: Build IA Engine Jev (DEV)
+    needs: changes
+    if: needs.changes.outputs.ia_engine_jev == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/smartcore-ia-engine-jev
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ia_engine_jev/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=ia-engine-jev
+          cache-to: type=gha,mode=max,scope=ia-engine-jev
+
   # Imagem Python do mcp_server (N13). Mesmo motivo do job do ia_engine: o compose
   # referencia ghcr.io/.../smartcore-mcp-server:dev via `docker compose pull`, e sem
   # este job o "Compose pull & up" falha com "not found".
@@ -320,7 +357,7 @@ jobs:
 
   deploy-dev:
     name: Deploy DEV (compose)
-    needs: [changes, build-server, build-web, build-web-tenant, build-edge, build-ia-engine, build-mcp-server]
+    needs: [changes, build-server, build-web, build-web-tenant, build-edge, build-ia-engine, build-ia-engine-jev, build-mcp-server]
     if: >-
       ${{ always()
           && needs.build-server.result != 'failure'
@@ -328,11 +365,13 @@ jobs:
           && needs.build-web-tenant.result != 'failure'
           && needs.build-edge.result != 'failure'
           && needs.build-ia-engine.result != 'failure'
+          && needs.build-ia-engine-jev.result != 'failure'
           && needs.build-mcp-server.result != 'failure'
           && (needs.changes.outputs.server == 'true'
               || needs.changes.outputs.web == 'true'
               || needs.changes.outputs.edge == 'true'
               || needs.changes.outputs.ia_engine == 'true'
+              || needs.changes.outputs.ia_engine_jev == 'true'
               || needs.changes.outputs.mcp_server == 'true'
               || needs.changes.outputs.compose == 'true') }}
     runs-on: [self-hosted, hostinger]
@@ -496,7 +535,7 @@ jobs:
           # Janela para um crash-loop se manifestar (restart: unless-stopped é
           # imediato, então poucos segundos já expõem o RestartCount subindo).
           sleep 25
-          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine watchdog pg_backup"
+          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine ia_engine_jev watchdog pg_backup"
           falhas=""
           for svc in $servicos; do
             cid=$(docker compose --env-file .env ps -q "$svc" || true)

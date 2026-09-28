@@ -4,6 +4,100 @@ import '../../domain/model/tenant_config.dart';
 import '../controllers/tenant_config_controller.dart';
 import '../../../../shared/widgets/admin_drawer.dart';
 
+/// Plano ia-engine-jev — o motor das decisões da IA deste tenant.
+///
+/// Decisão da plataforma (custo, fornecedor, contrato), por isso só aqui, no
+/// painel do superusuário, e fora do MCP do tenant. Toda troca fica na
+/// auditoria como `tenant_config.motor_alterado`.
+class _MotorDaIa extends StatefulWidget {
+  final Future<ReturnSuccessOrError<(String, String), AppError>> Function(
+    String motor,
+  )
+  onAplicar;
+
+  const _MotorDaIa({required this.onAplicar});
+
+  @override
+  State<_MotorDaIa> createState() => _MotorDaIaState();
+}
+
+class _MotorDaIaState extends State<_MotorDaIa> {
+  String _motor = 'sombra';
+  bool _aplicando = false;
+  String? _resultado;
+
+  static const _explicacao = {
+    '': 'Herda o padrão global (CoreSetting MOTOR_ANALISE).',
+    'llm': 'O motor atual decide (LLM com saída estruturada).',
+    'sombra':
+        'O motor atual decide; o Jev roda ao lado e só registra o que faria '
+        '(oraculo_decisao_ia), para comparar.',
+    'jev':
+        'O Jev decide (intenção, transferência pelas regras do tenant, trechos '
+        'da base); a LLM só escreve o texto.',
+  };
+
+  Future<void> _aplicar() async {
+    setState(() => _aplicando = true);
+    final res = await widget.onAplicar(_motor);
+    if (!mounted) return;
+    setState(() {
+      _aplicando = false;
+      _resultado = switch (res) {
+        Success(value: (final antes, final depois)) =>
+          'Motor alterado: ${antes.isEmpty ? 'global' : antes} → '
+              '${depois.isEmpty ? 'global' : depois}',
+        Failure(:final error) => error.message,
+      };
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Motor das decisões da IA',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            key: const ValueKey('motor-da-ia'),
+            segments: const [
+              ButtonSegment(value: '', label: Text('Global')),
+              ButtonSegment(value: 'llm', label: Text('Atual (LLM)')),
+              ButtonSegment(value: 'sombra', label: Text('Sombra')),
+              ButtonSegment(value: 'jev', label: Text('Jev')),
+            ],
+            selected: {_motor},
+            onSelectionChanged: (s) => setState(() {
+              _motor = s.first;
+              _resultado = null;
+            }),
+          ),
+          const SizedBox(height: 8),
+          Text(_explicacao[_motor] ?? ''),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              ElevatedButton(
+                key: const ValueKey('aplicar-motor'),
+                onPressed: _aplicando ? null : _aplicar,
+                child: const Text('Aplicar motor'),
+              ),
+              const SizedBox(width: 16),
+              if (_resultado case final r?) Expanded(child: Text(r)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class TenantConfigPage extends StatefulWidget {
   const TenantConfigPage({super.key});
 
@@ -294,6 +388,13 @@ class _TenantConfigPageState extends State<TenantConfigPage>
     return SingleChildScrollView(
       child: Column(
         children: [
+          _MotorDaIa(
+            onAplicar: (motor) => _controller.definirMotor(
+              tenantId: _tenantIdController.text.trim(),
+              motor: motor,
+            ),
+          ),
+          const SizedBox(height: 16),
           AppTextField(
             label: 'Classe da LLM (ex: openai, groq)',
             controller: _llmClassCtrl,

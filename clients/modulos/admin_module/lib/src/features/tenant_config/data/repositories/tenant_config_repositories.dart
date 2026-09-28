@@ -59,6 +59,23 @@ final class GetTenantConfigRepository
   ) => _mapTenantConfig('getTenantConfig', exception, stackTrace);
 }
 
+final class DefinirMotorRepository
+    extends
+        RepositoryBase<
+          (String, String),
+          DefinirMotorParameters,
+          TenantConfigError
+        > {
+  const DefinirMotorRepository({required super.datasource});
+
+  @override
+  TenantConfigError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    DefinirMotorParameters parameters,
+  ) => _mapTenantConfig('definirMotorTenant', exception, stackTrace);
+}
+
 final class UpdateTenantConfigRepository
     extends
         RepositoryBase<Unit, UpdateTenantConfigParameters, TenantConfigError> {

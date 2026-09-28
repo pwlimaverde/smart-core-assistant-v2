@@ -26,6 +26,18 @@ final class TestarPerguntaDatasource
       confiabilidade: resp.confiabilidade,
       transferiria: resp.transferiria,
       fluxoTransferencia: resp.fluxoTransferencia,
+      motor: resp.motor.isEmpty ? 'llm' : resp.motor,
+      modelo: resp.modelo,
+      motivoTransferencia: resp.motivoTransferencia,
+      sinais: resp.sinais
+          .map(
+            (s) =>
+                SinalDoEnsaio(nome: s.nome, valor: s.valor, limiar: s.limiar),
+          )
+          .toList(),
+      intencaoPrincipal: resp.intencaoPrincipal,
+      confiancaIntencao: resp.confiancaIntencao,
+      decisao: resp.decisao,
     );
   }
 }

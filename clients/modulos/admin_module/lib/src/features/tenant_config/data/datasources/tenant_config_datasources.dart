@@ -8,6 +8,25 @@ import '../../domain/parameters/tenant_config_parameters.dart';
 /// domínio. Todos burros — sem `try/catch`, a exceção sobe crua para o
 /// `mapError` do repositório correspondente.
 
+/// Troca o motor da IA do tenant; devolve `anterior → atual` para a tela.
+final class DefinirMotorDatasource
+    implements Datasource<(String, String), DefinirMotorParameters> {
+  final proto.AdminServiceClient _client;
+
+  const DefinirMotorDatasource({required this._client});
+
+  @override
+  Future<(String, String)> call(DefinirMotorParameters parameters) async {
+    final resp = await _client.definirMotorTenant(
+      proto.DefinirMotorTenantRequest(
+        tenantId: parameters.tenantId,
+        motor: parameters.motor,
+      ),
+    );
+    return (resp.anterior, resp.atual);
+  }
+}
+
 /// Lê a configuração de IA/persona de um tenant.
 final class GetTenantConfigDatasource
     implements Datasource<TenantConfig, GetTenantConfigParameters> {

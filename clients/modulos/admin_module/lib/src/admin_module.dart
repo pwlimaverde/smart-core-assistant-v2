@@ -162,6 +162,13 @@ final class AdminModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<DefinirMotorUsecase>(
+      () => DefinirMotorUsecase(
+        repository: DefinirMotorRepository(
+          datasource: DefinirMotorDatasource(client: _adminClient()),
+        ),
+      ),
+    );
 
     // ── billing ───────────────────────────────────────────────────────
     i.lazySingleton<ListPlansUsecase>(

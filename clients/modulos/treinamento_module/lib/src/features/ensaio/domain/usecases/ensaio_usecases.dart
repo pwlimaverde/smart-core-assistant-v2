@@ -33,6 +33,13 @@ final class TestarPerguntaUsecase
           confiabilidade: data.confiabilidade,
           transferiria: data.transferiria,
           fluxoTransferencia: data.fluxoTransferencia,
+          motor: data.motor,
+          modelo: data.modelo,
+          motivoTransferencia: data.motivoTransferencia,
+          sinais: data.sinais,
+          intencaoPrincipal: data.intencaoPrincipal,
+          confiancaIntencao: data.confiancaIntencao,
+          decisao: data.decisao,
         ),
       );
 
@@ -104,7 +111,12 @@ final class ListarAvaliacoesUsecase
 /// P17 — tira a avaliação da revisão.
 final class TratarAvaliacaoUsecase
     extends
-        UsecaseBaseCallData<Unit, Unit, TratarAvaliacaoParameters, EnsaioError> {
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          TratarAvaliacaoParameters,
+          EnsaioError
+        > {
   const TratarAvaliacaoUsecase({required super.repository});
 
   @override

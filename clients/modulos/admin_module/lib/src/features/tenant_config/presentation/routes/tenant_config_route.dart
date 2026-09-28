@@ -17,6 +17,7 @@ final class TenantConfigRoute extends GetItModule {
       () => TenantConfigController(
         getUsecase: inject<GetTenantConfigUsecase>(),
         updateUsecase: inject<UpdateTenantConfigUsecase>(),
+        motorUsecase: inject<DefinirMotorUsecase>(),
       ),
     );
   }

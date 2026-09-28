@@ -1,0 +1,6 @@
+{"mensagem": "Qual o tamanho máximo que vocês imprimem na impressão digital?", "intencao": "", "intencoes": [], "transfere": false}
+{"mensagem": "O que é papel blueback?", "intencao": "", "intencoes": [], "transfere": false}
+{"mensagem": "Quanto custa 1000 cartões de visita?", "intencao": "cartoes_visita", "intencoes": ["cartoes_visita"], "transfere": null}
+{"mensagem": "Vocês fazem banner em lona para fachada?", "intencao": "banners_faixas_lonas", "intencoes": ["banners_faixas_lonas"], "transfere": null}
+{"mensagem": "Preciso de rótulos adesivos para potes de doce, 500 unidades.", "intencao": "rotulos_etiquetas_autoadesivas", "intencoes": ["rotulos_etiquetas_autoadesivas"], "transfere": null}
+{"mensagem": "Quero falar com o Paulo.", "intencao": "transferencia_atendente", "intencoes": ["transferencia_atendente"], "transfere": true}

@@ -375,6 +375,35 @@ services:
     logging: *logging
     mem_limit: ${MEM_IA_ENGINE:-2g}
 
+  # ---------- MOTOR DE IA JEV (plano ia-engine-jev — imagem própria) ----------
+  # Mesmo contrato gRPC do ia_engine; as decisões (intenção, entidades,
+  # transferência, trechos da base) são do Jev (TypeSafe) e a LLM só escreve o
+  # texto. Quem o usa é decidido por tenant (`motor_analise`: llm | sombra | jev)
+  # — com `llm`, este serviço fica de pé sem receber tráfego.
+  #
+  # A chave TypeSafe NÃO entra por variável de ambiente: é a CoreSetting
+  # `TYPESAFE_API_KEY` (configuração geral), publicada no Redis com a config de
+  # cada tenant. O SDK leria `TYPESAFE_API_KEY` do ambiente sozinho — por isso
+  # ela não pode existir aqui.
+  ia_engine_jev:
+    image: ${IA_ENGINE_JEV_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-ia-engine-jev:dev}
+    build:
+      context: ../..
+      dockerfile: ia_engine_jev/Dockerfile
+    env_file: [.env]
+    environment:
+      TYPESAFE_API_KEY: ""
+    networks: [internal, observability]
+    healthcheck:
+      test: ["CMD", "python", "-m", "ia_engine_jev.healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_IA_ENGINE_JEV:-1g}
+
   # ---------- SERVIDOR MCP (Python — imagem própria) ----------
   # Resource server do módulo N13: é onde Claude, ChatGPT e Cursor se conectam.
   #
@@ -439,11 +468,15 @@ services:
       # e a sonda mede a idade dele. É o que distingue "worker parado" de
       # "worker vivo sem trabalho".
       SMARTCORE_LIVENESS_FILE: /tmp/worker_batimento
+      # Plano ia-engine-jev: o motor Jev. Sem ele, todo tenant fica no
+      # motor atual, qualquer que seja o `motor_analise`.
+      SMARTCORE_IA_ENGINE_JEV_ENDPOINT: ${SMARTCORE_IA_ENGINE_JEV_ENDPOINT:-http://ia_engine_jev:50060}
     networks: [internal, observability]
     depends_on:
       data_postgres: { condition: service_started }
       data_redis: { condition: service_started }
       ia_engine: { condition: service_started }
+      ia_engine_jev: { condition: service_started }
     healthcheck:
       # 90s de tolerância: o loop bate a cada volta (~1s) e o piso de escrita é
       # de 5s, então essa folga só dispara em travamento de verdade.
@@ -461,6 +494,10 @@ services:
     ulimits: *ulimits-rede
     command: ["runtime_api"]
     env_file: [.env]
+    environment:
+      # Plano ia-engine-jev: o teste de regra de transferência e o ensaio de
+      # pergunta de quem está no motor Jev ou na sombra.
+      SMARTCORE_IA_ENGINE_JEV_ENDPOINT: ${SMARTCORE_IA_ENGINE_JEV_ENDPOINT:-http://ia_engine_jev:50060}
     # `mcp_net` além das de sempre: é por ela que o mcp_server chega ao gRPC
     # daqui, sem que ele precise entrar na rede `internal`.
     networks: [internal, observability, mcp_net]

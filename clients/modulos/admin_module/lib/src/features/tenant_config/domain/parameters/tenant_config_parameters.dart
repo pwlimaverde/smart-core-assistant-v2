@@ -23,3 +23,12 @@ final class UpdateTenantConfigParameters extends Parameters {
     required this.config,
   });
 }
+
+/// Plano ia-engine-jev — troca o motor das decisões da IA de um tenant:
+/// `llm`, `sombra`, `jev` ou vazio (herda o global `MOTOR_ANALISE`).
+final class DefinirMotorParameters extends Parameters {
+  final String tenantId;
+  final String motor;
+
+  const DefinirMotorParameters({required this.tenantId, required this.motor});
+}

@@ -81,6 +81,9 @@ omit = [
     "src/ia_engine_jev/server.py",
     "src/ia_engine_jev/settings.py",
     "src/ia_engine_jev/telemetry.py",
+    # Avaliação J0: roda no VPS contra a TypeSafe de verdade, nunca na CI. As
+    # métricas (puras) têm teste; o script de rodada, não.
+    "src/ia_engine_jev/avaliacao/rodar.py",
 ]
 
 [tool.coverage.report]
