@@ -383,3 +383,42 @@ tenant, depois para todos; alertas no Grafana/Loki (taxa de 429, taxa de reserva
 | Mensagem adversarial | mensagem é dado; `Noul` de instrução nos trechos é filtro, não barreira |
 | Regra mal escrita | uma condição exata; Testar antes de ativar |
 | Volta atrás | mesmo contrato: endpoint de volta e `MOTOR_ANALISE = llm` |
+
+---
+
+## 8. Execução (2026-09-28)
+
+Implementado de ponta a ponta na `feature/ia-engine-jev`, sem a chave (os testes
+rodam com o Jev dublado; a avaliação real e a ativação ficam para quando a chave
+for cadastrada — ver `infra/RUNBOOK_MOTOR_JEV.md`).
+
+| Fase | Entregue |
+|---|---|
+| J0.1 | migração 0046 (`TYPESAFE_API_KEY` cifrada, `JEV_MODELO`, `MOTOR_ANALISE`); `RuntimeConfig` lê a chave só do global; publicação no Redis |
+| J0 | `ia_engine_jev.avaliacao` (métricas puras com teste + script de rodada no VPS, 3 variantes de idioma) e conjunto semente com as 6 perguntas do relatório |
+| J1 | serviço `ia_engine_jev` (cópia do `ia_engine` + `typesafe/`, `perguntas/`, `decisoes/`, `candidatos/`), `Analyse` e `Sentimento` pelo Jev, span `jev.requisicao`, métricas `smartcore_jev_*`, job de CI (piso 85%) |
+| J2 | proto aditivo; worker com catálogo completo, histórico e motor `llm | sombra | jev` por tenant; migração 0047 (motor por tenant, `oraculo_decisao_ia`, motor/modelo na mensagem); troca de motor no painel do superusuário, auditada |
+| J3 | `Responder` pelo Jev (antes/depois, trechos um a um, LLM só texto, reserva); migração 0048 e cadastro de regras (CRUD, sinais, teste, sugestões, últimas transferências); tela "Transferência para atendente"; 10 tools MCP; filtro por evento na trilha; motivo e sinais no ensaio e na auditoria |
+| J4 | candidatos por estratégia (regex, lista, varios, data, livre) com a estratégia por tipo em `jev_config.entidades`; campos do cartão pela LLM pequena, conferidos pelo Jev |
+| J5 | serviço no compose dev/prod, build das imagens, alertas no Grafana (429, reserva, p95, custo diário). **A troca e a remoção do motor antigo ficam para depois da avaliação e de uma semana sem regressão.** |
+
+### Desvios do plano, e por quê
+
+- **Troca por `motor_analise`, não por endpoint.** O worker tem os dois clientes
+  (`SMARTCORE_IA_ENGINE_ENDPOINT` e `SMARTCORE_IA_ENGINE_JEV_ENDPOINT`) e escolhe
+  por tenant. É o que torna a sombra possível e a volta instantânea (painel), sem
+  redeploy.
+- **Sem chave, o `ia_engine_jev` responde pelo caminho da LLM.** Pode ficar no ar
+  antes da chave existir.
+- **Sugestões de regra sem LLM.** A migração do texto antigo é determinística
+  (intenção cujo comportamento fala em transferir → regra por intenção; cada linha
+  do prompt de regras → regra por condição), sempre inativa. O que falta de
+  julgamento é do tenant, na revisão.
+- **Entidades vêm da config do tenant, não do request.** O `ia_engine_jev` lê
+  descrições e estratégias do Redis; `EntidadeDef` no contrato fica para quem
+  quiser sobrepor.
+- **Pisos calibrados por SQL.** `jev_config` não tem tela: é calibração da
+  plataforma, a partir da J0. Republica ao reaplicar o motor no painel.
+- **Destino sem nada configurado.** Regra → setor do Jev com confiança → fluxo
+  padrão → setor mais provável → primeiro fluxo: transferir sem destino deixaria
+  a conversa parada com o cliente ouvindo que foi transferido.
