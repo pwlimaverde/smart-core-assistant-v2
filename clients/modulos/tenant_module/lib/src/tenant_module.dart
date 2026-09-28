@@ -55,6 +55,10 @@ import 'features/usuarios/data/datasources/usuarios_datasources.dart';
 import 'features/usuarios/data/repositories/usuarios_repositories.dart';
 import 'features/usuarios/domain/usecases/usuarios_usecases.dart';
 import 'features/usuarios/presentation/routes/tenant_users_route.dart';
+import 'features/transferencia/data/datasources/transferencia_datasources.dart';
+import 'features/transferencia/data/repositories/transferencia_repositories.dart';
+import 'features/transferencia/domain/usecases/transferencia_usecases.dart';
+import 'features/transferencia/presentation/routes/transferencia_routes.dart';
 
 /// Módulo do painel do tenant (N3), em três features: **convites**,
 /// **usuarios** (papéis e `flow_permissions`) e **config** (persona do bot,
@@ -526,6 +530,50 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+
+    // ── transferência para atendente (plano ia-engine-jev) ────────────────
+    i.lazySingleton<CarregarTransferenciaUsecase>(
+      () => CarregarTransferenciaUsecase(
+        repository: CarregarTransferenciaRepository(
+          datasource: CarregarTransferenciaDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<SalvarRegraUsecase>(
+      () => SalvarRegraUsecase(
+        repository: SalvarRegraRepository(
+          datasource: SalvarRegraDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DefinirRegraAtivaUsecase>(
+      () => DefinirRegraAtivaUsecase(
+        repository: DefinirRegraAtivaRepository(
+          datasource: DefinirRegraAtivaDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DefinirSinaisUsecase>(
+      () => DefinirSinaisUsecase(
+        repository: DefinirSinaisRepository(
+          datasource: DefinirSinaisDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<TestarRegraUsecase>(
+      () => TestarRegraUsecase(
+        repository: TestarRegraRepository(
+          datasource: TestarRegraDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<GerarSugestoesUsecase>(
+      () => GerarSugestoesUsecase(
+        repository: GerarSugestoesRepository(
+          datasource: GerarSugestoesDatasource(client: _adminClient()),
+        ),
+      ),
+    );
   }
 
   @override
@@ -537,6 +585,7 @@ final class TenantModule extends AppModule {
     IntegracoesRoute(),
     ConexoesRoute(),
     IgnoradosRoute(),
+    TransferenciaRoute(),
     ContatosRoute(),
     ClientesRoute(),
     EquipeRoute(),

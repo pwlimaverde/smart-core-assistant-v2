@@ -229,7 +229,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     ) -> dict[str, object]:
         """Pergunta ao assistente sem enviar nada a cliente: devolve a resposta
         que ele daria, os trechos da base usados, a confiança e se transferiria
-        para uma pessoa. Use para validar treinamentos e intenções."""
+        para uma pessoa. Pelo motor Jev, também o **motivo** da transferência
+        (regra ou sinal), os sinais medidos com o limiar, a intenção escolhida e
+        os trechos aprovados. Use para validar treinamentos, intenções e regras."""
         r = await executor.executar(
             "testar_pergunta",
             "TestarPergunta",

@@ -485,6 +485,7 @@ async fn carregar_fluxos_disponiveis(
 /// `fluxo_transferencia` de volta ao `fluxo_id` e chama `TransferirAtendimentoParaFluxo`
 /// no data_postgres. Best-effort: qualquer falha só significa "sem transferência", nunca
 /// trava o atendimento. Audita `atendimento.transferido_por_ia` quando efetiva.
+#[allow(clippy::too_many_arguments)]
 async fn aplicar_transferencia_ia(
     state: &AppState,
     tenant_uuid: Uuid,
@@ -3476,8 +3477,7 @@ async fn historico_recente(
         turnos.pop();
     }
     let excesso = turnos.len().saturating_sub(4);
-    turnos.drain(..excesso);
-    turnos
+    turnos.split_off(excesso)
 }
 
 #[cfg(test)]

@@ -44,6 +44,9 @@ const Map<String, List<String>?> escoposParaAbrir = {
   '/tenant/usuarios': somenteAdmin,
   // GetMyTenantConfig
   '/tenant/config': ['configuracoes:read'],
+  // GetConfigTransferencia e ListRegrasTransferencia — quando o bot passa a
+  // conversa para uma pessoa é configuração do negócio.
+  '/tenant/transferencia': ['configuracoes:read'],
   // Os aplicativos de IA conectados são de cada pessoa (N13.8): esconder a
   // tela deixaria alguém sem meio de desconectar um agente que ele autorizou.
   '/tenant/integracoes': null,
@@ -63,6 +66,7 @@ const Map<String, List<String>> escoposParaAlterar = {
   '/tenant/ignorados': ['operacional:admin'],
   '/tenant/treinamento': ['treinamento:write'],
   '/tenant/config': ['configuracoes:write'],
+  '/tenant/transferencia': ['configuracoes:write'],
 };
 
 /// A mesma regra do `rbac::autorizado`: `tenant:admin` e o coringa `*`

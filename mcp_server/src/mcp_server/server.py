@@ -44,6 +44,7 @@ from mcp_server.tools import (
     equipe_whatsapp,
     exclusao,
     leitura,
+    transferencia,
     treinamento_ia,
 )
 from mcp_server.tools.base import Executor
@@ -162,6 +163,7 @@ def montar() -> ServidorMcpFiltrado:
     envio.registrar(mcp, registro, executor)
     destrutivas.registrar(mcp, registro, executor)
     exclusao.registrar(mcp, registro, executor, teto=teto)
+    transferencia.registrar(mcp, registro, executor, teto=teto)
 
     _registrar_icone(mcp)
 

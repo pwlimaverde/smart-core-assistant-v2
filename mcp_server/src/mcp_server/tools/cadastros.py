@@ -604,12 +604,25 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
             Literal["", "painel", "mcp"],
             Field(default="", description="Filtra quem agiu. Vazio = todos."),
         ] = "",
+        evento_prefixo: Annotated[
+            str,
+            Field(
+                default="",
+                description=(
+                    "Só eventos que começam com isto — ex.: 'transferencia_regra.' "
+                    "(mudanças de regra), 'atendimento.transferido' (transferências "
+                    "da IA). Vazio = todos."
+                ),
+            ),
+        ] = "",
     ) -> list[dict[str, object]]:
         """A trilha de auditoria do negócio: quem fez o quê e quando, inclusive
         o que agentes de IA fizeram por este conector."""
         r = await executor.executar(
             "list_auditoria",
             "ListMyAuditLog",
-            pb.ListMyAuditLogRequest(origem=origem, limit=teto),
+            pb.ListMyAuditLogRequest(
+                origem=origem, limit=teto, evento_prefixo=evento_prefixo
+            ),
         )
         return [para_dict(e) for e in limitar_itens(list(r.entries), teto)]

@@ -188,9 +188,16 @@ impl DadosRegra {
     }
 }
 
-const COLUNAS: &str = "id, nome, gatilho_tipo, condicao, intencao_tag, exemplos_sim, \
-    exemplos_nao, momento, campos_coleta, destino_tipo, destino_fluxo_id, mensagem, \
-    sensibilidade, ativa, sugestao, criado_em, atualizado_em";
+/// As colunas de uma regra. Macro, e não `const`: o `sqlx` só aceita SQL
+/// estático (`&'static str`), e `concat!` monta a consulta em tempo de
+/// compilação — um `format!` aqui abriria a porta para SQL dinâmico.
+macro_rules! colunas {
+    () => {
+        "id, nome, gatilho_tipo, condicao, intencao_tag, exemplos_sim, exemplos_nao, \
+         momento, campos_coleta, destino_tipo, destino_fluxo_id, mensagem, \
+         sensibilidade, ativa, sugestao, criado_em, atualizado_em"
+    };
+}
 
 fn da_linha(r: &sqlx::postgres::PgRow) -> Result<RegraTransferencia, DbError> {
     let lista_json = |c: &str| -> Result<Vec<String>, DbError> {
@@ -224,8 +231,10 @@ pub async fn listar(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
 ) -> Result<Vec<RegraTransferencia>, DbError> {
-    let linhas = sqlx::query(&format!(
-        "SELECT {COLUNAS} FROM oraculo_regra_transferencia \
+    let linhas = sqlx::query(concat!(
+        "SELECT ",
+        colunas!(),
+        " FROM oraculo_regra_transferencia \
          WHERE tenant_id = $1 ORDER BY ativa DESC, sugestao, nome"
     ))
     .bind(tenant_id)
@@ -239,8 +248,10 @@ pub async fn obter(
     tenant_id: Uuid,
     id: i64,
 ) -> Result<Option<RegraTransferencia>, DbError> {
-    let linha = sqlx::query(&format!(
-        "SELECT {COLUNAS} FROM oraculo_regra_transferencia WHERE tenant_id = $1 AND id = $2"
+    let linha = sqlx::query(concat!(
+        "SELECT ",
+        colunas!(),
+        " FROM oraculo_regra_transferencia WHERE tenant_id = $1 AND id = $2"
     ))
     .bind(tenant_id)
     .bind(id)
@@ -276,13 +287,14 @@ pub async fn criar(
     ativa: bool,
     sugestao: bool,
 ) -> Result<RegraTransferencia, DbError> {
-    let linha = sqlx::query(&format!(
+    let linha = sqlx::query(concat!(
         "INSERT INTO oraculo_regra_transferencia \
             (tenant_id, nome, gatilho_tipo, condicao, intencao_tag, exemplos_sim, exemplos_nao, \
              momento, campos_coleta, destino_tipo, destino_fluxo_id, mensagem, sensibilidade, \
              ativa, sugestao) \
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) \
-         RETURNING {COLUNAS}"
+         RETURNING ",
+        colunas!()
     ))
     .bind(tenant_id)
     .bind(&d.nome)
@@ -310,14 +322,15 @@ pub async fn atualizar(
     id: i64,
     d: &DadosRegra,
 ) -> Result<Option<RegraTransferencia>, DbError> {
-    let linha = sqlx::query(&format!(
+    let linha = sqlx::query(concat!(
         "UPDATE oraculo_regra_transferencia SET \
             nome = $3, gatilho_tipo = $4, condicao = $5, intencao_tag = $6, exemplos_sim = $7, \
             exemplos_nao = $8, momento = $9, campos_coleta = $10, destino_tipo = $11, \
             destino_fluxo_id = $12, mensagem = $13, sensibilidade = $14, \
             sugestao = FALSE, atualizado_em = NOW() \
          WHERE tenant_id = $1 AND id = $2 \
-         RETURNING {COLUNAS}"
+         RETURNING ",
+        colunas!()
     ))
     .bind(tenant_id)
     .bind(id)
@@ -344,11 +357,12 @@ pub async fn definir_ativa(
     id: i64,
     ativa: bool,
 ) -> Result<Option<RegraTransferencia>, DbError> {
-    let linha = sqlx::query(&format!(
+    let linha = sqlx::query(concat!(
         "UPDATE oraculo_regra_transferencia \
             SET ativa = $3, sugestao = CASE WHEN $3 THEN FALSE ELSE sugestao END, \
                 atualizado_em = NOW() \
-         WHERE tenant_id = $1 AND id = $2 RETURNING {COLUNAS}"
+         WHERE tenant_id = $1 AND id = $2 RETURNING ",
+        colunas!()
     ))
     .bind(tenant_id)
     .bind(id)

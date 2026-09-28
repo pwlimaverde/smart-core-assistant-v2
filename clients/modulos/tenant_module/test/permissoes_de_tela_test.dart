@@ -68,6 +68,10 @@ void main() {
       '/tenant/conexoes': ['ListWhatsappInstances'],
       '/tenant/ignorados': ['ListNumerosIgnorados'],
       '/tenant/treinamento': ['ListTreinamentos'],
+      '/tenant/transferencia': [
+        'GetConfigTransferencia',
+        'ListRegrasTransferencia',
+      ],
     };
 
     /// A chamada do botão principal de cada tela.
@@ -80,6 +84,7 @@ void main() {
       '/tenant/conexoes': 'CreateWhatsappInstance',
       '/tenant/ignorados': 'CriarNumeroIgnorado',
       '/tenant/treinamento': 'CreateTreinamento',
+      '/tenant/transferencia': 'SalvarRegraTransferencia',
     };
 
     aoAbrir.forEach((tela, rotas) {

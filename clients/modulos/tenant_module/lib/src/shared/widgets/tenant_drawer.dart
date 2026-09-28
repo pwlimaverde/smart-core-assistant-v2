@@ -54,6 +54,11 @@ class TenantDrawer extends StatelessWidget {
       item(Icons.mail_outline, 'Convites', '/tenant/convites'),
       item(Icons.people_outline, 'Usuários', '/tenant/usuarios'),
       item(Icons.settings_outlined, 'Configuração do Tenant', '/tenant/config'),
+      item(
+        Icons.support_agent_outlined,
+        'Transferência para atendente',
+        '/tenant/transferencia',
+      ),
     ].nonNulls.toList();
 
     return Drawer(
