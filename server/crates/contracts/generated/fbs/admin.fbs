@@ -1280,9 +1280,43 @@ table DefinirMyContatoAtivoRequest {
   ativo:bool;
 }
 
-table DefinirMyAtendimentoAtivoRequest {
-  atendimento_id:int;
+table ExcluirMyItemRequest {
+  tipo:string;
+  id:long;
+  confirmar:string;
+  dry_run:bool;
+}
+
+table ExcluirMyItemResponse {
+  sucesso:bool;
+  atendimentos_excluidos:[long];
+  simulacao:bool;
+  rotulo:string;
+  conversas:long;
+  em_uso:string;
+}
+
+table DefinirMyItemAtivoRequest {
+  tipo:string;
+  id:long;
   ativo:bool;
+}
+
+table ListMyExcluidosRequest {
+  tipo:string;
+  limite:int;
+}
+
+table ItemExcluido {
+  tipo:string;
+  id:long;
+  rotulo:string;
+  excluido_em:long;
+  excluido_por:string;
+}
+
+table ListMyExcluidosResponse {
+  itens:[smartcore.contracts.queries.ItemExcluido];
 }
 
 table DadosMyCliente {
