@@ -211,7 +211,7 @@ programada de excluídos, e anonimização LGPD (D8).
 | F3 Escrita | `infrastructure_postgres::exclusao` + rotas `ExcluirItem`, `DefinirItemAtivo`, `ListarExcluidos` + RPCs `ExcluirMyItem` (com `dry_run` e `confirmar` conferidos no servidor), `DefinirMyItemAtivo`, `ListMyExcluidos` | feito |
 | F4 MCP | `excluir_item`, `reativar_item`, `list_excluidos`, `excluir_conexao_whatsapp`; saem os `remover_*` e os `restaurar_*` | feito |
 | F5 App | diálogo com nome digitado, botão "Excluir definitivamente" nas telas de gestão, textos dos "remover" antigos, aba "Excluídos" em Aplicativos conectados | feito |
-| F6 Dados | converter os 6 contatos de teste inativos da Ecoprint (D7) | depois do deploy da 0045 na dev |
+| F6 Dados | os 6 contatos de teste inativos da Ecoprint (D7) viraram excluídos, com as 11 conversas deles; 6 linhas `contato.excluido` (service `ops`, origem `conversao_d7`) | feito em 28/09 após backup `pre_exclusao_definitiva_20260928T003150Z` |
 
 Decisões de implementação:
 
