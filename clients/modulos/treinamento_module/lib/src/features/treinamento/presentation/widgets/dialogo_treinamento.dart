@@ -300,10 +300,115 @@ Future<void> abrirEnvioDeArquivo(
   );
 }
 
-/// Revisão do material antes de virar vetor.
+/// O material inteiro, para conferir o que a IA sabe.
+///
+/// A lista mostra só o começo do texto; conferir um material exigia abrir a
+/// edição, com risco de mexer sem querer. Aqui é leitura (o texto pode ser
+/// selecionado e copiado), e a edição é um passo explícito: "Editar e
+/// retreinar" leva ao texto e, ao salvar, a IA refaz o treinamento dele.
+Future<void> abrirMaterial(
+  BuildContext context,
+  Treinamento item,
+  TreinamentoController controller, {
+  required bool podeAlterar,
+}) async {
+  // O contexto do navegador sobrevive à lista: ela recarrega sozinha enquanto
+  // há material em processamento, e a linha que abriu esta janela pode sumir.
+  final contextoEstavel = Navigator.of(context).context;
+  final podeEditar = podeAlterar && !item.extraindo;
+  final acao = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) {
+      final estilo = Theme.of(dialogContext).textTheme;
+      final apagado = dialogContext.colors.fgMuted;
+      return AlertDialog(
+        title: Text(item.tag),
+        content: SizedBox(
+          width: 640,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                [
+                  'Grupo: ${item.grupo}',
+                  item.situacao.rotulo,
+                  if (item.veioDeArquivo) 'Arquivo: ${item.arquivoNome}',
+                ].join('  ·  '),
+                style: estilo.bodySmall?.copyWith(color: apagado),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                item.situacao.explicacao,
+                style: estilo.bodySmall?.copyWith(color: apagado),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Flexible(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: dialogContext.colors.border),
+                    borderRadius: AppRadius.md,
+                  ),
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      item.conteudo.trim().isEmpty
+                          ? (item.extraindo
+                                ? 'O arquivo ainda está sendo lido.'
+                                : 'Sem texto.')
+                          : item.conteudo,
+                      key: const ValueKey('conteudo-do-material'),
+                      style: estilo.bodyMedium,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${item.conteudo.length} caracteres',
+                style: estilo.bodySmall?.copyWith(color: apagado),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          if (podeAlterar)
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('remover'),
+              child: const Text('Remover'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Fechar'),
+          ),
+          if (podeEditar)
+            FilledButton.icon(
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: Text(
+                item.finalizado ? 'Editar e retreinar' : 'Revisar e treinar',
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop('editar'),
+            ),
+        ],
+      );
+    },
+  );
+  if (!contextoEstavel.mounted) return;
+  switch (acao) {
+    case 'editar':
+      await abrirRevisao(contextoEstavel, item, controller);
+    case 'remover':
+      await abrirRemocao(contextoEstavel, item, controller);
+  }
+}
+
+/// Revisão do material antes de virar vetor — e edição do que já virou.
 ///
 /// É o passo que a v1 chamava de pré-processamento. Aceitar é o que põe o
 /// material na fila da IA — e o texto que estiver aqui é o que ela vai usar.
+/// Num material já treinado, salvar retreina: os trechos do texto anterior
+/// são substituídos pelos do novo (não somados).
 Future<void> abrirRevisao(
   BuildContext context,
   Treinamento item,
@@ -319,7 +424,11 @@ Future<void> abrirRevisao(
       campos: [conteudo],
       builder: (dialogContext) => StatefulBuilder(
         builder: (stateCtx, setStateDialog) => AlertDialog(
-          title: Text('Revisar "${item.tag}"'),
+          title: Text(
+            item.finalizado
+                ? 'Editar e retreinar "${item.tag}"'
+                : 'Revisar "${item.tag}"',
+          ),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -328,8 +437,13 @@ Future<void> abrirRevisao(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Ajuste o texto se precisar. Ao aceitar, a IA processa este '
-                    'material e passa a usá-lo nas respostas.',
+                    item.finalizado
+                        ? 'Ao salvar, a IA refaz o treinamento deste material '
+                              'com o texto novo. O texto anterior deixa de ser '
+                              'usado nas respostas.'
+                        : 'Ajuste o texto se precisar. Ao aceitar, a IA '
+                              'processa este material e passa a usá-lo nas '
+                              'respostas.',
                     style: Theme.of(stateCtx).textTheme.bodySmall?.copyWith(
                       color: stateCtx.colors.fgMuted,
                     ),
@@ -359,7 +473,9 @@ Future<void> abrirRevisao(
               child: const Text('Cancelar'),
             ),
             PrimaryButton(
-              label: 'Aceitar e treinar',
+              label: item.finalizado
+                  ? 'Salvar e retreinar'
+                  : 'Aceitar e treinar',
               expand: false,
               isLoading: salvando,
               onPressed: salvando

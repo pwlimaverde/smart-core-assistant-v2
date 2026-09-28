@@ -1280,6 +1280,11 @@ table DefinirMyContatoAtivoRequest {
   ativo:bool;
 }
 
+table DefinirMyAtendimentoAtivoRequest {
+  atendimento_id:int;
+  ativo:bool;
+}
+
 table DadosMyCliente {
   nome_fantasia:string;
   razao_social:string;

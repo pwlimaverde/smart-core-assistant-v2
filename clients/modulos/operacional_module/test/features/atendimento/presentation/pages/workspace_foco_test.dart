@@ -7,6 +7,7 @@ import 'package:operacional_module/src/features/atendimento/domain/usecases/aten
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_controller.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/pages/chat_page.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/pages/kanban_page.dart';
+import 'package:operacional_module/src/features/atendimento/presentation/widgets/atendimento_card_content.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/widgets/avatar_do_contato.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/widgets/mini_barra_da_conversa.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/widgets/painel_ficha.dart';
@@ -268,6 +269,93 @@ void main() {
     await tester.tap(find.byTooltip('Expandir (Alt+3)'));
     await tester.pumpAndSettle();
     expect(find.text('ENTRADA'), findsNothing);
+  });
+
+  testWidgets('o quadro abre em Kanban e só divide com uma conversa aberta', (
+    tester,
+  ) async {
+    await abrirOQuadro(tester);
+
+    // Sem conversa: nada de meia tela vazia, e os outros modos desligados.
+    expect(find.byType(PainelDeConversa), findsNothing);
+    expect(find.text('Selecione um atendimento'), findsNothing);
+    expect(
+      find.byTooltip('Dividido: abra um atendimento primeiro'),
+      findsOneWidget,
+    );
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit3);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('ENTRADA'), findsOneWidget);
+
+    // Com a conversa aberta, os modos voltam a valer.
+    await abrirACoversa(tester);
+    expect(find.byType(PainelDeConversa), findsOneWidget);
+    expect(find.byTooltip('Dividido (Alt+2)'), findsOneWidget);
+
+    // Fechar a conversa volta ao Kanban.
+    await tester.tap(find.byTooltip('Minimizar (Esc)'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(MiniBarraDaConversa),
+        matching: find.byTooltip('Fechar a conversa'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byTooltip('Dividido: abra um atendimento primeiro'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('arrastar um cartão recolhe a conversa e as informações', (
+    tester,
+  ) async {
+    await abrirOQuadro(tester);
+    await abrirACoversa(tester);
+    expect(find.byType(PainelDeConversa), findsOneWidget);
+
+    final cartao = find.descendant(
+      of: find.byType(AtendimentoCardContent),
+      matching: find.text('Assunto 7'),
+    );
+    // Com a conversa aberta o quadro tem meia tela: o cartão pode estar fora
+    // da vista, e o gesto começaria em cima da conversa.
+    await tester.ensureVisible(cartao);
+    await tester.pumpAndSettle();
+    expect(find.byType(PainelDeConversa), findsOneWidget);
+    final gesto = await tester.startGesture(tester.getCenter(cartao));
+    await gesto.moveBy(const Offset(-40, 0));
+    await tester.pump();
+    await gesto.moveBy(const Offset(-40, 0));
+    await tester.pump();
+
+    expect(find.byType(PainelDeConversa), findsNothing);
+    expect(find.byType(MiniBarraDaConversa), findsOneWidget);
+
+    await gesto.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a trilha do Atendimento mostra as colunas e volta ao Kanban', (
+    tester,
+  ) async {
+    await abrirOQuadro(tester);
+    await abrirACoversa(tester);
+    await tester.tap(find.byTooltip('Atendimento (Alt+3)'));
+    await tester.pumpAndSettle();
+
+    // A trilha tem o nome da coluna e o atendimento aberto no topo.
+    expect(find.text('Entrada'), findsWidgets);
+    expect(find.text('EM ATENDIMENTO'), findsOneWidget);
+
+    await tester.tap(find.text('Ver o quadro'));
+    await tester.pumpAndSettle();
+    expect(find.text('ENTRADA'), findsOneWidget);
+    expect(find.byType(PainelDeConversa), findsNothing);
+    expect(find.byType(MiniBarraDaConversa), findsOneWidget);
   });
 
   testWidgets('em tela cheia (janela estreita) a ficha abre pela barra', (

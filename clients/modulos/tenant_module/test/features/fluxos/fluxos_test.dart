@@ -115,6 +115,20 @@ void main() {
     });
   });
 
+  group('normalizarHex', () {
+    test('aceita com e sem #, em qualquer caixa', () {
+      expect(normalizarHex('#315c28'), '#315C28');
+      expect(normalizarHex(' 315C28 '), '#315C28');
+    });
+
+    test('recusa o que não tem 6 dígitos hexadecimais', () {
+      expect(normalizarHex(''), isNull);
+      expect(normalizarHex('#12345'), isNull);
+      expect(normalizarHex('#GGGGGG'), isNull);
+      expect(normalizarHex('#1234567'), isNull);
+    });
+  });
+
   proto.MyFluxo pbFluxo({
     int id = 1,
     String nome = 'Padrão',
@@ -632,6 +646,35 @@ void main() {
       expect(enviado.tipoEtapa, 'trabalho');
       expect(enviado.fluxoId, 1);
       expect(enviado.cor, coresDeEtapa.first);
+    });
+
+    testWidgets('a cor digitada em hexadecimal é a que vai para a coluna', (
+      tester,
+    ) async {
+      responde(tresEtapas());
+      when(() => client.createMyEtapaFluxo(any())).thenAnswer(
+        (_) => respostaGrpc(proto.MyEtapaFluxoResponse(etapa: pbEtapa(id: 9))),
+      );
+      registrar();
+
+      await montar(tester, const EtapasFluxoPage(fluxoId: 1));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Nova coluna'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'ex: Aguardando pagamento'),
+        'Da marca',
+      );
+      await tester.enterText(find.byKey(const ValueKey('cor-hex')), '315c28');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      final enviado =
+          verify(() => client.createMyEtapaFluxo(captureAny())).captured.single
+              as proto.CreateMyEtapaFluxoRequest;
+      expect(enviado.cor, '#315C28');
     });
 
     testWidgets('coluna sem nome é barrada dentro da janela', (tester) async {

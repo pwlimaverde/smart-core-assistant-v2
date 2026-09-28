@@ -89,11 +89,21 @@ class _KanbanPageState extends State<KanbanPage> {
   /// Conversa aberta no painel da direita. `null` = só o quadro.
   int? _conversaAberta;
 
-  /// O modo de foco escolhido por último, lembrado enquanto o app está aberto:
-  /// sair do quadro e voltar não deve desfazer a preferência de quem atende.
+  /// Como a conversa abre (Dividido ou Atendimento), lembrado enquanto o app
+  /// está aberto: sair do quadro e voltar não deve desfazer a preferência de
+  /// quem atende.
   static ModoDeFoco _modoLembrado = ModoDeFoco.dividido;
 
-  late ModoDeFoco _modo = _modoLembrado;
+  /// O quadro sempre abre em Kanban. Dividido e Atendimento só existem com uma
+  /// conversa aberta: sem ela, a metade da tela ficava num "Selecione um
+  /// atendimento" sem nada para fazer e sem como recolher.
+  ModoDeFoco _modo = ModoDeFoco.quadro;
+
+  /// O quadro mantém o mesmo State quando troca de lugar na árvore (ao lado
+  /// da conversa, sozinho, sob a mini-barra). Sem a chave, minimizar a
+  /// conversa no meio de um arrasto recriava o quadro: o cartão arrastado
+  /// perdia o dono e a rolagem voltava ao começo.
+  final _chaveDoQuadro = GlobalKey(debugLabel: 'quadro');
 
   /// O painel de informações do atendimento aberto, à direita da conversa.
   final _detalhes = ValueNotifier<bool>(false);
@@ -131,8 +141,19 @@ class _KanbanPageState extends State<KanbanPage> {
   }
 
   void _definirModo(ModoDeFoco modo) {
-    _modoLembrado = modo;
+    // Sem conversa aberta não há o que dividir nem expandir.
+    if (modo != ModoDeFoco.quadro && _conversaAberta == null) return;
+    if (modo != ModoDeFoco.quadro) _modoLembrado = modo;
     setState(() => _modo = modo);
+  }
+
+  /// Arrastar um cartão é trabalho de quadro: a conversa e as informações
+  /// recolhem para a mini-barra e o quadro ganha a tela inteira, senão as
+  /// colunas do outro lado ficam fora do alcance do arrasto.
+  void _aoIniciarArrasto() {
+    if (_conversaAberta != null && _modo != ModoDeFoco.quadro) {
+      _definirModo(ModoDeFoco.quadro);
+    }
   }
 
   /// Clique fora da conversa: ela recolhe para a mini-barra e devolve a
@@ -144,7 +165,10 @@ class _KanbanPageState extends State<KanbanPage> {
 
   void _fechar() {
     _detalhes.value = false;
-    setState(() => _conversaAberta = null);
+    setState(() {
+      _conversaAberta = null;
+      _modo = ModoDeFoco.quadro;
+    });
   }
 
   KanbanViewModel? _quadroAtual() {
@@ -341,12 +365,9 @@ class _KanbanPageState extends State<KanbanPage> {
       _detalhes.value = true;
       setState(() {
         _conversaAberta = atendimentoId;
-        // Abrir a partir do quadro minimizado expande: quem clicou no cartão
-        // quer ver a conversa, não a mini-barra.
-        if (_modo == ModoDeFoco.quadro) {
-          _modo = ModoDeFoco.dividido;
-          _modoLembrado = _modo;
-        }
+        // Abrir a partir do quadro expande no modo que a pessoa usou por
+        // último: quem clicou no cartão quer ver a conversa, não a mini-barra.
+        if (_modo == ModoDeFoco.quadro) _modo = _modoLembrado;
       });
       return;
     }
@@ -409,12 +430,21 @@ class _KanbanPageState extends State<KanbanPage> {
                 const _Migalha(),
                 if (quadro != null && quadro.fluxos.length > 1) ...[
                   const SizedBox(width: 14),
-                  _SeletorDeFluxo(quadro: quadro, controller: controller),
+                  _SeletorDeFluxo(
+                    quadro: quadro,
+                    // Outro fluxo abre como um quadro novo: em Kanban, sem a
+                    // conversa do fluxo anterior por cima.
+                    aoTrocar: (fluxoId) {
+                      _fechar();
+                      controller.abrirQuadro(fluxoId);
+                    },
+                  ),
                 ],
                 if (largo) ...[
                   const SizedBox(width: 14),
                   _SeletorDeFoco(
                     modo: _modo,
+                    comConversa: _conversaAberta != null,
                     comRotulos: largura >= 1360,
                     aoEscolher: _definirModo,
                   ),
@@ -480,7 +510,7 @@ class _KanbanPageState extends State<KanbanPage> {
     if (state is SuccessState<KanbanViewModel>) _ultimoQuadro = state.data;
     final aberta = _conversaAberta;
     final largo = constraints.maxWidth >= _larguraParaOsDois;
-    final trilho = largo && _modo == ModoDeFoco.conversa;
+    final trilho = largo && aberta != null && _modo == ModoDeFoco.conversa;
 
     final quadro = switch (state) {
       InitialState() || LoadingState() when _ultimoQuadro == null =>
@@ -495,12 +525,15 @@ class _KanbanPageState extends State<KanbanPage> {
                 viewModel: _ultimoQuadro!,
                 abertoId: aberta,
                 aoAbrir: _abrir,
+                aoVerQuadro: () => _definirModo(ModoDeFoco.quadro),
               )
             : _Quadro(
+                key: _chaveDoQuadro,
                 viewModel: _ultimoQuadro!,
                 controller: controller,
                 abertoId: aberta,
                 aoAbrir: _abrir,
+                aoIniciarArrasto: _aoIniciarArrasto,
               ),
     };
 
@@ -509,23 +542,8 @@ class _KanbanPageState extends State<KanbanPage> {
     // melhor que os dois espremidos.
     if (!largo) return quadro;
 
-    if (aberta == null) {
-      return switch (_modo) {
-        ModoDeFoco.quadro => quadro,
-        ModoDeFoco.dividido => Row(
-          children: [
-            Expanded(child: quadro),
-            const Expanded(child: _SemConversa()),
-          ],
-        ),
-        ModoDeFoco.conversa => Row(
-          children: [
-            SizedBox(width: 88, child: quadro),
-            const Expanded(child: _SemConversa()),
-          ],
-        ),
-      };
-    }
+    // Sem conversa aberta, é o quadro — em qualquer modo.
+    if (aberta == null) return quadro;
 
     // `ValueKey` no id: trocar de atendimento tem de **recriar** o painel.
     // Sem ela o Flutter reaproveita o State, e o `initState` — que é onde o
@@ -567,7 +585,7 @@ class _KanbanPageState extends State<KanbanPage> {
       // A conversa com a tela: o quadro vira a trilha de avatares.
       ModoDeFoco.conversa => Row(
         children: [
-          SizedBox(width: 88, child: quadro),
+          SizedBox(width: _Trilho.largura, child: quadro),
           Expanded(child: painel),
         ],
       ),
@@ -620,9 +638,9 @@ class _Migalha extends StatelessWidget {
 /// O quadro aberto, escolhido no topo (`ws-topbar__sel`).
 class _SeletorDeFluxo extends StatelessWidget {
   final KanbanViewModel quadro;
-  final KanbanController controller;
+  final ValueChanged<int> aoTrocar;
 
-  const _SeletorDeFluxo({required this.quadro, required this.controller});
+  const _SeletorDeFluxo({required this.quadro, required this.aoTrocar});
 
   @override
   Widget build(BuildContext context) {
@@ -650,7 +668,7 @@ class _SeletorDeFluxo extends StatelessWidget {
               DropdownMenuItem(value: f.id, child: Text(f.rotulo)),
           ],
           onChanged: (v) {
-            if (v != null) controller.abrirQuadro(v);
+            if (v != null && v != quadro.fluxoId) aoTrocar(v);
           },
         ),
       ),
@@ -661,11 +679,16 @@ class _SeletorDeFluxo extends StatelessWidget {
 /// Kanban / Dividido / Atendimento (`ws-focus-seg`).
 class _SeletorDeFoco extends StatelessWidget {
   final ModoDeFoco modo;
+
+  /// Dividido e Atendimento mostram uma conversa: sem nenhuma aberta, ficam
+  /// desligados em vez de abrir meia tela vazia.
+  final bool comConversa;
   final bool comRotulos;
   final ValueChanged<ModoDeFoco> aoEscolher;
 
   const _SeletorDeFoco({
     required this.modo,
+    required this.comConversa,
     required this.comRotulos,
     required this.aoEscolher,
   });
@@ -685,44 +708,52 @@ class _SeletorDeFoco extends StatelessWidget {
         children: [
           for (final m in ModoDeFoco.values)
             Tooltip(
-              message: '${m.rotulo} (Alt+${m.index + 1})',
+              message: comConversa || m == ModoDeFoco.quadro
+                  ? '${m.rotulo} (Alt+${m.index + 1})'
+                  : '${m.rotulo}: abra um atendimento primeiro',
               child: InkWell(
                 borderRadius: AppRadius.sm,
-                onTap: () => aoEscolher(m),
-                child: AnimatedContainer(
+                onTap: comConversa || m == ModoDeFoco.quadro
+                    ? () => aoEscolher(m)
+                    : null,
+                child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: m == modo ? colors.accent : Colors.transparent,
-                    borderRadius: AppRadius.sm,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        m.icone,
-                        size: 14,
-                        color: m == modo
-                            ? Colors.white
-                            : const Color(0xFFA8A29E),
-                      ),
-                      if (comRotulos) ...[
-                        const SizedBox(width: 5),
-                        Text(
-                          m.rotulo,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: m == modo
-                                ? Colors.white
-                                : const Color(0xFFA8A29E),
-                          ),
+                  opacity: comConversa || m == ModoDeFoco.quadro ? 1 : 0.4,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: m == modo ? colors.accent : Colors.transparent,
+                      borderRadius: AppRadius.sm,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          m.icone,
+                          size: 14,
+                          color: m == modo
+                              ? Colors.white
+                              : const Color(0xFFA8A29E),
                         ),
+                        if (comRotulos) ...[
+                          const SizedBox(width: 5),
+                          Text(
+                            m.rotulo,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: m == modo
+                                  ? Colors.white
+                                  : const Color(0xFFA8A29E),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -803,60 +834,6 @@ class _CampoDeBuscaState extends State<_CampoDeBusca> {
   }
 }
 
-/// O painel da conversa quando nenhuma está aberta (`ws-chat__empty`).
-class _SemConversa extends StatelessWidget {
-  const _SemConversa();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.bg,
-        border: Border(left: BorderSide(color: colors.border)),
-      ),
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: colors.card,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(Icons.forum_outlined, size: 30, color: colors.accent),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'Selecione um atendimento',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: colors.fgStrong,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 240),
-            child: Text(
-              'Clique em um cartão do quadro para abrir a conversa, enviar '
-              'mensagens e gerenciar o atendimento por aqui.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.5,
-                color: colors.fgMuted,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _Quadro extends StatelessWidget {
   final KanbanViewModel viewModel;
   final KanbanController controller;
@@ -866,11 +843,16 @@ class _Quadro extends StatelessWidget {
   /// conversa aparece é a página, que conhece a largura da janela.
   final void Function(int atendimentoId) aoAbrir;
 
+  /// Um cartão começou a ser arrastado.
+  final VoidCallback aoIniciarArrasto;
+
   const _Quadro({
+    super.key,
     required this.viewModel,
     required this.controller,
     required this.abertoId,
     required this.aoAbrir,
+    required this.aoIniciarArrasto,
   });
 
   @override
@@ -911,24 +893,20 @@ class _Quadro extends StatelessWidget {
                     controller: controller,
                     abertoId: abertoId,
                     aoAbrir: aoAbrir,
+                    aoIniciarArrasto: aoIniciarArrasto,
                   ),
                 // Conversas fora de qualquer coluna do quadro: chegaram antes do
                 // fluxo existir, ou apontam para uma coluna já removida.
                 // Escondê-las faria sumir atendimento de verdade.
                 if (soltas.isNotEmpty)
                   _Coluna(
-                    coluna: const ColunaDoQuadro(
-                      id: KanbanViewModel.semEtapa,
-                      nome: 'Sem coluna',
-                      cor: '#F59E0B',
-                      ordem: 9999,
-                      tipo: 'fila',
-                    ),
+                    coluna: _colunaSemEtapa,
                     itens: soltas,
                     viewModel: viewModel,
                     controller: controller,
                     abertoId: abertoId,
                     aoAbrir: aoAbrir,
+                    aoIniciarArrasto: aoIniciarArrasto,
                   ),
               ],
             ),
@@ -1079,6 +1057,7 @@ class _Coluna extends StatelessWidget {
   final KanbanController controller;
   final int? abertoId;
   final void Function(int atendimentoId) aoAbrir;
+  final VoidCallback aoIniciarArrasto;
 
   const _Coluna({
     required this.coluna,
@@ -1087,11 +1066,13 @@ class _Coluna extends StatelessWidget {
     required this.controller,
     required this.abertoId,
     required this.aoAbrir,
+    required this.aoIniciarArrasto,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final cor = _corDaColuna(coluna.cor, colors.accent);
     return DragTarget<_DragPayload>(
       onAcceptWithDetails: (detalhes) {
         final payload = detalhes.data;
@@ -1113,9 +1094,11 @@ class _Coluna extends StatelessWidget {
           decoration: BoxDecoration(
             color: destacado ? colors.accentSoft : colors.card,
             borderRadius: AppRadius.col,
+            // A cor da etapa numa borda suave: dá para achar a coluna de
+            // relance sem que o quadro vire um arco-íris.
             border: Border.all(
-              color: destacado ? colors.accent : colors.border,
-              width: destacado ? 2 : 1,
+              color: destacado ? colors.accent : cor.withValues(alpha: 0.45),
+              width: destacado ? 2 : 1.5,
             ),
           ),
           child: Column(
@@ -1132,7 +1115,7 @@ class _Coluna extends StatelessWidget {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: _corDaColuna(coluna.cor, colors.accent),
+                        color: cor,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -1194,6 +1177,9 @@ class _Coluna extends StatelessWidget {
                             key: ValueKey(atendimento.id),
                             atendimento: atendimento,
                             etapaId: coluna.id,
+                            corDaEtapa: cor,
+                            tonalizado: _etapaDeDesfecho(coluna.tipo),
+                            aoIniciarArrasto: aoIniciarArrasto,
                             ativo: atendimento.id == abertoId,
                             arrastando:
                                 viewModel.movendoAtendimentoId ==
@@ -1237,6 +1223,21 @@ class _Coluna extends StatelessWidget {
   }
 }
 
+/// A coluna das conversas que chegaram antes do fluxo existir, ou que apontam
+/// para uma coluna já removida.
+const _colunaSemEtapa = ColunaDoQuadro(
+  id: KanbanViewModel.semEtapa,
+  nome: 'Sem coluna',
+  cor: '#F59E0B',
+  ordem: 9999,
+  tipo: 'fila',
+);
+
+/// Etapas em que a conversa já teve um desfecho ou está parada esperando
+/// alguém de fora (resolvido, cancelado, pendência): o cartão inteiro ganha
+/// um tom da cor da coluna, para a fila viva se destacar do que já andou.
+bool _etapaDeDesfecho(String tipo) => tipo == 'espera' || tipo == 'finalizacao';
+
 Color _corDaColuna(String hex, Color padrao) {
   final limpo = hex.replaceFirst('#', '');
   final valor = int.tryParse(limpo, radix: 16);
@@ -1249,6 +1250,15 @@ Color _corDaColuna(String hex, Color padrao) {
 class _Cartao extends StatefulWidget {
   final AtendimentoResumo atendimento;
   final int etapaId;
+
+  /// A cor da coluna em que o cartão está: faixa no topo e, em [tonalizado],
+  /// o fundo.
+  final Color corDaEtapa;
+
+  /// O fundo do cartão leva 20% da cor da coluna (resolvido, cancelado,
+  /// pendência) — o bastante para distinguir, sem gritar.
+  final bool tonalizado;
+  final VoidCallback aoIniciarArrasto;
   final bool ativo;
   final bool arrastando;
   final VoidCallback aoAbrir;
@@ -1258,6 +1268,9 @@ class _Cartao extends StatefulWidget {
     super.key,
     required this.atendimento,
     required this.etapaId,
+    required this.corDaEtapa,
+    required this.tonalizado,
+    required this.aoIniciarArrasto,
     required this.ativo,
     required this.arrastando,
     required this.aoAbrir,
@@ -1271,15 +1284,39 @@ class _Cartao extends StatefulWidget {
 class _CartaoState extends State<_Cartao> {
   bool _sobre = false;
 
+  /// O cartão com a faixa da etapa no topo.
+  Widget _conteudo() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(height: 3, color: widget.corDaEtapa),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 9, 12, 12),
+        child: AtendimentoCardContent(atendimento: widget.atendimento),
+      ),
+    ],
+  );
+
+  void _informarArrasto(Offset? posicao) {
+    final arrasto = _ArrastoNoQuadro.of(context);
+    if (arrasto != null) arrasto.value = posicao;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final fundo = widget.tonalizado
+        ? Color.alphaBlend(
+            widget.corDaEtapa.withValues(alpha: 0.2),
+            colors.card,
+          )
+        : colors.card;
     final superficie = AnimatedContainer(
       duration: const Duration(milliseconds: 120),
       transform: Matrix4.translationValues(0, _sobre ? -1 : 0, 0),
-      padding: const EdgeInsets.all(12),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: colors.card,
+        color: fundo,
         borderRadius: AppRadius.card,
         border: Border.all(
           color: widget.ativo
@@ -1297,7 +1334,7 @@ class _CartaoState extends State<_Cartao> {
             ),
         ],
       ),
-      child: AtendimentoCardContent(atendimento: widget.atendimento),
+      child: _conteudo(),
     );
 
     final interativo = MouseRegion(
@@ -1320,15 +1357,22 @@ class _CartaoState extends State<_Cartao> {
           atendimentoId: widget.atendimento.id,
           etapaOrigemId: widget.etapaId,
         ),
+        onDragStarted: widget.aoIniciarArrasto,
+        // A posição do arrasto vai para a rolagem do quadro, que corre
+        // sozinha quando o cartão chega perto da borda.
+        onDragUpdate: (d) => _informarArrasto(d.globalPosition),
+        onDragEnd: (_) => _informarArrasto(null),
+        onDraggableCanceled: (_, _) => _informarArrasto(null),
+        onDragCompleted: () => _informarArrasto(null),
         feedback: Material(
           color: Colors.transparent,
           child: Transform.rotate(
             angle: 0.035,
             child: Container(
               width: 256,
-              padding: const EdgeInsets.all(12),
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: colors.card,
+                color: fundo,
                 borderRadius: AppRadius.card,
                 border: Border.all(color: colors.accent, width: 2),
                 boxShadow: const [
@@ -1339,7 +1383,7 @@ class _CartaoState extends State<_Cartao> {
                   ),
                 ],
               ),
-              child: AtendimentoCardContent(atendimento: widget.atendimento),
+              child: _conteudo(),
             ),
           ),
         ),
@@ -1445,114 +1489,270 @@ const _estadosOferecidos = <(String, String)>[
   ('cancelado', 'Cancelar atendimento'),
 ];
 
-/// O quadro recolhido em trilha de avatares, no modo Atendimento (o
-/// `data-focus="chat"` do desenho): a fila continua à vista e a um clique,
-/// enquanto a conversa usa a tela.
+/// O quadro recolhido em trilha, no modo Atendimento (o `data-focus="chat"`
+/// do desenho): a fila continua à vista e a um clique, enquanto a conversa
+/// usa a tela.
+///
+/// O atendimento aberto fica no topo; abaixo, cada coluna com a cor, o nome e
+/// quantos há nela. O cabeçalho e o nome de uma coluna levam de volta ao
+/// Kanban — é por onde se sai do modo sem precisar achar o seletor lá em cima.
 class _Trilho extends StatelessWidget {
+  /// Largura da trilha ao lado da conversa.
+  static const largura = 248.0;
+
   final KanbanViewModel viewModel;
   final int? abertoId;
   final void Function(int atendimentoId) aoAbrir;
+  final VoidCallback aoVerQuadro;
 
   const _Trilho({
     required this.viewModel,
     required this.abertoId,
     required this.aoAbrir,
+    required this.aoVerQuadro,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final grupos = <(ColunaDoQuadro, List<AtendimentoResumo>)>[
-      for (final c in viewModel.colunas)
-        (c, viewModel.porEtapa[c.id] ?? const <AtendimentoResumo>[]),
-    ];
+    AtendimentoResumo? aberto;
+    ColunaDoQuadro? colunaDoAberto;
+    final grupos = <(ColunaDoQuadro, List<AtendimentoResumo>)>[];
+    for (final c in viewModel.colunas) {
+      final itens = viewModel.porEtapa[c.id] ?? const <AtendimentoResumo>[];
+      for (final a in itens) {
+        if (a.id == abertoId) {
+          aberto = a;
+          colunaDoAberto = c;
+        }
+      }
+      grupos.add((c, itens));
+    }
+    // As conversas fora de qualquer coluna também ficam à vista aqui, como
+    // no quadro.
+    if (viewModel.semColuna.isNotEmpty) {
+      final soltas = (_colunaSemEtapa, viewModel.semColuna);
+      for (final a in soltas.$2) {
+        if (a.id == abertoId) {
+          aberto = a;
+          colunaDoAberto = soltas.$1;
+        }
+      }
+      grupos.add(soltas);
+    }
+
     return Container(
-      color: colors.bg,
+      decoration: BoxDecoration(
+        color: colors.bg,
+        border: Border(right: BorderSide(color: colors.border)),
+      ),
       child: ListView(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
         children: [
-          for (final (coluna, itens) in grupos) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: _corDaColuna(coluna.cor, colors.accent),
-                      shape: BoxShape.circle,
+          Tooltip(
+            message: 'Ver o quadro (Alt+1)',
+            child: InkWell(
+              borderRadius: AppRadius.md,
+              onTap: aoVerQuadro,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.view_kanban_outlined,
+                      size: 16,
+                      color: colors.fgMuted,
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Tooltip(
-                    message: coluna.nome,
-                    child: Text(
-                      '${itens.length}',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: colors.fgMuted,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Ver o quadro',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: colors.fgStrong,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    Icon(Icons.chevron_right, size: 16, color: colors.fgSubtle),
+                  ],
+                ),
               ),
             ),
-            for (final a in itens)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Tooltip(
-                  message: a.nomeParaExibir,
-                  waitDuration: const Duration(milliseconds: 400),
-                  child: InkWell(
-                    borderRadius: AppRadius.card,
-                    onTap: () => aoAbrir(a.id),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: colors.card,
-                        borderRadius: AppRadius.card,
-                        border: Border.all(
-                          color: a.id == abertoId
-                              ? colors.accent
-                              : colors.border,
+          ),
+          if (aberto != null) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
+              child: Text(
+                'EM ATENDIMENTO',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.6,
+                  color: colors.fgSubtle,
+                ),
+              ),
+            ),
+            _ItemDaTrilha(
+              atendimento: aberto,
+              cor: _corDaColuna(colunaDoAberto!.cor, colors.accent),
+              detalhe: colunaDoAberto.nome,
+              ativo: true,
+              aoTocar: () {},
+            ),
+          ],
+          for (final (coluna, itens) in grupos) ...[
+            const SizedBox(height: 10),
+            Tooltip(
+              message: 'Ver o quadro (Alt+1)',
+              waitDuration: const Duration(milliseconds: 600),
+              child: InkWell(
+                borderRadius: AppRadius.sm,
+                onTap: aoVerQuadro,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: _corDaColuna(coluna.cor, colors.accent),
+                          borderRadius: AppRadius.pill,
                         ),
-                        boxShadow: [
-                          if (a.id == abertoId)
-                            BoxShadow(
-                              color: colors.accentRing,
-                              spreadRadius: 2,
-                            ),
-                        ],
                       ),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.center,
-                        children: [
-                          AvatarDoContato(
-                            nome: a.nomeParaExibir,
-                            fotoUrl: a.contatoFotoUrl,
-                            raio: 18,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          coluna.nome,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colors.fgStrong,
                           ),
-                          if (a.naoLidas > 0)
-                            Positioned(
-                              top: -6,
-                              right: -2,
-                              child: BadgeDeNaoLidas(
-                                quantidade: a.naoLidas,
-                                compacto: true,
-                              ),
-                            ),
-                        ],
+                        ),
                       ),
-                    ),
+                      Container(
+                        constraints: const BoxConstraints(minWidth: 22),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.chip,
+                          borderRadius: AppRadius.pill,
+                        ),
+                        child: Text(
+                          '${itens.length}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: colors.fgMuted,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
+            ),
+            for (final a in itens)
+              if (a.id != abertoId)
+                _ItemDaTrilha(
+                  atendimento: a,
+                  cor: _corDaColuna(coluna.cor, colors.accent),
+                  detalhe: previaDaUltimaMensagem(a),
+                  ativo: false,
+                  aoTocar: () => aoAbrir(a.id),
+                ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Uma conversa na trilha: avatar, nome e uma linha de contexto.
+class _ItemDaTrilha extends StatelessWidget {
+  final AtendimentoResumo atendimento;
+  final Color cor;
+  final String detalhe;
+  final bool ativo;
+  final VoidCallback aoTocar;
+
+  const _ItemDaTrilha({
+    required this.atendimento,
+    required this.cor,
+    required this.detalhe,
+    required this.ativo,
+    required this.aoTocar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final a = atendimento;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: InkWell(
+        borderRadius: AppRadius.card,
+        onTap: aoTocar,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: colors.card,
+            borderRadius: AppRadius.card,
+            border: Border.all(
+              color: ativo ? colors.accent : cor.withValues(alpha: 0.35),
+            ),
+            boxShadow: [
+              if (ativo) BoxShadow(color: colors.accentRing, spreadRadius: 2),
+            ],
+          ),
+          child: Row(
+            children: [
+              AvatarDoContato(
+                nome: a.nomeParaExibir,
+                fotoUrl: a.contatoFotoUrl,
+                raio: 15,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      a.nomeParaExibir,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: a.naoLidas > 0 || ativo
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        color: colors.fgStrong,
+                      ),
+                    ),
+                    if (detalhe.isNotEmpty)
+                      Text(
+                        detalhe,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: colors.fgMuted),
+                      ),
+                  ],
+                ),
+              ),
+              if (a.naoLidas > 0) ...[
+                const SizedBox(width: 6),
+                BadgeDeNaoLidas(quantidade: a.naoLidas, compacto: true),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1574,12 +1774,70 @@ class _RolagemDoQuadro extends StatefulWidget {
 }
 
 class _RolagemDoQuadroState extends State<_RolagemDoQuadro> {
+  /// Distância da borda em que o arrasto começa a rolar o quadro.
+  static const _faixaDaBorda = 80.0;
+
+  /// Passo máximo por quadro de animação, com o cartão colado na borda.
+  static const _passoMaximo = 22.0;
+
   final _rolagem = ScrollController();
+  final _arrasto = ValueNotifier<Offset?>(null);
+  Timer? _auto;
+  double _passo = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _arrasto.addListener(_acompanharArrasto);
+  }
 
   @override
   void dispose() {
+    _auto?.cancel();
+    _arrasto.dispose();
     _rolagem.dispose();
     super.dispose();
+  }
+
+  /// Com o cartão perto de uma das bordas, o quadro rola sozinho para aquele
+  /// lado — mais rápido quanto mais perto. Sem isso, arrastar para uma coluna
+  /// fora da tela só ia até onde a rolagem já estava.
+  void _acompanharArrasto() {
+    final posicao = _arrasto.value;
+    final caixa = context.findRenderObject();
+    _passo = 0;
+    if (posicao != null && caixa is RenderBox && caixa.hasSize) {
+      final x = caixa.globalToLocal(posicao).dx;
+      final largura = caixa.size.width;
+      if (x < _faixaDaBorda) {
+        _passo =
+            -_passoMaximo *
+            ((_faixaDaBorda - x) / _faixaDaBorda).clamp(0.2, 1.0);
+      } else if (x > largura - _faixaDaBorda) {
+        _passo =
+            _passoMaximo *
+            ((x - (largura - _faixaDaBorda)) / _faixaDaBorda).clamp(0.2, 1.0);
+      }
+    }
+    if (_passo == 0) {
+      _auto?.cancel();
+      _auto = null;
+    } else {
+      _auto ??= Timer.periodic(
+        const Duration(milliseconds: 16),
+        (_) => _rolarUmPasso(),
+      );
+    }
+  }
+
+  void _rolarUmPasso() {
+    if (!_rolagem.hasClients || _passo == 0) return;
+    final p = _rolagem.position;
+    final destino = (p.pixels + _passo).clamp(
+      p.minScrollExtent,
+      p.maxScrollExtent,
+    );
+    if (destino != p.pixels) _rolagem.jumpTo(destino);
   }
 
   void _rodar(PointerSignalEvent evento) {
@@ -1597,19 +1855,36 @@ class _RolagemDoQuadroState extends State<_RolagemDoQuadro> {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      onPointerSignal: _rodar,
-      child: Scrollbar(
-        controller: _rolagem,
-        thumbVisibility: true,
-        trackVisibility: true,
-        child: SingleChildScrollView(
+    return _ArrastoNoQuadro(
+      posicao: _arrasto,
+      child: Listener(
+        onPointerSignal: _rodar,
+        child: Scrollbar(
           controller: _rolagem,
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-          child: widget.child,
+          thumbVisibility: true,
+          trackVisibility: true,
+          child: SingleChildScrollView(
+            controller: _rolagem,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            child: widget.child,
+          ),
         ),
       ),
     );
   }
+}
+
+/// Por onde o cartão arrastado conta à rolagem do quadro onde está o ponteiro.
+class _ArrastoNoQuadro extends InheritedWidget {
+  final ValueNotifier<Offset?> posicao;
+
+  const _ArrastoNoQuadro({required this.posicao, required super.child});
+
+  static ValueNotifier<Offset?>? of(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<_ArrastoNoQuadro>()?.posicao;
+
+  @override
+  bool updateShouldNotify(_ArrastoNoQuadro oldWidget) =>
+      posicao != oldWidget.posicao;
 }

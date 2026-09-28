@@ -81,6 +81,63 @@ fn texto_da_saudacao(nome_atendente: &str, cargo: &str, empresa: &str) -> String
 ///   saísse, o atendimento entraria na contagem de "aguardando resposta" sem
 ///   nunca ter perguntado nada — recriando o bug numa forma nova.
 ///
+/// "Devolver à fila" leva o cartão para a etapa de entrada do fluxo.
+///
+/// Tirar só o dono deixava o cartão parado em "Em atendimento" sem ninguém: o
+/// quadro dizia que alguém atendia e o rodízio não o via como livre. O
+/// movimento fica na trilha como qualquer outro. Sem fluxo, sem etapa de fila,
+/// ou já na entrada, nada muda.
+async fn devolver_a_etapa_inicial(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<(), DbError> {
+    let repo = PostgresAtendimentoRepository;
+    let Some(atendimento) = repo.buscar_por_id(tx, ctx, atendimento_id).await? else {
+        return Ok(());
+    };
+    let Some(fluxo_id) = atendimento.fluxo_atendimento_id else {
+        return Ok(());
+    };
+    let Some(inicial) = PostgresEtapaFluxoRepository
+        .get_etapa_inicial(tx, ctx, fluxo_id)
+        .await?
+    else {
+        return Ok(());
+    };
+    if atendimento.etapa_atual_id == Some(inicial.id) {
+        return Ok(());
+    }
+
+    repo.atualizar_etapa(tx, ctx, atendimento_id, inicial.id, None)
+        .await?;
+    if atendimento.status != "fila" {
+        repo.atualizar_status(tx, ctx, atendimento_id, "fila")
+            .await?;
+        repo.registrar_historico_status(
+            tx,
+            ctx,
+            atendimento_id,
+            "fila",
+            &format!("Devolvido à fila (\"{}\")", inicial.nome),
+        )
+        .await?;
+    }
+    PostgresMovimentoFluxoRepository
+        .criar(
+            tx,
+            ctx,
+            atendimento_id,
+            atendimento.etapa_atual_id,
+            inicial.id,
+            None,
+            Some("devolvido à fila"),
+            false,
+        )
+        .await?;
+    Ok(())
+}
+
 /// Devolve `true` quando a pesquisa foi criada.
 async fn solicitar_pesquisa_satisfacao(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -288,6 +345,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                 }
                 None => {
                     repo.desatribuir(&mut tx, &ctx, atendimento_id).await?;
+                    devolver_a_etapa_inicial(&mut tx, &ctx, atendimento_id).await?;
                     true
                 }
             };
