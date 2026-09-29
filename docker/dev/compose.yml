@@ -393,6 +393,9 @@ services:
     env_file: [.env]
     environment:
       TYPESAFE_API_KEY: ""
+      # Teto de requisições ao Jev por minuto neste processo (a conta aceita
+      # 1.200/min para todos os tenants). A sombra é descartada antes da conversa.
+      JEV_REQ_POR_MINUTO: ${JEV_REQ_POR_MINUTO:-1000}
     networks: [internal, observability]
     healthcheck:
       test: ["CMD", "python", "-m", "ia_engine_jev.healthcheck"]

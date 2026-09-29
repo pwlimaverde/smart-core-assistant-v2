@@ -47,6 +47,16 @@ const TTL_MAXIMO_SEGUNDOS: u64 = 300;
 pub(crate) struct MensagemBufferizada {
     pub message_id: String,
     pub texto: String,
+    /// Id interno da mensagem persistida. O motor Jev devolve a análise junto
+    /// com a resposta da rajada, e ela é anexada à última mensagem que a
+    /// compôs. `default`: entradas gravadas antes do campo seguem legíveis.
+    #[serde(default)]
+    pub mensagem_id: Option<i32>,
+}
+
+/// A última mensagem persistida da rajada (a que recebe a análise).
+pub(crate) fn ultima_mensagem_id(rajada: &[MensagemBufferizada]) -> Option<i32> {
+    rajada.iter().rev().find_map(|m| m.mensagem_id)
 }
 
 /// Resultado de enfileirar uma mensagem na janela do contato.
@@ -275,7 +285,22 @@ mod tests {
         MensagemBufferizada {
             message_id: id.to_string(),
             texto: texto.to_string(),
+            mensagem_id: id.parse().ok(),
         }
+    }
+
+    #[test]
+    fn a_analise_vai_para_a_ultima_mensagem_com_id() {
+        let mut sem_id = msg("x", "c");
+        sem_id.mensagem_id = None;
+        assert_eq!(
+            ultima_mensagem_id(&[msg("1", "a"), msg("2", "b"), sem_id]),
+            Some(2)
+        );
+        assert_eq!(ultima_mensagem_id(&[]), None);
+        let antiga: MensagemBufferizada =
+            serde_json::from_str(r#"{"message_id":"m","texto":"t"}"#).unwrap();
+        assert_eq!(antiga.mensagem_id, None);
     }
 
     /// O comportamento central da fase: a rajada vira UMA pergunta, na ordem em

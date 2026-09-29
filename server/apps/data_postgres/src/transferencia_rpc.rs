@@ -7,7 +7,8 @@
 //!   desativar regras, ler e mudar os sinais, as últimas transferências e as
 //!   sugestões a partir do texto antigo;
 //! * o **worker**: `RegistrarDecisaoIa` (uma linha por motor, sem texto da
-//!   conversa) e `PurgarDecisoesIa` (retenção de 90 dias);
+//!   conversa), `PurgarDecisoesIa` (retenção de 90 dias) e as rodadas de
+//!   coleta do motor Jev (`ObterRodadasColeta`, `RegistrarRodadaColeta`);
 //! * o **superusuário**: `DefinirMotorTenant`.
 //!
 //! Toda escrita do tenant é auditada (evento, nome e campos alterados — nunca
@@ -524,6 +525,81 @@ pub async fn handler_registrar_decisao(
     }
 }
 
+fn atendimento_do_payload(p: &serde_json::Value) -> Option<i32> {
+    p.get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .filter(|id| *id > 0)
+        .map(|id| id as i32)
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ObterRodadasColeta", tenant_id = %env.tenant_id))]
+pub async fn handler_obter_rodadas(
+    store: &dyn ports::TransferenciaStore,
+    env: Envelope,
+) -> Envelope {
+    let Some(atendimento_id) = atendimento_do_payload(&payload_de(&env)) else {
+        return validacao("informe o atendimento_id", &env);
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store.rodadas_coleta(&ctx, atendimento_id).await {
+        Ok(n) => ok_reply(
+            &env,
+            "ObterRodadasColetaReply",
+            serde_json::json!({ "rodadas": n }),
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+/// O bot pediu dados ao cliente (ato `coletar`, ou `responder` com perguntas):
+/// soma uma rodada e audita quais campos — só os slugs, nunca a conversa.
+#[tracing::instrument(skip_all, fields(rpc = "RegistrarRodadaColeta", tenant_id = %env.tenant_id))]
+pub async fn handler_registrar_rodada(
+    store: &dyn ports::TransferenciaStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let p = payload_de(&env);
+    let Some(atendimento_id) = atendimento_do_payload(&p) else {
+        return validacao("informe o atendimento_id", &env);
+    };
+    let campos: Vec<String> = p
+        .get("campos")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|c| c.as_str())
+                .map(|c| c.chars().take(60).collect())
+                .take(10)
+                .collect()
+        })
+        .unwrap_or_default();
+    let ctx = contexto_do_envelope(&env);
+    match store.registrar_rodada_coleta(&ctx, atendimento_id).await {
+        Ok(Some(n)) => {
+            audit
+                .publish(
+                    &env,
+                    "atendimento.coleta_rodada",
+                    format!("O bot pediu {} dado(s) ao cliente", campos.len()),
+                    serde_json::json!({
+                        "atendimento_id": atendimento_id,
+                        "rodada": n,
+                        "campos": campos,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "RegistrarRodadaColetaReply",
+                serde_json::json!({ "rodadas": n }),
+            )
+        }
+        Ok(None) => validacao("atendimento não encontrado", &env),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
 #[tracing::instrument(skip_all, fields(rpc = "PurgarDecisoesIa"))]
 pub async fn handler_purgar_decisoes(
     store: &dyn ports::TransferenciaStore,
@@ -653,6 +729,7 @@ async fn persistir_com_motor(state: &AppState, env: Envelope) -> Envelope {
 /// guarda a última) para marcar o motor na resposta do bot.
 pub fn registrar_rotas(server: Server, state: AppState) -> Server {
     let s = |st: &AppState| st.clone();
+    let (s13, s14) = (s(&state), s(&state));
     let (s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12) = (
         s(&state),
         s(&state),
@@ -735,6 +812,16 @@ pub fn registrar_rotas(server: Server, state: AppState) -> Server {
         .route("PersistMessage", move |env| {
             let st = s12.clone();
             Box::pin(async move { persistir_com_motor(&st, env).await })
+        })
+        .route("ObterRodadasColeta", move |env| {
+            let st = s13.clone();
+            Box::pin(async move { handler_obter_rodadas(st.transferencia.as_ref(), env).await })
+        })
+        .route("RegistrarRodadaColeta", move |env| {
+            let st = s14.clone();
+            Box::pin(async move {
+                handler_registrar_rodada(st.transferencia.as_ref(), st.audit.as_ref(), env).await
+            })
         })
 }
 
@@ -878,5 +965,70 @@ mod tests {
         );
         let resp = handler_registrar_decisao(&store, env).await;
         assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    #[tokio::test]
+    async fn rodada_de_coleta_soma_e_audita_so_os_slugs() {
+        let mut store = MockTransferenciaStore::new();
+        store
+            .expect_registrar_rodada_coleta()
+            .withf(|_, atendimento| *atendimento == 42)
+            .times(1)
+            .returning(|_, _| Ok(Some(1)));
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish()
+            .withf(|_, evento, _, ctx| {
+                evento == "atendimento.coleta_rodada"
+                    && ctx["rodada"] == 1
+                    && ctx["campos"] == serde_json::json!(["quantidade", "arte"])
+            })
+            .times(1)
+            .returning(|_, _, _, _| ());
+        let env = envelope(
+            "RegistrarRodadaColeta",
+            serde_json::json!({ "atendimento_id": 42, "campos": ["quantidade", "arte"] }),
+        );
+        let resp = handler_registrar_rodada(&store, &audit, env).await;
+        assert_eq!(corpo(&resp)["rodadas"], 1);
+    }
+
+    #[tokio::test]
+    async fn rodadas_exigem_atendimento_e_leem_do_store() {
+        let mut store = MockTransferenciaStore::new();
+        store
+            .expect_rodadas_coleta()
+            .times(1)
+            .returning(|_, _| Ok(2));
+        let sem = handler_obter_rodadas(
+            &store,
+            envelope("ObterRodadasColeta", serde_json::json!({})),
+        )
+        .await;
+        assert_eq!(sem.kind, MessageKind::Error as i32);
+        let resp = handler_obter_rodadas(
+            &store,
+            envelope(
+                "ObterRodadasColeta",
+                serde_json::json!({ "atendimento_id": 5 }),
+            ),
+        )
+        .await;
+        assert_eq!(corpo(&resp)["rodadas"], 2);
+        let mut vazio = MockTransferenciaStore::new();
+        vazio
+            .expect_registrar_rodada_coleta()
+            .returning(|_, _| Ok(None));
+        let audit = MockAuditPort::new();
+        let nao_achou = handler_registrar_rodada(
+            &vazio,
+            &audit,
+            envelope(
+                "RegistrarRodadaColeta",
+                serde_json::json!({ "atendimento_id": 5 }),
+            ),
+        )
+        .await;
+        assert_eq!(nao_achou.kind, MessageKind::Error as i32);
     }
 }

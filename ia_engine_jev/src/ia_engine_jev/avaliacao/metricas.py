@@ -24,6 +24,8 @@ class Resultado:
     transfere_esperado: bool | None = None
     transfere_obtido: bool = False
     motivo: str = ""
+    ato_esperado: str = ""
+    ato_obtido: str = ""
     tokens: int = 0
     duracao_ms: int = 0
     erro: str = ""
@@ -41,6 +43,7 @@ class Relatorio:
     calibracao: tuple[tuple[str, int, float], ...]
     p95_ms: float
     tokens_por_mensagem: float
+    acuracia_ato: float = 0.0
     falsos_positivos: tuple[int, ...] = field(default=())
     falsos_negativos: tuple[int, ...] = field(default=())
 
@@ -77,6 +80,9 @@ def calcular(resultados: Sequence[Resultado]) -> Relatorio:
         r.indice for r in rotulados if not r.transfere_obtido and r.transfere_esperado
     ]
 
+    com_ato = [r for r in validos if r.ato_esperado]
+    acertos_ato = sum(r.ato_obtido == r.ato_esperado for r in com_ato)
+
     calibracao = []
     for baixo, alto in FAIXAS:
         na_faixa = [r for r in com_intencao if baixo <= r.confianca < alto]
@@ -95,6 +101,7 @@ def calcular(resultados: Sequence[Resultado]) -> Relatorio:
         calibracao=tuple(calibracao),
         p95_ms=percentil([r.duracao_ms for r in validos], 0.95),
         tokens_por_mensagem=_div(sum(r.tokens for r in validos), len(validos)),
+        acuracia_ato=_div(acertos_ato, len(com_ato)),
         falsos_positivos=tuple(tfp),
         falsos_negativos=tuple(tfn),
     )
@@ -110,6 +117,7 @@ def em_markdown(variante: str, rel: Relatorio) -> str:
         f"recall {rel.recall_multi:.1%}",
         f"- Transferência — precisão {rel.precisao_transferencia:.1%}, "
         f"recall {rel.recall_transferencia:.1%}",
+        f"- Acurácia do ato (onde rotulado): {rel.acuracia_ato:.1%}",
         f"- Latência p95: {rel.p95_ms:.0f} ms",
         f"- Tokens de entrada por mensagem: {rel.tokens_por_mensagem:.0f} "
         f"(~US$ {rel.tokens_por_mensagem * 0.042 / 1_000_000:.6f})",

@@ -17,7 +17,8 @@ use infrastructure_postgres::treinamento::treinamentos::{
 };
 
 use crate::ports::treinamento::{
-    ChunkVetorizado, DadosIntent, Intent, IntentPendente, TreinamentoPendente,
+    ChunkVetorizado, ColetaDaIntent, DadosIntent, Intent, IntentPendente, TreinamentoPendente,
+    MAX_PERGUNTAS_PADRAO,
 };
 use crate::ports::{DocumentoTrecho, QueryComposeResultado, TreinamentoResumo, TreinamentoStore};
 
@@ -479,19 +480,45 @@ impl TreinamentoStore for PgTreinamentoStore {
             .fetch_all(&mut *tx)
             .await?;
             let vetorizadas: std::collections::HashSet<i32> = com_vetor.into_iter().collect();
+            // Coleta do motor Jev: também numa consulta só (runtime, SQL
+            // estático — as colunas são posteriores ao cache offline do sqlx).
+            let coletas: std::collections::HashMap<i32, (Vec<String>, i16, String)> =
+                sqlx::query_as::<_, (i32, Vec<String>, i16, String)>(
+                    "SELECT id, campos_coleta, max_perguntas, apos_coleta \
+                     FROM treinamento_querycompose WHERE tenant_id = $1",
+                )
+                .bind(ctx.tenant_id)
+                .fetch_all(&mut *tx)
+                .await?
+                .into_iter()
+                .map(|(id, campos, max, apos)| (id, (campos, max, apos)))
+                .collect();
 
             let itens = rows
                 .into_iter()
-                .map(|i| Intent {
-                    vetorizada: vetorizadas.contains(&i.id),
-                    id: i.id,
-                    tag: i.tag,
-                    grupo: i.grupo,
-                    descricao: i.descricao,
-                    exemplo: i.exemplo,
-                    comportamento: i.comportamento,
-                    criado_em: i.created_at.timestamp_millis(),
-                    atualizado_em: i.updated_at.timestamp_millis(),
+                .map(|i| {
+                    let (campos_coleta, max_perguntas, apos_coleta) =
+                        coletas.get(&i.id).cloned().unwrap_or_else(|| {
+                            (
+                                Vec::new(),
+                                MAX_PERGUNTAS_PADRAO as i16,
+                                "transferir".to_string(),
+                            )
+                        });
+                    Intent {
+                        vetorizada: vetorizadas.contains(&i.id),
+                        id: i.id,
+                        tag: i.tag,
+                        grupo: i.grupo,
+                        descricao: i.descricao,
+                        exemplo: i.exemplo,
+                        comportamento: i.comportamento,
+                        campos_coleta,
+                        max_perguntas: i32::from(max_perguntas),
+                        apos_coleta,
+                        criado_em: i.created_at.timestamp_millis(),
+                        atualizado_em: i.updated_at.timestamp_millis(),
+                    }
                 })
                 .collect();
             Ok((itens, tx))
@@ -522,6 +549,7 @@ impl TreinamentoStore for PgTreinamentoStore {
                     None,
                 )
                 .await?;
+            definir_coleta(&mut tx, &ctx, criada.id, &dados.coleta).await?;
             let intent = Intent {
                 id: criada.id,
                 tag: criada.tag,
@@ -529,6 +557,9 @@ impl TreinamentoStore for PgTreinamentoStore {
                 descricao: criada.descricao,
                 exemplo: criada.exemplo,
                 comportamento: criada.comportamento,
+                campos_coleta: dados.coleta.campos.clone(),
+                max_perguntas: dados.coleta.max_perguntas,
+                apos_coleta: dados.coleta.apos.clone(),
                 vetorizada: false,
                 criado_em: criada.created_at.timestamp_millis(),
                 atualizado_em: criada.updated_at.timestamp_millis(),
@@ -559,6 +590,9 @@ impl TreinamentoStore for PgTreinamentoStore {
                     &dados.comportamento,
                 )
                 .await?;
+            if ok {
+                definir_coleta(&mut tx, &ctx, id, &dados.coleta).await?;
+            }
             Ok((ok, tx))
         })
         .await
@@ -611,4 +645,27 @@ impl TreinamentoStore for PgTreinamentoStore {
         })
         .await
     }
+}
+
+/// Grava a coleta estruturada de uma intenção (motor Jev). SQL estático em
+/// runtime: as colunas vieram na 0049, depois do cache offline do sqlx.
+async fn definir_coleta(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ctx: &RequestContext,
+    id: i32,
+    coleta: &ColetaDaIntent,
+) -> Result<(), DbError> {
+    sqlx::query(
+        "UPDATE treinamento_querycompose \
+         SET campos_coleta = $1, max_perguntas = $2, apos_coleta = $3 \
+         WHERE tenant_id = $4 AND id = $5",
+    )
+    .bind(&coleta.campos)
+    .bind(coleta.max_perguntas as i16)
+    .bind(&coleta.apos)
+    .bind(ctx.tenant_id)
+    .bind(id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }

@@ -11,7 +11,10 @@ A chave, o modelo, as regras e os sinais vêm de `tenant:config:<uuid>` no Redis
 — o mesmo caminho do serviço. O conjunto é um JSONL com, por linha:
 `mensagem`, `historico` (opcional, lista de "cliente: ..."/"atendente: ..."),
 `intencao` (a principal esperada, ou ""), `intencoes` (lista), `transfere`
-(true/false/null). O catálogo é a lista de intenções
+(true/false/null), `ato` (opcional: transferir | responder | coletar | social |
+sem_info | barrada) e `rodadas_coleta` (opcional, padrão 0). O `ato` medido é
+o do planejamento sem a base — `responder` pode virar `sem_info` no serviço.
+O catálogo é a lista de intenções
 (`[{tag, grupo, descricao, exemplo, comportamento}]`, como `list_intencoes`).
 
 Variantes: `pt` (instruções em inglês, catálogo em português — o padrão do
@@ -35,12 +38,18 @@ from typing import Any
 
 from ia_engine_jev.avaliacao.metricas import Resultado, calcular, em_markdown
 from ia_engine_jev.config.models import RuntimeConfig
-from ia_engine_jev.decisoes.analise import decidir_intencoes
+from ia_engine_jev.conversao import (
+    dados_da_coleta,
+    entidades_da_config,
+    politica_da_config,
+)
+from ia_engine_jev.decisoes.ato import planejar
+from ia_engine_jev.decisoes.leitura import interpretar
 from ia_engine_jev.decisoes.limiares import limiares_de, sinais_de
-from ia_engine_jev.decisoes.transferencia import decidir_antes
 from ia_engine_jev.domain.jev import IntentDef
 from ia_engine_jev.perguntas import intencoes as pi
 from ia_engine_jev.perguntas import transferencia as pt
+from ia_engine_jev.perguntas.leitura import PedidoDeLeitura, montar_leitura
 from ia_engine_jev.typesafe import (
     ClienteJev,
     Pergunta,
@@ -117,34 +126,50 @@ async def avaliar_uma(
     config: RuntimeConfig,
     tudo_pt: bool,
 ) -> Resultado:
-    perguntas: dict[str, Pergunta] = {
-        pi.PRINCIPAL: pi.pergunta_principal(intents),
-        **pi.perguntas_multi(intents),
-        pt.PEDE_HUMANO: pt.pergunta_pede_humano(),
-        pt.INSATISFACAO: pt.pergunta_insatisfacao(),
-        pt.PEDE_INFORMACAO: pt.pergunta_pede_informacao(),
-    }
-    for regra in config.regras_transferencia:
-        if regra.gatilho_tipo == "condicao" and regra.condicao.strip():
-            perguntas[pt.id_regra(regra.id)] = pt.pergunta_regra(regra)
+    # A mesma leitura única do serviço (Responder): o que se mede é o que roda.
+    entidades = entidades_da_config(config)
+    dados = dados_da_coleta(intents, entidades)
+    historico = tuple(
+        ("ai" if str(h).startswith("atendente:") else "human", str(h).split(":", 1)[-1])
+        for h in item.get("historico", [])
+    )
+    montagem = montar_leitura(
+        PedidoDeLeitura(
+            mensagem=item["mensagem"],
+            historico=historico,
+            intents=intents,
+            entidades=entidades,
+            dados_empresa=config.dados_empresa,
+            completa=True,
+            regras=tuple(config.regras_transferencia),
+            dados_coleta=dados,
+            politica=politica_da_config(config),
+        )
+    )
+    perguntas: dict[str, Pergunta] = dict(montagem.perguntas)
     if tudo_pt:
         perguntas = _em_portugues(perguntas)
-    estado = {"mensagem": item["mensagem"], "historico": item.get("historico", [])}
     inicio = time.perf_counter()
     try:
-        resposta = await jev.perguntar("avaliacao", estado, perguntas)
+        resposta = await jev.perguntar(
+            "avaliacao", montagem.estado, perguntas, prioridade="baixa"
+        )
     except Exception as exc:  # noqa: BLE001 — a avaliação segue sem a linha
         return Resultado(
             indice, item.get("intencao", ""), "", 0.0, erro=type(exc).__name__
         )
     duracao = int((time.perf_counter() - inicio) * 1000)
     limiares = limiares_de(config.jev_config)
-    aceitas, principal, conf, _ = decidir_intencoes(resposta, intents, limiares)
-    decisao = decidir_antes(
-        resposta,
+    leitura = interpretar(
+        resposta, intents=intents, limiares=limiares, dados_coleta=dados
+    )
+    plano = planejar(
+        leitura,
         regras=config.regras_transferencia,
-        campos_coletados=set(),
-        trechos=(),
+        campos_coletados=frozenset(),
+        rodadas_coleta=int(item.get("rodadas_coleta", 0)),
+        dados={d.id: d for d in dados},
+        politica=politica_da_config(config),
         limiares=limiares,
         sinais_cfg=sinais_de(config.transferencia_sinais),
     )
@@ -152,13 +177,15 @@ async def avaliar_uma(
     return Resultado(
         indice=indice,
         intencao_esperada=item.get("intencao", ""),
-        intencao_obtida=principal,
-        confianca=conf,
+        intencao_obtida=leitura.principal,
+        confianca=leitura.confianca_principal,
         intencoes_esperadas=frozenset(item.get("intencoes", [])),
-        intencoes_obtidas=frozenset(a.tipo for a in aceitas),
+        intencoes_obtidas=frozenset(a.tipo for a in leitura.intents),
         transfere_esperado=None if transfere is None else bool(transfere),
-        transfere_obtido=decisao.transferir,
-        motivo=decisao.motivo,
+        transfere_obtido=plano.transferir,
+        motivo=plano.motivo,
+        ato_esperado=str(item.get("ato", "")),
+        ato_obtido=plano.ato,
         tokens=resposta.tokens_entrada,
         duracao_ms=duracao,
     )
@@ -212,6 +239,8 @@ async def principal(args: argparse.Namespace) -> None:
                     "transfere_esperado",
                     "transfere_obtido",
                     "motivo",
+                    "ato_esperado",
+                    "ato_obtido",
                     "tokens",
                     "duracao_ms",
                     "erro",
@@ -227,6 +256,8 @@ async def principal(args: argparse.Namespace) -> None:
                         r.transfere_esperado,
                         r.transfere_obtido,
                         r.motivo,
+                        r.ato_esperado,
+                        r.ato_obtido,
                         r.tokens,
                         r.duracao_ms,
                         r.erro,

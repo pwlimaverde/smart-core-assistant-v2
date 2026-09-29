@@ -104,6 +104,23 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
 
     # -- Intenções (QueryCompose) --------------------------------------------
 
+    CAMPOS_COLETA = Field(
+        description=(
+            "Motor Jev — dados essenciais que o bot pede ao cliente nesta intenção, "
+            "em ordem de prioridade: tipo de entidade (ex.: 'quantidade_tiragem') "
+            "ou slug de campo do cartão. Até 10."
+        )
+    )
+    MAX_PERGUNTAS = Field(
+        description="Quantos dados, no máximo, o bot pede numa mensagem (1 a 5)."
+    )
+    APOS_COLETA = Field(
+        description=(
+            "Depois da rodada de coleta (uma por atendimento), ou se o cliente já "
+            "informou tudo: 'transferir' para um atendente ou 'continuar'."
+        )
+    )
+
     registro.registrar("list_intencoes", Categoria.LEITURA, ("treinamento:read",))
 
     @mcp.tool(
@@ -119,7 +136,14 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         return [para_dict(i) for i in limitar_itens(list(r.intents), 200)]
 
     def _dados_intencao(
-        tag: str, grupo: str, descricao: str, exemplo: str, comportamento: str
+        tag: str,
+        grupo: str,
+        descricao: str,
+        exemplo: str,
+        comportamento: str,
+        campos_coleta: list[str],
+        max_perguntas: int,
+        apos_coleta: str,
     ) -> pb.MyIntentDados:
         return pb.MyIntentDados(
             tag=tag,
@@ -127,6 +151,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
             descricao=descricao,
             exemplo=exemplo,
             comportamento=comportamento,
+            campos_coleta=campos_coleta,
+            max_perguntas=max_perguntas,
+            apos_coleta=apos_coleta,
         )
 
     registro.registrar(
@@ -144,11 +171,21 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         comportamento: Annotated[
             str, Field(description="O que o assistente deve fazer nesse caso.")
         ],
+        campos_coleta: Annotated[list[str], CAMPOS_COLETA] = [],  # noqa: B006
+        max_perguntas: Annotated[int, MAX_PERGUNTAS] = 2,
+        apos_coleta: Annotated[Literal["transferir", "continuar"], APOS_COLETA] = (
+            "transferir"
+        ),
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Cria uma intenção (o 'QueryCompose' da v1): um tipo de mensagem que a IA
         reconhece e o comportamento que ela deve ter nesse caso. Tag+grupo são
-        únicos — confira `list_intencoes` antes."""
+        únicos — confira `list_intencoes` antes.
+
+        Motor Jev: `campos_coleta` são os dados essenciais que o bot pede ao
+        cliente quando esta intenção é a escolhida — no máximo `max_perguntas`
+        por mensagem e uma única rodada por atendimento; depois dela (ou se o
+        cliente já disse tudo), `apos_coleta` decide: transferir ou continuar."""
         tool = registro.exigir("create_intencao")
         lista = await executor.executar(
             "create_intencao",
@@ -178,7 +215,16 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         r = await executor.executar(
             "create_intencao",
             "CreateMyIntent",
-            _dados_intencao(tag, grupo, descricao, exemplo, comportamento),
+            _dados_intencao(
+                tag,
+                grupo,
+                descricao,
+                exemplo,
+                comportamento,
+                list(campos_coleta),
+                max_perguntas,
+                apos_coleta,
+            ),
         )
         return f"Intenção '{grupo}/{tag}' criada com o id {r.intent.id}."
 
@@ -196,12 +242,36 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         descricao: str,
         exemplo: str,
         comportamento: str,
+        campos_coleta: Annotated[list[str] | None, CAMPOS_COLETA] = None,
+        max_perguntas: Annotated[int | None, MAX_PERGUNTAS] = None,
+        apos_coleta: Annotated[
+            Literal["transferir", "continuar"] | None, APOS_COLETA
+        ] = None,
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Edita uma intenção existente (tag, grupo, descrição, exemplo e
-        comportamento). Todos os campos são gravados: leia com `list_intencoes` e
-        reenvie o que não muda."""
+        comportamento). Esses cinco são gravados como vierem: leia com
+        `list_intencoes` e reenvie o que não muda. A coleta (`campos_coleta`,
+        `max_perguntas`, `apos_coleta`) omitida mantém o valor atual."""
         tool = registro.exigir("update_intencao")
+        if campos_coleta is None or max_perguntas is None or apos_coleta is None:
+            lista = await executor.executar(
+                "update_intencao",
+                "ListMyIntents",
+                pb.ListMyIntentsRequest(),
+                contabilizar=False,
+            )
+            atual = next((i for i in lista.intents if i.id == intencao_id), None)
+            if campos_coleta is None:
+                campos_coleta = list(atual.campos_coleta) if atual else []
+            if max_perguntas is None:
+                max_perguntas = (atual.max_perguntas if atual else 0) or 2
+            if apos_coleta is None:
+                apos_coleta = (
+                    "continuar"
+                    if atual and atual.apos_coleta == "continuar"
+                    else "transferir"
+                )
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(tool, "alterar a intenção")
@@ -210,7 +280,16 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
             "UpdateMyIntent",
             pb.UpdateMyIntentRequest(
                 id=intencao_id,
-                dados=_dados_intencao(tag, grupo, descricao, exemplo, comportamento),
+                dados=_dados_intencao(
+                    tag,
+                    grupo,
+                    descricao,
+                    exemplo,
+                    comportamento,
+                    list(campos_coleta),
+                    max_perguntas,
+                    apos_coleta,
+                ),
             ),
         )
         return f"Intenção {intencao_id} atualizada."
@@ -229,9 +308,13 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     ) -> dict[str, object]:
         """Pergunta ao assistente sem enviar nada a cliente: devolve a resposta
         que ele daria, os trechos da base usados, a confiança e se transferiria
-        para uma pessoa. Pelo motor Jev, também o **motivo** da transferência
-        (regra ou sinal), os sinais medidos com o limiar, a intenção escolhida e
-        os trechos aprovados. Use para validar treinamentos, intenções e regras."""
+        para uma pessoa. Pelo motor Jev, também o **ato** decidido (transferir,
+        responder, coletar, social, sem_info ou barrada), o **motivo** da
+        transferência (regra ou sinal), os sinais medidos com o limiar, a
+        intenção escolhida, os trechos aprovados, os dados que a resposta pediu,
+        se a redação subiu para o modelo maior (`escalada`, com os `problemas`) e
+        o tempo de cada etapa. Use para validar treinamentos, intenções, coleta e
+        regras. O ensaio não conta rodada de coleta (é sempre a primeira)."""
         r = await executor.executar(
             "testar_pergunta",
             "TestarPergunta",

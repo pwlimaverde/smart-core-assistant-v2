@@ -1,23 +1,27 @@
-"""Feature `Responder` pelo motor Jev.
+"""Feature `Responder` pelo motor Jev: o Jev lê, o código decide o ato, a LLM
+só redige, o Jev confere.
 
-Fluxo (plano §4.2):
+Etapas (cada uma cronometrada e devolvida em `etapas`):
 
-1. **Antes de gerar**, em paralelo: uma requisição com pedido de humano, regras
-   do tenant, setor, intenção principal, irritação, pedido de informação e
-   presença dos campos pendentes; e uma requisição por trecho da base.
-2. **Decisão 1** (código): transfere sem chamar a LLM, ou responde a
-   `msg_sem_info`, ou segue.
-3. **LLM**: só o texto, com os trechos aprovados (evidência e conflito) e o
-   comportamento da intenção escolhida pelo Jev. Em paralelo, a LLM pequena
-   copia os campos pendentes que o Jev viu na mensagem.
-4. **Depois de gerar**: resposta apoiada? promete o proibido? diz que vai
-   transferir? E a conferência dos campos copiados.
-5. **Decisão 2** (código): envia, transfere, troca pela `msg_sem_info`, gera de
-   novo uma vez, ou marca "a revisar".
+1. **leitura** — uma requisição ao Jev com todas as perguntas sobre a
+   mensagem: intenções, entidades, tom, transferência, coleta, guarda de
+   entrada e política (`perguntas/leitura.py`).
+2. **ato** — código puro (`decisoes/ato.py`): barrada, transferir, responder,
+   coletar, social ou sem_info. A regra "uma rodada de coleta" é contada com
+   `rodadas_coleta`, que vem do atendimento.
+3. **trechos** — só quando o ato depende da base: o Jev julga cada trecho
+   (base, dados da empresa, comportamento da intenção) em paralelo, e a
+   evidência é reordenada pelo `responde` dele.
+4. **redacao** — a LLM pequena escreve só o ato decidido; em paralelo, copia
+   os valores livres (uma chamada para todos).
+5. **conferencia** — uma requisição: apoio, promessas, estilo e a cópia.
+6. **escalada** — se a conferência reprovou: o modelo maior reescreve com as
+   correções, e o Jev confere de novo. Reprovou outra vez: texto do tenant
+   (fatos) ou "a revisar" (estilo).
 
-O datasource orquestra o I/O chamando as decisões puras de `decisoes/`; o
-usecase monta o resultado. Falha do Jev vira erro de domínio e o `servicer`
-cai no caminho de reserva (o `Responder` da LLM com schema).
+`somente_decisao` (a sombra) para depois da etapa 3: sem LLM e com prioridade
+baixa no limitador. Falha do Jev vira erro de domínio e o `servicer` cai na
+reserva (o `Responder` da LLM com schema).
 """
 
 from __future__ import annotations
@@ -27,7 +31,8 @@ import json
 import re
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import UTC, date, datetime
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -41,39 +46,66 @@ from py_return_success_or_error import (
     UsecaseBaseCallData,
 )
 
-from ia_engine_jev.candidatos import esta_no_texto
 from ia_engine_jev.config.models import RegraTransferencia
+from ia_engine_jev.decisoes.ato import (
+    CONFIAVEIS,
+    TRECHO_COMPORTAMENTO,
+    TRECHO_EMPRESA,
+    Plano,
+    aplicar_evidencia,
+    fora_do_horario,
+    planejar,
+    texto_da_transferencia,
+)
+from ia_engine_jev.decisoes.conferencia import (
+    CORRECOES,
+    Conferencia,
+    conferir,
+    desfecho,
+)
 from ia_engine_jev.decisoes.limiares import Limiares, SinaisTransferencia
 from ia_engine_jev.decisoes.transferencia import (
-    DecisaoAntes,
-    DecisaoDepois,
+    MOTIVO_SEM_APOIO,
     avaliar_trechos,
-    comportamento_da_intencao,
-    decidir_antes,
-    decidir_depois,
     escolher_destino,
+    evidencia_ordenada,
 )
-from ia_engine_jev.domain.jev import DecisaoResposta, Fluxo, IntentDef, Sinal, Trecho
+from ia_engine_jev.domain.jev import (
+    Dado,
+    DecisaoResposta,
+    EntidadeDef,
+    Fluxo,
+    IntentDef,
+    Politica,
+    Sinal,
+    Trecho,
+    TrechoAvaliado,
+)
 from ia_engine_jev.domain.models import LlmProviderSpec
+from ia_engine_jev.features.leitura import (
+    ResultadoDaLeitura,
+    campos_conferidos,
+    ler,
+    livres_presentes,
+    montar_analise,
+)
 from ia_engine_jev.features.responder.domain.parameters import (
     CampoColetado,
     CampoPendente,
 )
 from ia_engine_jev.features.responder_jev.geracao import (
-    AVISO_SEM_TRANSFERENCIA,
     CHAVE_REGRAS_RESPOSTA,
+    PedidoDeRedacao,
     gerar_texto,
     montar_prompt_sistema,
 )
 from ia_engine_jev.jev import erro_de_dominio
 from ia_engine_jev.perguntas import conferencia as pc
-from ia_engine_jev.perguntas import intencoes as pi
-from ia_engine_jev.perguntas import transferencia as pt
 from ia_engine_jev.perguntas import trechos as ptr
-from ia_engine_jev.perguntas.comum import estado_da_mensagem
+from ia_engine_jev.perguntas.leitura import PedidoDeLeitura
 from ia_engine_jev.shared.history import ChatTurnTuple
-from ia_engine_jev.shared.valor_livre import copiar_valor
-from ia_engine_jev.typesafe import ClienteJev, Pergunta, PerguntaNoul, RespostaJev, Uso
+from ia_engine_jev.shared.valor_livre import CampoACopiar, copiar_valores
+from ia_engine_jev.typesafe import ClienteJev, RespostaJev, Uso
 
 ChatModelFactory = Callable[[LlmProviderSpec], BaseChatModel]
 
@@ -88,6 +120,7 @@ MSG_SEM_INFO_GENERICA = (
 _NORMALIZAR_CAMPO = (
     "Normalize: datas em AAAA-MM-DD, números sem unidade, sim/não como true/false."
 )
+_LIMITE_TRECHO_EMPRESA = 4000
 
 
 @dataclass(frozen=True)
@@ -98,13 +131,16 @@ class ResponderJevParameters(Parameters):
     llm: LlmProviderSpec
     fluxos: tuple[Fluxo, ...] = ()
     intents: tuple[IntentDef, ...] = ()
+    entidades: tuple[EntidadeDef, ...] = ()
     trechos: tuple[Trecho, ...] = ()
-    comportamento_vetor: str = ""
     campos_coletados: tuple[CampoColetado, ...] = ()
     campos_pendentes: tuple[CampoPendente, ...] = ()
+    dados_coleta: tuple[Dado, ...] = ()
+    rodadas_coleta: int = 0
     regras: tuple[RegraTransferencia, ...] = ()
     sinais: SinaisTransferencia = field(default_factory=SinaisTransferencia)
     limiares: Limiares = field(default_factory=Limiares)
+    politica: Politica = field(default_factory=Politica)
     fluxo_padrao_id: int | None = None
     piso_b4: float | None = None
     dados_empresa: str = ""
@@ -113,43 +149,67 @@ class ResponderJevParameters(Parameters):
     msg_transferencia: str = ""
     msg_sem_info: str = ""
     prompts: dict[str, str] = field(default_factory=dict)
+    somente_decisao: bool = False
+    hoje: date = field(default_factory=date.today)
+    agora: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
 class DadosResposta:
-    antes: RespostaJev
-    decisao_antes: DecisaoAntes
-    trechos: tuple  # tuple[TrechoAvaliado, ...]
+    leitura: ResultadoDaLeitura
+    plano: Plano
+    trechos: tuple[TrechoAvaliado, ...] = ()
     texto: str = ""
-    decisao_depois: DecisaoDepois | None = None
-    regerada: bool = False
-    campos: tuple[tuple[str, str, float], ...] = ()
+    conferencia: Conferencia | None = None
+    # enviar | a_revisar | sem_info | transferir ("" = sem LLM)
+    desfecho: str = ""
+    escalada: bool = False
+    problemas: tuple[str, ...] = ()
+    modelo_llm: str = ""
+    valores: dict[str, str] = field(default_factory=dict)
+    conferencia_valores: RespostaJev | None = None
     uso: Uso = field(default_factory=Uso)
     duracao_ms: int = 0
+    etapas: tuple[tuple[str, int], ...] = ()
 
 
-def perguntas_antes(p: ResponderJevParameters) -> dict[str, Pergunta]:
-    perguntas: dict[str, Pergunta] = {
-        pt.PEDE_HUMANO: pt.pergunta_pede_humano(),
-        pt.INSATISFACAO: pt.pergunta_insatisfacao(),
-        pt.PEDE_INFORMACAO: pt.pergunta_pede_informacao(),
-    }
-    if p.fluxos:
-        perguntas[pt.SETOR] = pt.pergunta_setor(p.fluxos)
-    if p.intents and not pi.precisa_de_dois_estagios(p.intents):
-        # A mesma do `Analyse`: ele roda em paralelo e não chega a tempo.
-        # Catálogo acima do limite do `Choice` ficaria sem resposta (422 → a
-        # reserva em toda mensagem): sem a pergunta, o comportamento vem do
-        # vetor e as regras por intenção não disparam — o resto segue.
-        perguntas[pi.PRINCIPAL] = pi.pergunta_principal(p.intents)
-    for regra in p.regras:
-        if regra.gatilho_tipo == "condicao" and regra.condicao.strip():
-            perguntas[pt.id_regra(regra.id)] = pt.pergunta_regra(regra)
-    for campo in p.campos_pendentes:
-        perguntas[pt.id_campo(campo.slug)] = pt.pergunta_campo(
-            campo.slug, campo.nome, campo.descricao
-        )
-    return perguntas
+def _ms(inicio: float) -> int:
+    return int((time.perf_counter() - inicio) * 1000)
+
+
+def _spec(base: LlmProviderSpec, modelo: str) -> LlmProviderSpec:
+    return replace(base, model=modelo) if modelo.strip() else base
+
+
+def _trechos_avaliaveis(p: ResponderJevParameters, plano: Plano) -> list[Trecho]:
+    """Base + dados da empresa + comportamento da intenção: os três podem
+    responder, e o `sem_info` só vale se nenhum responder."""
+    trechos = list(p.trechos)
+    if p.dados_empresa.strip():
+        trechos.append(Trecho(TRECHO_EMPRESA, p.dados_empresa[:_LIMITE_TRECHO_EMPRESA]))
+    if plano.comportamento.strip():
+        trechos.append(Trecho(TRECHO_COMPORTAMENTO, plano.comportamento))
+    return trechos
+
+
+def _pedido_de_leitura(p: ResponderJevParameters) -> PedidoDeLeitura:
+    return PedidoDeLeitura(
+        mensagem=p.mensagem,
+        historico=p.historico,
+        intents=p.intents,
+        entidades=p.entidades,
+        dados_empresa=p.dados_empresa,
+        hoje=p.hoje,
+        completa=True,
+        regras=p.regras,
+        fluxos=p.fluxos,
+        dados_coleta=p.dados_coleta,
+        ja_coletados=frozenset(c.slug for c in p.campos_coletados),
+        campos_pendentes=tuple(
+            (c.slug, c.nome, c.descricao) for c in p.campos_pendentes
+        ),
+        politica=p.politica,
+    )
 
 
 class ResponderJevDataSource(DataSource[DadosResposta, ResponderJevParameters]):
@@ -158,176 +218,233 @@ class ResponderJevDataSource(DataSource[DadosResposta, ResponderJevParameters]):
 
     async def __call__(self, p: ResponderJevParameters) -> DadosResposta:
         inicio = time.perf_counter()
-        estado = estado_da_mensagem(p.mensagem, p.historico, p.dados_empresa)
-        pedidos = [p.jev.perguntar("antes", estado, perguntas_antes(p))]
-        pedidos.extend(
-            p.jev.perguntar(
-                "trecho",
-                ptr.estado_do_trecho(p.mensagem, p.historico, t.conteudo),
-                ptr.perguntas_do_trecho(),
-            )
-            for t in p.trechos
+        prioridade = "baixa" if p.somente_decisao else "alta"
+        etapas: list[tuple[str, int]] = []
+
+        # 1. Leitura.
+        resultado = await ler(
+            _pedido_de_leitura(p), p.jev, p.limiares, prioridade=prioridade
         )
-        respostas = list(await asyncio.gather(*pedidos))
-        antes, julgamentos = respostas[0], respostas[1:]
-        avaliados = tuple(
-            avaliar_trechos(list(zip(p.trechos, julgamentos, strict=True)), p.limiares)
-        )
-        coletados = {c.slug for c in p.campos_coletados}
-        d1 = decidir_antes(
-            antes,
+        etapas.append(("leitura", resultado.duracao_ms))
+        respostas = list(resultado.respostas)
+
+        # 2. Ato.
+        t = time.perf_counter()
+        plano = planejar(
+            resultado.leitura,
             regras=p.regras,
-            campos_coletados=coletados,
-            trechos=avaliados,
+            campos_coletados=frozenset(c.slug for c in p.campos_coletados),
+            rodadas_coleta=p.rodadas_coleta,
+            dados={d.id: d for d in p.dados_coleta},
+            politica=p.politica,
             limiares=p.limiares,
             sinais_cfg=p.sinais,
         )
-        if d1.transferir or d1.sem_info:
-            return DadosResposta(
-                antes, d1, avaliados, uso=Uso.de(respostas), duracao_ms=_ms(inicio)
+        etapas.append(("ato", _ms(t)))
+
+        # 3. Trechos (só quando o ato depende da base).
+        trechos = _trechos_avaliaveis(p, plano) if plano.precisa_evidencia else []
+        avaliados: tuple[TrechoAvaliado, ...] = ()
+        if trechos:
+            t = time.perf_counter()
+            julgamentos = await asyncio.gather(
+                *(
+                    p.jev.perguntar(
+                        "trecho",
+                        ptr.estado_do_trecho(p.mensagem, p.historico, tr.conteudo),
+                        ptr.perguntas_do_trecho(),
+                        prioridade=prioridade,
+                    )
+                    for tr in trechos
+                )
+            )
+            respostas.extend(julgamentos)
+            avaliados = tuple(
+                avaliar_trechos(
+                    list(zip(trechos, julgamentos, strict=True)),
+                    p.limiares,
+                    CONFIAVEIS,
+                )
+            )
+            plano = aplicar_evidencia(plano, avaliados, sinais_cfg=p.sinais)
+            etapas.append(("trechos", _ms(t)))
+
+        base = DadosResposta(leitura=resultado, plano=plano, trechos=avaliados)
+        if p.somente_decisao:
+            return replace(
+                base,
+                uso=Uso.de(respostas),
+                duracao_ms=_ms(inicio),
+                etapas=tuple(etapas),
             )
 
-        llm = self._chat_model_factory(p.llm)
-        aprovados = {t.id for t in avaliados if t.aprovado}
-        conflitos = {t.id for t in avaliados if t.conflito}
-        evidencia = [t.conteudo for t in p.trechos if t.id in aprovados]
-        conflito = [t.conteudo for t in p.trechos if t.id in conflitos]
-        comportamento = (
-            comportamento_da_intencao(
-                d1.intencao, d1.confianca_intencao, p.intents, p.limiares
-            )
-            or p.comportamento_vetor
+        copiar = livres_presentes(
+            resultado.leitura,
+            p.entidades,
+            [(c.slug, c.nome, c.descricao, c.hint) for c in p.campos_pendentes],
+            p.limiares,
         )
-        prompt = montar_prompt_sistema(
+        spec_redacao = _spec(p.llm, p.politica.modelo_redacao)
+        llm = self._chat_model_factory(spec_redacao)
+
+        if not plano.usa_llm:
+            # Sem texto a redigir; a cópia dos valores (para a análise e o
+            # cartão) ainda acontece, com uma conferência só dela.
+            valores, conf_valores = await self._copiar_e_conferir(
+                p, llm, copiar, respostas, etapas
+            )
+            return replace(
+                base,
+                valores=valores,
+                conferencia_valores=conf_valores,
+                uso=Uso.de(respostas),
+                duracao_ms=_ms(inicio),
+                etapas=tuple(etapas),
+            )
+
+        # 4. Redação (+ cópia dos valores, em paralelo).
+        evidencia, conflito = evidencia_ordenada(
+            trechos, avaliados, p.politica.trechos_max, excluir=CONFIAVEIS
+        )
+        pedido = PedidoDeRedacao(
+            ato=plano.ato,
             nome=p.bot_agent_name,
             persona=p.persona_bot,
             regras=p.prompts.get(CHAVE_REGRAS_RESPOSTA, ""),
-            comportamento=comportamento,
             dados_empresa=p.dados_empresa,
+            comportamento=plano.comportamento,
             evidencia=evidencia,
             conflito=conflito,
             coletados=[(c.nome or c.slug, c.valor) for c in p.campos_coletados],
-            pendentes=[(c.nome or c.slug, c.descricao) for c in p.campos_pendentes],
+            perguntar=plano.perguntar,
+            nota_politica=plano.nota_politica,
         )
-        pendentes = [c for c in p.campos_pendentes if c.slug in d1.campos_presentes]
+        t = time.perf_counter()
         texto, valores = await asyncio.gather(
-            gerar_texto(llm, prompt, p.mensagem, p.historico),
-            _copiar_campos(llm, p.mensagem, pendentes),
-        )
-        restricoes = p.persona_bot
-        depois, conferencia = await asyncio.gather(
-            p.jev.perguntar(
-                "depois",
-                pc.estado_da_resposta(p.mensagem, texto, evidencia, restricoes),
-                pc.perguntas_da_resposta(),
+            gerar_texto(
+                llm, montar_prompt_sistema(pedido, p.agora), p.mensagem, p.historico
             ),
-            _conferir_campos(p.jev, estado, pendentes, valores),
+            copiar_valores(llm, p.mensagem, copiar, _NORMALIZAR_CAMPO),
         )
-        respostas.append(depois)
-        if conferencia is not None:
-            respostas.append(conferencia)
-        d2 = decidir_depois(
-            depois,
-            limiares=p.limiares,
-            sinais_cfg=p.sinais,
-            piso_b4=p.piso_b4,
-            ja_regerada=False,
+        etapas.append(("redacao", _ms(t)))
+
+        # 5. Conferência (texto + valores copiados, numa requisição).
+        evid_conferencia = [
+            *evidencia,
+            *([p.dados_empresa[:_LIMITE_TRECHO_EMPRESA]] if p.dados_empresa else []),
+            *([plano.comportamento] if plano.comportamento else []),
+        ]
+        por_chave = {c.chave: (c.nome, c.descricao) for c in copiar}
+        limite = max(1, len(plano.perguntar))
+        t = time.perf_counter()
+        conf_resp = await p.jev.perguntar(
+            "conferencia",
+            pc.estado_da_resposta(
+                p.mensagem, texto, evid_conferencia, p.persona_bot, valores
+            ),
+            pc.perguntas_da_resposta(
+                nunca_pedir=p.politica.nunca_pedir,
+                valores={k: por_chave[k] for k in valores if k in por_chave},
+            ),
+            prioridade=prioridade,
         )
-        regerada = False
-        if d2.regerar:
-            # A LLM prometeu transferir sem regra disparada: ela não decide
-            # isso. Gera de novo uma vez; persistindo, "a revisar".
-            regerada = True
-            texto = await gerar_texto(
-                llm, prompt + AVISO_SEM_TRANSFERENCIA, p.mensagem, p.historico
-            )
-            depois = await p.jev.perguntar(
-                "depois",
-                pc.estado_da_resposta(p.mensagem, texto, evidencia, restricoes),
-                pc.perguntas_da_resposta(),
-            )
-            respostas.append(depois)
-            d2 = decidir_depois(
-                depois,
-                limiares=p.limiares,
-                sinais_cfg=p.sinais,
-                piso_b4=p.piso_b4,
-                ja_regerada=True,
-            )
-        campos = tuple(
-            (slug, valor, conferencia.noul(_id_confere_campo(slug)))
-            for slug, valor in valores.items()
-            if conferencia is not None
-            and conferencia.noul(_id_confere_campo(slug)) >= p.limiares.piso_entidade
-            and esta_no_texto(_valor_visivel(valor), p.mensagem)
-        )
-        return DadosResposta(
-            antes,
-            d1,
-            avaliados,
+        respostas.append(conf_resp)
+        exige_apoio = plano.ato == "responder"
+        conf = conferir(
+            conf_resp,
             texto=texto,
-            decisao_depois=d2,
-            regerada=regerada,
-            campos=campos,
+            exige_apoio=exige_apoio,
+            limite_perguntas=limite,
+            limiares=p.limiares,
+            piso_b4=p.piso_b4,
+        )
+        etapas.append(("conferencia", _ms(t)))
+        problemas = conf.problemas
+        fim = desfecho(
+            conf, ja_escalada=False, limiares=p.limiares, sinais_cfg=p.sinais
+        )
+        modelo_llm = spec_redacao.model
+        escalada = False
+
+        # 6. Escalada: o modelo maior reescreve com as correções.
+        if fim == "escalar":
+            escalada = True
+            spec_escalada = _spec(p.llm, p.politica.modelo_escalada)
+            modelo_llm = spec_escalada.model
+            t = time.perf_counter()
+            corrigido = replace(
+                pedido,
+                correcoes=[CORRECOES[x] for x in conf.problemas if x in CORRECOES],
+            )
+            texto = await gerar_texto(
+                self._chat_model_factory(spec_escalada),
+                montar_prompt_sistema(corrigido, p.agora),
+                p.mensagem,
+                p.historico,
+            )
+            conf_resp2 = await p.jev.perguntar(
+                "conferencia_escalada",
+                pc.estado_da_resposta(
+                    p.mensagem, texto, evid_conferencia, p.persona_bot
+                ),
+                pc.perguntas_da_resposta(nunca_pedir=p.politica.nunca_pedir),
+                prioridade=prioridade,
+            )
+            respostas.append(conf_resp2)
+            conf = conferir(
+                conf_resp2,
+                texto=texto,
+                exige_apoio=exige_apoio,
+                limite_perguntas=limite,
+                limiares=p.limiares,
+                piso_b4=p.piso_b4,
+            )
+            fim = desfecho(
+                conf, ja_escalada=True, limiares=p.limiares, sinais_cfg=p.sinais
+            )
+            etapas.append(("escalada", _ms(t)))
+
+        return replace(
+            base,
+            texto=texto,
+            conferencia=conf,
+            desfecho=fim,
+            escalada=escalada,
+            problemas=problemas,
+            modelo_llm=modelo_llm,
+            valores=valores,
+            conferencia_valores=conf_resp,
             uso=Uso.de(respostas),
             duracao_ms=_ms(inicio),
+            etapas=tuple(etapas),
         )
 
-
-def _ms(inicio: float) -> int:
-    return int((time.perf_counter() - inicio) * 1000)
-
-
-def _id_confere_campo(slug: str) -> str:
-    return f"confere_campo::{slug}"
-
-
-def _valor_visivel(valor: str) -> str:
-    """Datas normalizadas (AAAA-MM-DD) não aparecem assim no texto: confere só
-    o que é texto de verdade; números e datas ficam com a conferência do Jev."""
-    return "" if any(ch.isdigit() for ch in valor) else valor
-
-
-async def _copiar_campos(
-    llm: BaseChatModel, mensagem: str, pendentes: list[CampoPendente]
-) -> dict[str, str]:
-    valores: dict[str, str] = {}
-    for campo in pendentes:
-        valor = await copiar_valor(
-            llm,
-            mensagem,
-            campo.nome or campo.slug,
-            f"{campo.descricao} {campo.hint}".strip(),
-            _NORMALIZAR_CAMPO,
-        )
-        if valor:
-            valores[campo.slug] = valor
-    return valores
-
-
-async def _conferir_campos(
-    jev: ClienteJev,
-    estado: dict,
-    pendentes: list[CampoPendente],
-    valores: dict[str, str],
-) -> RespostaJev | None:
-    if not valores:
-        return None
-    perguntas: dict[str, Pergunta] = {
-        _id_confere_campo(c.slug): PerguntaNoul(
-            instrucoes={
-                "question": (
-                    f"Is `valores.{c.slug}` what the customer states for this field "
-                    "in `mensagem` (allowing only format normalization)?"
+    async def _copiar_e_conferir(
+        self,
+        p: ResponderJevParameters,
+        llm: BaseChatModel,
+        copiar: list[CampoACopiar],
+        respostas: list[RespostaJev],
+        etapas: list[tuple[str, int]],
+    ) -> tuple[dict[str, str], RespostaJev | None]:
+        if not copiar:
+            return {}, None
+        t = time.perf_counter()
+        valores = await copiar_valores(llm, p.mensagem, copiar, _NORMALIZAR_CAMPO)
+        conf: RespostaJev | None = None
+        if valores:
+            por_chave = {c.chave: (c.nome, c.descricao) for c in copiar}
+            conf = await p.jev.perguntar(
+                "conferencia",
+                pc.estado_da_resposta(p.mensagem, "", [], "", valores),
+                pc.perguntas_da_resposta(
+                    com_texto=False,
+                    valores={k: por_chave[k] for k in valores if k in por_chave},
                 ),
-                "field": c.nome or c.slug,
-                "definition": c.descricao or c.nome or c.slug,
-            }
-        )
-        for c in pendentes
-        if c.slug in valores
-    }
-    return await jev.perguntar("campos", {**estado, "valores": valores}, perguntas)
+            )
+            respostas.append(conf)
+        etapas.append(("copia", _ms(t)))
+        return valores, conf
 
 
 # --------------------------------------------------------------- usecase
@@ -361,91 +478,125 @@ class ResponderJevUsecase(
         self, data: DadosResposta, parameters: ResponderJevParameters
     ) -> ReturnSuccessOrError[DecisaoResposta, AppError]:
         p = parameters
-        d1 = data.decisao_antes
-        sinais: list[Sinal] = list(d1.sinais)
+        plano = data.plano
+        leitura = data.leitura.leitura
         msg_transf = p.msg_transferencia.strip() or MSG_TRANSFERENCIA_GENERICA
         msg_sem_info = p.msg_sem_info.strip() or MSG_SEM_INFO_GENERICA
+        sinais: list[Sinal] = list(plano.sinais)
+        if data.conferencia is not None:
+            sinais.extend(data.conferencia.sinais)
+        analise = montar_analise(
+            data.leitura,
+            mensagem=p.mensagem,
+            entidades=p.entidades,
+            valores=data.valores,
+            conferencia=data.conferencia_valores,
+            limiares=p.limiares,
+            uso=data.uso,
+        )
+        campos = tuple(
+            (slug, _valor_json(v), c)
+            for slug, v, c in campos_conferidos(
+                data.valores,
+                data.conferencia_valores,
+                p.mensagem,
+                p.limiares.piso_entidade,
+            )
+        )
         comum: dict[str, Any] = {
+            "ato": plano.ato,
             "trechos": data.trechos,
-            "intencao_principal": d1.intencao,
-            "confianca_intencao": d1.confianca_intencao,
+            "intencao_principal": leitura.principal,
+            "confianca_intencao": leitura.confianca_principal,
             "modelo": data.uso.modelo,
+            "modelo_llm": data.modelo_llm,
             "tokens_entrada": data.uso.tokens_entrada,
             "requisicoes": data.uso.requisicoes,
             "duracao_ms": data.duracao_ms,
+            "etapas": data.etapas,
+            "escalada": data.escalada,
+            "problemas": data.problemas,
+            "campos_extraidos": campos,
+            "analise": analise,
         }
 
-        if d1.transferir:
-            regra = d1.regra
-            texto = (regra.mensagem.strip() if regra else "") or msg_transf
-            if d1.sem_info and d1.motivo.endswith("base_sem_resposta"):
-                texto = f"{msg_sem_info}\n\n{msg_transf}"
-            return self.ok(
-                DecisaoResposta(
-                    resposta_texto=texto,
-                    transferir=True,
-                    fluxo_transferencia=escolher_destino(
-                        regra, data.antes, p.fluxos, p.fluxo_padrao_id, p.limiares
-                    ),
-                    confiabilidade=0.0,
-                    motivo=d1.motivo,
-                    decisao="transferida",
-                    sinais=tuple(sinais),
-                    regra_id=regra.id if regra else 0,
-                    **comum,
-                )
-            )
-        if d1.sem_info:
-            return self.ok(
-                DecisaoResposta(
-                    resposta_texto=msg_sem_info,
-                    transferir=False,
-                    fluxo_transferencia="",
-                    confiabilidade=0.0,
-                    motivo="",
-                    decisao="sem_info",
-                    sinais=tuple(sinais),
-                    **comum,
-                )
+        def transferir(plano_t: Plano, confiabilidade: float = 0.0) -> DecisaoResposta:
+            fora = fora_do_horario(p.agora, p.politica.horario)
+            aviso = p.politica.horario.aviso if fora and p.politica.horario else ""
+            if fora:
+                sinais.append(Sinal("fora_do_horario", 1.0, 1.0))
+            return DecisaoResposta(
+                resposta_texto=texto_da_transferencia(
+                    plano_t,
+                    msg_transferencia=msg_transf,
+                    msg_sem_info=msg_sem_info,
+                    aviso_fora_do_horario=aviso,
+                ),
+                transferir=True,
+                fluxo_transferencia=escolher_destino(
+                    plano_t.regra,
+                    leitura.resposta,
+                    p.fluxos,
+                    p.fluxo_padrao_id,
+                    p.limiares,
+                ),
+                confiabilidade=confiabilidade,
+                motivo=plano_t.motivo,
+                decisao="transferida",
+                sinais=tuple(sinais),
+                regra_id=plano_t.regra.id if plano_t.regra else 0,
+                **{**comum, "ato": "transferir"},
             )
 
-        d2 = data.decisao_depois or DecisaoDepois(apoiada=1.0)
-        sinais.extend(d2.sinais)
-        campos = tuple((slug, _valor_json(v), c) for slug, v, c in data.campos)
-        if d2.transferir:
-            return self.ok(
-                DecisaoResposta(
-                    resposta_texto=msg_transf,
-                    transferir=True,
-                    fluxo_transferencia=escolher_destino(
-                        None, data.antes, p.fluxos, p.fluxo_padrao_id, p.limiares
-                    ),
-                    confiabilidade=d2.apoiada,
-                    motivo=d2.motivo,
-                    decisao="transferida",
-                    sinais=tuple(sinais),
-                    regerada=data.regerada,
-                    campos_extraidos=campos,
-                    **comum,
-                )
-            )
-        texto = msg_sem_info if d2.sem_info else data.texto
-        decisao = (
-            "sem_info"
-            if d2.sem_info
-            else ("a_revisar" if d2.a_revisar else "automatica")
-        )
-        return self.ok(
-            DecisaoResposta(
+        def simples(
+            texto: str, decisao: str, ato: str, motivo: str = ""
+        ) -> DecisaoResposta:
+            return DecisaoResposta(
                 resposta_texto=texto,
                 transferir=False,
                 fluxo_transferencia="",
-                confiabilidade=d2.apoiada,
-                motivo="",
+                confiabilidade=0.0,
+                motivo=motivo,
                 decisao=decisao,
                 sinais=tuple(sinais),
-                regerada=data.regerada,
-                campos_extraidos=campos,
+                **{**comum, "ato": ato},
+            )
+
+        match plano.ato:
+            case "barrada":
+                return self.ok(
+                    simples(msg_sem_info, "barrada", "barrada", plano.motivo)
+                )
+            case "transferir":
+                return self.ok(transferir(plano))
+            case "sem_info":
+                return self.ok(
+                    simples(msg_sem_info, "sem_info", "sem_info", plano.motivo)
+                )
+        if p.somente_decisao:
+            # Sombra: o ato é o que interessa; não houve texto nem conferência.
+            return self.ok(simples("", "automatica", plano.ato))
+
+        apoiada = data.conferencia.apoiada if data.conferencia else 1.0
+        match data.desfecho:
+            case "transferir":
+                return self.ok(
+                    transferir(replace(plano, motivo=MOTIVO_SEM_APOIO), apoiada)
+                )
+            case "sem_info":
+                return self.ok(
+                    simples(msg_sem_info, "sem_info", "sem_info", "conferencia")
+                )
+        perguntados = tuple(d.id for d in plano.perguntar)
+        return self.ok(
+            DecisaoResposta(
+                resposta_texto=data.texto,
+                transferir=False,
+                fluxo_transferencia="",
+                confiabilidade=apoiada,
+                decisao="a_revisar" if data.desfecho == "a_revisar" else "automatica",
+                sinais=tuple(sinais),
+                campos_perguntados=perguntados,
                 **comum,
             )
         )
@@ -462,5 +613,4 @@ __all__ = [
     "ResponderJevParameters",
     "ResponderJevRepository",
     "ResponderJevUsecase",
-    "perguntas_antes",
 ]

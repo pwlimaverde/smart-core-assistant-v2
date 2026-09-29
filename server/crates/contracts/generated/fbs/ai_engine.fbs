@@ -28,6 +28,9 @@ table IntentDef {
   descricao:string;
   exemplo:string;
   comportamento:string;
+  campos_coleta:[string];
+  max_perguntas:int;
+  apos_coleta:string;
 }
 
 table EntidadeDef {
@@ -53,6 +56,11 @@ table TrechoAvaliado {
   id:string;
   aprovado:bool;
   conflito:bool;
+}
+
+table DuracaoEtapa {
+  etapa:string;
+  ms:long;
 }
 
 table UsoDoMotor {
@@ -129,6 +137,8 @@ table AnalyseResponse {
   motor:string;
   modelo:string;
   uso:smartcore.contracts.ai.UsoDoMotor;
+  sentimento_nota:int;
+  sentimento_label:string;
 }
 
 table ExtrairTextoDocumentoRequest {
@@ -180,6 +190,8 @@ table ResponderRequest {
   intents:[smartcore.contracts.ai.IntentDef];
   trechos:[smartcore.contracts.ai.Trecho];
   comportamento:string;
+  somente_decisao:bool;
+  rodadas_coleta:int;
 }
 
 table CampoExtraido {
@@ -204,7 +216,13 @@ table ResponderResponse {
   confianca_intencao:double;
   decisao:string;
   regra_id:long;
-  regerada:bool;
+  ato:string;
+  campos_perguntados:[string];
+  escalada:bool;
+  problemas:[string];
+  modelo_llm:string;
+  etapas:[smartcore.contracts.ai.DuracaoEtapa];
+  analise:smartcore.contracts.ai.AnalyseResponse;
 }
 
 table SentimentoRequest {

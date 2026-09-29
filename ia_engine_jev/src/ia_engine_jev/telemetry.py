@@ -308,3 +308,83 @@ def contar_transferencia(motivo: str) -> None:
             description="Transferências para atendente decididas, por tipo de motivo",
         )
     _transferencias.add(1, {"motivo": motivo_da_metrica(motivo)})
+
+
+# ------------------------------------------------------ decisões do motor Jev
+_decisoes: Any = None
+
+
+def _instrumentos_da_decisao() -> Any:
+    global _decisoes
+    if _decisoes is None:
+        medidor = metrics.get_meter(_SERVICE_NAME)
+
+        class _Instrumentos:
+            ato = medidor.create_counter(
+                "smartcore_jev_ato_total",
+                description="Respostas do motor Jev por ato decidido e desfecho",
+            )
+            etapa = medidor.create_histogram(
+                "smartcore_jev_etapa_ms",
+                unit="ms",
+                description="Duração de cada etapa do Responder do motor Jev",
+            )
+            escalada = medidor.create_counter(
+                "smartcore_ia_escalada_total",
+                description="Redações reprovadas pela conferência e refeitas "
+                "no modelo de escalada, por problema",
+            )
+            requisicoes = medidor.create_histogram(
+                "smartcore_jev_requisicoes_por_resposta",
+                description="Requisições ao Jev por resposta (vazão da conta)",
+            )
+
+        _decisoes = _Instrumentos()
+    return _decisoes
+
+
+def registrar_decisao_jev(decisao: Any, *, tenant_id: str, sombra: bool) -> None:
+    """Métricas e log de uma decisão do `Responder` pelo Jev.
+
+    Tudo com cardinalidade fechada (ato, decisão, etapa, problema) e nada de
+    texto: nem da mensagem, nem da resposta, nem nome de regra — o tenant fica
+    no log e no span, não em label. É o registro que os testes com a chave vão
+    ler para achar onde o tempo e as decisões foram.
+    """
+    inst = _instrumentos_da_decisao()
+    modo = "sombra" if sombra else "valendo"
+    inst.ato.add(1, {"ato": decisao.ato, "decisao": decisao.decisao, "modo": modo})
+    for etapa, ms in decisao.etapas:
+        inst.etapa.record(ms, {"etapa": etapa, "modo": modo})
+    inst.requisicoes.record(decisao.requisicoes, {"modo": modo})
+    if decisao.escalada:
+        for problema in decisao.problemas or ("desconhecido",):
+            inst.escalada.add(1, {"problema": problema})
+    if decisao.transferir:
+        contar_transferencia(decisao.motivo)
+    span = trace.get_current_span()
+    span.set_attribute("jev.ato", decisao.ato)
+    span.set_attribute("jev.decisao", decisao.decisao)
+    span.set_attribute("jev.escalada", decisao.escalada)
+    span.set_attribute("jev.requisicoes", decisao.requisicoes)
+    logger.info(
+        "jev.decisao",
+        tenant_id=tenant_id,
+        modo=modo,
+        ato=decisao.ato,
+        decisao=decisao.decisao,
+        motivo=motivo_da_metrica(decisao.motivo) if decisao.motivo else "",
+        intencao=decisao.intencao_principal,
+        confianca_intencao=round(decisao.confianca_intencao, 3),
+        trechos=len(decisao.trechos),
+        trechos_aprovados=sum(1 for t in decisao.trechos if t.aprovado),
+        perguntou=list(decisao.campos_perguntados),
+        escalada=decisao.escalada,
+        problemas=list(decisao.problemas),
+        requisicoes=decisao.requisicoes,
+        tokens_entrada=decisao.tokens_entrada,
+        modelo=decisao.modelo,
+        modelo_llm=decisao.modelo_llm,
+        duracao_ms=decisao.duracao_ms,
+        etapas={etapa: ms for etapa, ms in decisao.etapas},
+    )

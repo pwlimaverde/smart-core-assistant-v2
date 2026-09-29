@@ -12,6 +12,7 @@ from ia_engine_jev.typesafe.cliente import (
     JevPerguntaInvalida,
     TypeSafeJev,
 )
+from ia_engine_jev.typesafe.limitador import Descartada, Limitador
 from ia_engine_jev.typesafe.tipos import (
     Escolha,
     Nivel,
@@ -26,6 +27,7 @@ from ia_engine_jev.typesafe.tipos import (
 __all__ = [
     "MODELO_PADRAO",
     "ClienteJev",
+    "Descartada",
     "Escolha",
     "FabricaJev",
     "JevChaveInvalida",
@@ -34,6 +36,7 @@ __all__ = [
     "JevLimite",
     "JevNaoConfigurado",
     "JevPerguntaInvalida",
+    "Limitador",
     "Nivel",
     "Pergunta",
     "PerguntaChoice",

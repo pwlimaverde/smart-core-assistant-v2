@@ -30,6 +30,11 @@ Future<void> _abrirFormulario({
   final descricao = TextEditingController(text: item?.descricao);
   final exemplo = TextEditingController(text: item?.exemplo);
   final comportamento = TextEditingController(text: item?.comportamento);
+  final coleta = TextEditingController(
+    text: (item?.camposColeta ?? const <String>[]).join(', '),
+  );
+  var maxPerguntas = item?.maxPerguntas ?? 2;
+  var aposColeta = item?.aposColeta ?? 'transferir';
   String? erro;
   var salvando = false;
   final editando = item != null;
@@ -37,7 +42,7 @@ Future<void> _abrirFormulario({
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => DialogoComCampos(
-      campos: [tag, grupo, descricao, exemplo, comportamento],
+      campos: [tag, grupo, descricao, exemplo, comportamento, coleta],
       builder: (dialogContext) => StatefulBuilder(
         builder: (stateCtx, setStateDialog) => AlertDialog(
           title: Text(editando ? 'Editar intenção' : 'Nova intenção'),
@@ -91,6 +96,71 @@ Future<void> _abrirFormulario({
                       alignLabelWithHint: true,
                       border: OutlineInputBorder(),
                       helperText: 'ex: encerre a conversa e transfira ao setor',
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'Coleta (motor Jev)',
+                    style: Theme.of(stateCtx).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  AppTextField(
+                    label: 'Dados que o bot pede (separados por vírgula)',
+                    hint: 'ex: tipo_produto, quantidade_tiragem, dimensoes',
+                    controller: coleta,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          initialValue: maxPerguntas,
+                          decoration: const InputDecoration(
+                            labelText: 'Perguntas por mensagem',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (var n = 1; n <= 5; n++)
+                              DropdownMenuItem(value: n, child: Text('$n')),
+                          ],
+                          onChanged: (v) =>
+                              setStateDialog(() => maxPerguntas = v ?? 2),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: aposColeta,
+                          decoration: const InputDecoration(
+                            labelText: 'Depois da coleta',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'transferir',
+                              child: Text('Transferir'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'continuar',
+                              child: Text('Continuar atendendo'),
+                            ),
+                          ],
+                          onChanged: (v) => setStateDialog(
+                            () => aposColeta = v ?? 'transferir',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  // A regra de "uma rodada só" é do servidor: não precisa
+                  // mais estar escrita no comportamento.
+                  Text(
+                    'O bot pede só o que falta, uma única vez por atendimento. '
+                    'Use os tipos de entidade da configuração ou os campos do '
+                    'cartão. Vazio: esta intenção não coleta nada.',
+                    style: Theme.of(stateCtx).textTheme.bodySmall?.copyWith(
+                      color: stateCtx.colors.fgMuted,
                     ),
                   ),
                   if (editando) ...[
@@ -160,6 +230,9 @@ Future<void> _abrirFormulario({
                         descricao: descricao.text.trim(),
                         exemplo: exemplo.text.trim(),
                         comportamento: comportamento.text.trim(),
+                        camposColeta: camposDaColeta(coleta.text),
+                        maxPerguntas: maxPerguntas,
+                        aposColeta: aposColeta,
                       );
                       final res = editando
                           ? await controller.atualizar(
@@ -185,6 +258,17 @@ Future<void> _abrirFormulario({
       ),
     ),
   );
+}
+
+/// Os dados da coleta digitados: separados por vírgula ou quebra de linha,
+/// aparados, sem repetição.
+List<String> camposDaColeta(String texto) {
+  final vistos = <String>[];
+  for (final parte in texto.split(RegExp(r'[,\n]'))) {
+    final c = parte.trim();
+    if (c.isNotEmpty && !vistos.contains(c)) vistos.add(c);
+  }
+  return vistos;
 }
 
 Future<void> abrirRemocaoIntent(

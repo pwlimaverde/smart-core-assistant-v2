@@ -2,6 +2,8 @@
 
 A doc do jev-1.13 avisa que `state` grande com lixo derruba a acurácia. Por
 isso vão as últimas falas, não a conversa inteira, e a empresa em uma linha.
+Seis falas: a coleta pergunta "o cliente já disse X?" e a resposta pode estar
+duas ou três trocas atrás.
 A mensagem do cliente é dado, nunca instrução: vai sempre como campo do
 `state`, referenciado por caminho entre crases nas instruções.
 """
@@ -13,7 +15,7 @@ from typing import Any
 
 from ia_engine_jev.shared.history import ChatTurnTuple
 
-FALAS_NO_HISTORICO = 4
+FALAS_NO_HISTORICO = 6
 LIMITE_EMPRESA = 300
 
 
@@ -26,7 +28,7 @@ def historico_curto(
         quem = "atendente" if (role or "").strip().lower() == "ai" else "cliente"
         texto = (conteudo or "").strip()
         if texto:
-            linhas.append(f"{quem}: {texto[:500]}")
+            linhas.append(f"{quem}: {texto[:400]}")
     return linhas
 
 

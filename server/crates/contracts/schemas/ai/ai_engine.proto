@@ -54,6 +54,13 @@ message IntentDef {
   string descricao = 3;
   string exemplo = 4;
   string comportamento = 5;
+  // Coleta estruturada: os dados essenciais que o bot pede quando esta
+  // intenção é a escolhida (tipos de entidade ou slugs de campo do cartão),
+  // quantos no máximo por mensagem, e o que fazer quando a rodada acaba:
+  // `transferir` (padrão) ou `continuar` (o bot segue atendendo).
+  repeated string campos_coleta = 6;
+  int32 max_perguntas = 7;
+  string apos_coleta = 8;
 }
 
 // Tipo de entidade com a estratégia de busca de valor (regex | lista | varios
@@ -86,6 +93,13 @@ message TrechoAvaliado {
   string id = 1;
   bool aprovado = 2;
   bool conflito = 3;
+}
+
+// Duração de uma etapa do motor Jev (leitura, trechos, redacao,
+// conferencia, escalada...), para achar onde o tempo foi.
+message DuracaoEtapa {
+  string etapa = 1;
+  int64 ms = 2;
 }
 
 // Custo e duração da decisão, para o registro das decisões da IA.
@@ -170,6 +184,10 @@ message AnalyseResponse {
   string motor = 6;
   string modelo = 7;
   UsoDoMotor uso = 8;
+  // Motor Jev: o tom da mensagem (a leitura única mede junto) — nota 1..5 e
+  // rótulo (negativo | neutro | positivo). Zero/vazio quando não medido.
+  int32 sentimento_nota = 9;
+  string sentimento_label = 10;
 }
 
 // --- ExtrairTextoDocumento (B9 / N10 E5) ---
@@ -232,6 +250,11 @@ message ResponderRequest {
   repeated IntentDef intents = 13;
   repeated Trecho trechos = 14;
   string comportamento = 15;
+  // Sombra: só a decisão (leitura, trechos e ato), sem LLM e sem conferência.
+  bool somente_decisao = 16;
+  // Quantas rodadas de coleta o bot já fez neste atendimento: a regra "uma
+  // rodada só" é contada aqui, não pela LLM lendo o histórico.
+  int32 rodadas_coleta = 17;
 }
 // C1 — o que a IA extraiu da mensagem do cliente.
 //
@@ -265,10 +288,26 @@ message ResponderResponse {
   repeated TrechoAvaliado trechos = 11;
   string intencao_principal = 12;
   double confianca_intencao = 13;
-  // automatica | transferida | sem_info | a_revisar | reserva
+  // automatica | transferida | sem_info | a_revisar | barrada | reserva
   string decisao = 14;
   int64 regra_id = 15;
-  bool regerada = 16;
+  // 16 era `regerada`: virou `escalada` (a cascata troca de modelo).
+  reserved 16;
+  // O ato que o código decidiu: transferir | responder | coletar | social |
+  // sem_info | barrada.
+  string ato = 17;
+  // Campos que a resposta pediu ao cliente (conta uma rodada de coleta).
+  repeated string campos_perguntados = 18;
+  // A conferência reprovou a primeira redação e ela foi refeita no modelo de
+  // escalada; `problemas` diz o que a conferência apontou.
+  bool escalada = 19;
+  repeated string problemas = 20;
+  // Modelo da LLM que redigiu o texto (vazio quando não houve LLM).
+  string modelo_llm = 21;
+  repeated DuracaoEtapa etapas = 22;
+  // A análise da mesma leitura (intenções, entidades, tom): o worker a grava
+  // na mensagem sem chamar o `Analyse` de novo.
+  AnalyseResponse analise = 23;
 }
 
 // --- Sentimento (equivalente a analise_avaliacao) ---

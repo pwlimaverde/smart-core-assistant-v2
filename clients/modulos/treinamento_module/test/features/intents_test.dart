@@ -12,6 +12,7 @@ import 'package:treinamento_module/src/features/intents/domain/parameters/intent
 import 'package:treinamento_module/src/features/intents/domain/usecases/intents_usecases.dart';
 import 'package:treinamento_module/src/features/intents/presentation/controllers/intents_controllers.dart';
 import 'package:treinamento_module/src/features/intents/presentation/widgets/aba_intents.dart';
+import 'package:treinamento_module/src/features/intents/presentation/widgets/dialogo_intent.dart';
 
 class _MockAdminClient extends Mock implements proto.AdminServiceClient {}
 
@@ -394,5 +395,59 @@ void main() {
     )(noParams);
 
     expect((res as Failure).error, isA<IntentsAcessoNegado>());
+  });
+
+  test('coleta digitada vira lista aparada e sem repetição', () {
+    expect(camposDaColeta(' tipo_produto, quantidade\nquantidade ,, arte '), [
+      'tipo_produto',
+      'quantidade',
+      'arte',
+    ]);
+    expect(camposDaColeta(''), isEmpty);
+  });
+
+  test('a coleta vai e volta pelo contrato', () async {
+    when(() => client.listMyIntents(any())).thenAnswer(
+      (_) => respostaGrpc(
+        proto.ListMyIntentsResponse(
+          intents: [
+            proto.MyIntent(
+              id: 1,
+              tag: 'panfletos',
+              camposColeta: ['formato', 'quantidade'],
+              maxPerguntas: 0,
+              aposColeta: 'continuar',
+            ),
+          ],
+        ),
+      ),
+    );
+    final lista = await ListarIntentsDatasource(client: client)(noParams);
+    expect(lista.single.camposColeta, ['formato', 'quantidade']);
+    expect(lista.single.maxPerguntas, 2);
+    expect(lista.single.aposColeta, 'continuar');
+
+    when(
+      () => client.createMyIntent(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.MyIntentResponse()));
+    await CriarIntentDatasource(client: client)(
+      const CriarIntentParameters(
+        dados: DadosIntent(
+          tag: 't',
+          grupo: '',
+          descricao: 'd',
+          exemplo: 'e',
+          comportamento: 'c',
+          camposColeta: ['arte'],
+          maxPerguntas: 1,
+        ),
+      ),
+    );
+    final enviado =
+        verify(() => client.createMyIntent(captureAny())).captured.single
+            as proto.MyIntentDados;
+    expect(enviado.camposColeta, ['arte']);
+    expect(enviado.maxPerguntas, 1);
+    expect(enviado.aposColeta, 'transferir');
   });
 }

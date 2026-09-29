@@ -267,6 +267,34 @@ impl TransferenciaStore for PgTransferenciaStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn rodadas_coleta(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<i32, DbError> {
+        let tenant = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant, move |mut tx| async move {
+            let n = tr::rodadas_coleta(&mut tx, tenant, atendimento_id).await?;
+            Ok((n, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn registrar_rodada_coleta(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<i32>, DbError> {
+        let tenant = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant, move |mut tx| async move {
+            let n = tr::registrar_rodada_coleta(&mut tx, tenant, atendimento_id).await?;
+            Ok((n, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
     async fn marcar_motor_da_mensagem(
         &self,

@@ -32,6 +32,24 @@ class SinalDoEnsaio {
   });
 
   bool get passou => valor >= limiar;
+
+  /// Sinais que são contagem, não probabilidade: mostrar "200%" confundiria.
+  bool get contagem => const {
+    'coleta_faltando',
+    'coleta_rodadas',
+    'perguntas',
+    'trechos_aprovados',
+    'fora_do_horario',
+  }.contains(nome);
+}
+
+/// Quanto tempo uma etapa do motor Jev levou no ensaio.
+@immutable
+class EtapaDoEnsaio {
+  final String etapa;
+  final int ms;
+
+  const EtapaDoEnsaio({required this.etapa, required this.ms});
 }
 
 /// O que a IA responderia a uma pergunta, e com base em quê.
@@ -56,8 +74,18 @@ class Ensaio {
   final String intencaoPrincipal;
   final double confiancaIntencao;
 
-  /// automatica | transferida | sem_info | a_revisar | reserva
+  /// automatica | transferida | sem_info | a_revisar | barrada | reserva
   final String decisao;
+
+  /// Motor Jev: o ato decidido em código (transferir | responder | coletar |
+  /// social | sem_info | barrada), os dados que a resposta pediu, se a
+  /// redação subiu para o modelo maior e por quê, e o tempo por etapa.
+  final String ato;
+  final List<String> camposPerguntados;
+  final bool escalada;
+  final List<String> problemas;
+  final String modeloLlm;
+  final List<EtapaDoEnsaio> etapas;
 
   const Ensaio({
     required this.resposta,
@@ -73,7 +101,16 @@ class Ensaio {
     this.intencaoPrincipal = '',
     this.confiancaIntencao = 0,
     this.decisao = '',
+    this.ato = '',
+    this.camposPerguntados = const [],
+    this.escalada = false,
+    this.problemas = const [],
+    this.modeloLlm = '',
+    this.etapas = const [],
   });
+
+  /// Soma do tempo das etapas, em milissegundos.
+  int get tempoTotalMs => etapas.fold(0, (soma, e) => soma + e.ms);
 
   bool get peloJev => motor == 'jev';
 

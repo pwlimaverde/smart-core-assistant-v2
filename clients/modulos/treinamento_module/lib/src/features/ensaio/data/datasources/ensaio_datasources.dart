@@ -38,6 +38,14 @@ final class TestarPerguntaDatasource
       intencaoPrincipal: resp.intencaoPrincipal,
       confiancaIntencao: resp.confiancaIntencao,
       decisao: resp.decisao,
+      ato: resp.ato,
+      camposPerguntados: List.unmodifiable(resp.camposPerguntados),
+      escalada: resp.escalada,
+      problemas: List.unmodifiable(resp.problemas),
+      modeloLlm: resp.modeloLlm,
+      etapas: resp.etapas
+          .map((e) => EtapaDoEnsaio(etapa: e.etapa, ms: e.ms.toInt()))
+          .toList(),
     );
   }
 }

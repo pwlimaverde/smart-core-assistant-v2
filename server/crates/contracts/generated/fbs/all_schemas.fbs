@@ -1742,6 +1742,9 @@ table MyIntent {
   vetorizada:bool;
   criado_em:long;
   atualizado_em:long;
+  campos_coleta:[string];
+  max_perguntas:int;
+  apos_coleta:string;
 }
 
 table ListMyIntentsRequest {
@@ -1757,6 +1760,9 @@ table MyIntentDados {
   descricao:string;
   exemplo:string;
   comportamento:string;
+  campos_coleta:[string];
+  max_perguntas:int;
+  apos_coleta:string;
 }
 
 table MyIntentResponse {
@@ -1796,6 +1802,17 @@ table TestarPerguntaResponse {
   confianca_intencao:double;
   decisao:string;
   trechos_aprovados:[string];
+  ato:string;
+  campos_perguntados:[string];
+  escalada:bool;
+  problemas:[string];
+  modelo_llm:string;
+  etapas:[EtapaDoMotor];
+}
+
+table EtapaDoMotor {
+  etapa:string;
+  ms:long;
 }
 
 table RegraTransferencia {
@@ -2047,6 +2064,9 @@ table IntentDef {
   descricao:string;
   exemplo:string;
   comportamento:string;
+  campos_coleta:[string];
+  max_perguntas:int;
+  apos_coleta:string;
 }
 
 table EntidadeDef {
@@ -2072,6 +2092,11 @@ table TrechoAvaliado {
   id:string;
   aprovado:bool;
   conflito:bool;
+}
+
+table DuracaoEtapa {
+  etapa:string;
+  ms:long;
 }
 
 table UsoDoMotor {
@@ -2148,6 +2173,8 @@ table AnalyseResponse {
   motor:string;
   modelo:string;
   uso:UsoDoMotor;
+  sentimento_nota:int;
+  sentimento_label:string;
 }
 
 table ExtrairTextoDocumentoRequest {
@@ -2199,6 +2226,8 @@ table ResponderRequest {
   intents:[IntentDef];
   trechos:[Trecho];
   comportamento:string;
+  somente_decisao:bool;
+  rodadas_coleta:int;
 }
 
 table CampoExtraido {
@@ -2223,7 +2252,13 @@ table ResponderResponse {
   confianca_intencao:double;
   decisao:string;
   regra_id:long;
-  regerada:bool;
+  ato:string;
+  campos_perguntados:[string];
+  escalada:bool;
+  problemas:[string];
+  modelo_llm:string;
+  etapas:[DuracaoEtapa];
+  analise:AnalyseResponse;
 }
 
 table SentimentoRequest {

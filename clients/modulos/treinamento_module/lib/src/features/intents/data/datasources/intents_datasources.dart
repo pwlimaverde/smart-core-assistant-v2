@@ -12,6 +12,9 @@ IntentIa _intent(proto.MyIntent i) => IntentIa(
   exemplo: i.exemplo,
   comportamento: i.comportamento,
   vetorizada: i.vetorizada,
+  camposColeta: List.unmodifiable(i.camposColeta),
+  maxPerguntas: i.maxPerguntas > 0 ? i.maxPerguntas : 2,
+  aposColeta: i.aposColeta == 'continuar' ? 'continuar' : 'transferir',
 );
 
 proto.MyIntentDados _dados(DadosIntent d) => proto.MyIntentDados(
@@ -20,6 +23,9 @@ proto.MyIntentDados _dados(DadosIntent d) => proto.MyIntentDados(
   descricao: d.descricao,
   exemplo: d.exemplo,
   comportamento: d.comportamento,
+  camposColeta: d.camposColeta,
+  maxPerguntas: d.maxPerguntas,
+  aposColeta: d.aposColeta,
 );
 
 final class ListarIntentsDatasource

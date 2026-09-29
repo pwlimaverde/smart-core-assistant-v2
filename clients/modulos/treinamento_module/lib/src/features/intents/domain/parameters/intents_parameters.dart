@@ -1,6 +1,6 @@
 import 'package:return_success_or_error/return_success_or_error.dart';
 
-/// Os cinco campos de escrita de uma intenção, nomeados.
+/// Os campos de escrita de uma intenção, nomeados.
 ///
 /// Um struct e não cinco strings soltas: `descricao` e `exemplo` são ambos
 /// texto livre e trocá-los de lugar não daria erro de compilação nenhum.
@@ -11,12 +11,20 @@ final class DadosIntent {
   final String exemplo;
   final String comportamento;
 
+  /// Coleta do motor Jev (ver `IntentIa.camposColeta`).
+  final List<String> camposColeta;
+  final int maxPerguntas;
+  final String aposColeta;
+
   const DadosIntent({
     required this.tag,
     required this.grupo,
     required this.descricao,
     required this.exemplo,
     required this.comportamento,
+    this.camposColeta = const [],
+    this.maxPerguntas = 2,
+    this.aposColeta = 'transferir',
   });
 }
 

@@ -1,8 +1,10 @@
-"""Perguntas antes de gerar a resposta: transferência, setor, irritação.
+"""Perguntas de transferência: pedido de humano, regras do tenant, setor,
+pedido de informação e presença dos campos do cartão.
 
-Uma requisição só, com todas as perguntas em paralelo e isoladas. As regras do
-tenant são lidas **ao pé da letra**: cada condição vira um `Noul` com os
-exemplos que transferem e os que não transferem como critérios.
+Entram na leitura única (`perguntas/leitura.py`). As regras do tenant são
+lidas **ao pé da letra**: cada condição vira um `Noul` com os exemplos que
+transferem e os que não transferem como critérios. A irritação sai do `tom`
+(`perguntas/conversa.py`), medido uma vez para o sentimento e para a decisão.
 """
 
 from __future__ import annotations
@@ -12,11 +14,10 @@ from typing import Any
 
 from ia_engine_jev.config.models import RegraTransferencia
 from ia_engine_jev.domain.jev import Fluxo
-from ia_engine_jev.typesafe.tipos import PerguntaChoice, PerguntaNoul, PerguntaScore
+from ia_engine_jev.typesafe.tipos import PerguntaChoice, PerguntaNoul
 
 PEDE_HUMANO = "pede_humano"
 SETOR = "setor"
-INSATISFACAO = "insatisfacao"
 PEDE_INFORMACAO = "pede_informacao"
 NENHUM_SETOR = "nenhum"
 
@@ -74,17 +75,6 @@ def pergunta_setor(fluxos: Sequence[Fluxo]) -> PerguntaChoice:
             "Which department should handle what the customer asks in `mensagem`?"
         ),
         criterios=criterios,
-    )
-
-
-def pergunta_insatisfacao() -> PerguntaScore:
-    return PerguntaScore(
-        instrucoes="How upset is the customer in `mensagem`, given `historico`?",
-        niveis=(
-            "Calm or neutral: no complaint.",
-            "Annoyed: mild complaint or impatience, still cooperative.",
-            "Angry: strong complaint, threat to leave, insults or repeated anger.",
-        ),
     )
 
 

@@ -301,6 +301,18 @@ fn intents_do_catalogo(resposta: &serde_json::Value) -> Vec<ia_engine::client::I
                     descricao: texto(i, "descricao"),
                     exemplo: texto(i, "exemplo"),
                     comportamento: texto(i, "comportamento"),
+                    campos_coleta: i
+                        .get("campos_coleta")
+                        .and_then(|v| v.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|c| c.as_str().map(str::to_string))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    max_perguntas: i.get("max_perguntas").and_then(|v| v.as_i64()).unwrap_or(0)
+                        as i32,
+                    apos_coleta: texto(i, "apos_coleta"),
                 })
                 .filter(|i| !i.tag.is_empty())
                 .collect()
@@ -366,7 +378,40 @@ fn registro_da_resposta(
         "tokens_entrada": r.uso.tokens_entrada,
         "requisicoes": r.uso.requisicoes,
         "duracao_ms": r.uso.duracao_ms,
+        "ato": r.ato,
+        "escalada": r.escalada,
+        "problemas": r.problemas,
+        "modelo_llm": r.modelo_llm,
+        "etapas": etapas_json(&r.etapas),
+        "campos_perguntados": r.campos_perguntados,
     })
+}
+
+/// As etapas do motor Jev como objeto `etapa → ms` (a mesma etapa repetida
+/// soma: duas conferências, por exemplo).
+fn etapas_json(etapas: &[ia_engine::client::EtapaOutput]) -> serde_json::Value {
+    let mut mapa = serde_json::Map::new();
+    for e in etapas {
+        let atual = mapa.get(&e.etapa).and_then(|v| v.as_i64()).unwrap_or(0);
+        mapa.insert(e.etapa.clone(), serde_json::json!(atual + e.ms));
+    }
+    serde_json::Value::Object(mapa)
+}
+
+/// O texto que vira vetor na busca da base. Mensagem curta ("e em lona?",
+/// "500") não tem assunto sozinha: vai junto a última fala do atendente,
+/// que é a pergunta que ela responde.
+fn texto_para_busca(mensagem: &str, historico: &[ia_engine::ChatTurnInput]) -> String {
+    if mensagem.split_whitespace().count() > 4 {
+        return mensagem.to_string();
+    }
+    match historico.iter().rev().find(|t| t.role == "ai") {
+        Some(t) => {
+            let contexto: String = t.conteudo.chars().take(300).collect();
+            format!("{contexto}\n{mensagem}")
+        }
+        None => mensagem.to_string(),
+    }
 }
 
 /// A decisão de uma análise, no formato de `oraculo_decisao_ia`.
@@ -671,10 +716,11 @@ struct RespostaIa {
     motor: String,
     modelo: String,
     /// Como o motor Jev decidiu (automatica | transferida | sem_info |
-    /// a_revisar | reserva); vazio no motor atual.
+    /// a_revisar | barrada | reserva); vazio no motor atual.
     decisao_motor: String,
-    /// A LLM prometeu transferir sem regra e a resposta foi gerada de novo.
-    regerada: bool,
+    /// Motor Jev: o ato decidido e se a redação subiu para o modelo maior.
+    ato: String,
+    escalada: bool,
 }
 
 /// B4 (D1, passo 2) — como a resposta do bot foi decidida.
@@ -740,13 +786,18 @@ mod tests_decisao {
         transferida = tracing::field::Empty,
         motivo = tracing::field::Empty,
         llm_chamada = tracing::field::Empty,
-        regerada = tracing::field::Empty,
+        ato = tracing::field::Empty,
+        escalada = tracing::field::Empty,
+        requisicoes = tracing::field::Empty,
+        trechos_count = tracing::field::Empty,
+        rodadas_coleta = tracing::field::Empty,
     )
 )]
 async fn responder_via_ia(
     state: &AppState,
     tenant_uuid: Uuid,
     atendimento_id: i32,
+    mensagem_id: Option<i32>,
     mensagem_texto: &str,
     causation_id: &str,
     traceparent: &str,
@@ -774,76 +825,15 @@ async fn responder_via_ia(
         .and_then(|v| v.as_f64())
         .unwrap_or(0.3);
 
-    // 2. Embedding da mensagem (necessário para o RAG).
-    let embed_out = state
-        .ia_client
-        .embed(
-            ia_engine::EmbedInput {
-                tenant_id: tenant_id_str.clone(),
-                textos: vec![mensagem_texto.to_string()],
-            },
-            traceparent,
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("ia_engine.Embed falhou: {e}"))?;
-    let query_embedding = embed_out.embeddings.into_iter().next().unwrap_or_default();
+    // Motor do tenant antes da busca: o Jev julga cada trecho, então recebe
+    // mais candidatos (10) e reordena; a LLM do motor atual segue com 3.
+    let motores = motores_do_tenant(state, tenant_uuid).await;
+    let usa_jev = motores.motor != config_tenant::Motor::Llm;
+    let chunk_top_k: usize = if usa_jev { 10 } else { 3 };
 
-    // 3. RAG via data_postgres.QueryCompose — best-effort: uma falha aqui não
-    // aborta a resposta, só segue sem contexto de treinamento.
-    let mut dados_treinamento = String::new();
-    // Plano ia-engine-jev: o motor Jev julga cada trecho sozinho, então eles
-    // viajam também separados (com id), e o comportamento à parte.
-    let mut trechos: Vec<ia_engine::client::TrechoInput> = Vec::new();
-    let mut comportamento = String::new();
-    if !query_embedding.is_empty() {
-        let qc_payload = serde_json::json!({
-            "query_embedding": query_embedding,
-            "distance_threshold": vector_distance_threshold,
-            "chunk_top_k": 3,
-        });
-        match chamar_rpc(
-            &state.pg_client,
-            &tenant_id_str,
-            "QueryCompose",
-            qc_payload,
-            causation_id,
-            traceparent,
-        )
-        .await
-        {
-            Ok(resp) => {
-                let mut partes: Vec<String> = Vec::new();
-                if let Some(c) = resp.get("comportamento").and_then(|v| v.as_str()) {
-                    partes.push(c.to_string());
-                    comportamento = c.to_string();
-                }
-                if let Some(docs) = resp.get("documentos").and_then(|v| v.as_array()) {
-                    for d in docs {
-                        if let Some(c) = d.get("conteudo").and_then(|v| v.as_str()) {
-                            partes.push(c.to_string());
-                            trechos.push(ia_engine::client::TrechoInput {
-                                id: d
-                                    .get("id")
-                                    .and_then(|v| v.as_i64())
-                                    .unwrap_or(0)
-                                    .to_string(),
-                                conteudo: c.to_string(),
-                                distancia: d
-                                    .get("distancia")
-                                    .and_then(|v| v.as_f64())
-                                    .unwrap_or(0.0),
-                            });
-                        }
-                    }
-                }
-                dados_treinamento = partes.join("\n\n");
-            }
-            Err(e) => tracing::warn!("QueryCompose falhou (seguindo sem RAG): {:?}", e),
-        }
-    }
-
-    // 4. Histórico recente — best-effort (uma falha só significa responder sem
-    // histórico, não aborta a resposta).
+    // 2. Histórico recente — best-effort (uma falha só significa responder sem
+    // histórico, não aborta a resposta). Vem antes do embedding: mensagem
+    // curta é buscada junto com a última fala do atendente.
     let mut historico = Vec::new();
     if let Ok(thread_resp) = chamar_rpc(
         &state.pg_client,
@@ -874,6 +864,97 @@ async fn responder_via_ia(
             }
         }
     }
+
+    // 3. Embedding do texto de busca (necessário para o RAG).
+    let embed_out = state
+        .ia_client
+        .embed(
+            ia_engine::EmbedInput {
+                tenant_id: tenant_id_str.clone(),
+                textos: vec![texto_para_busca(mensagem_texto, &historico)],
+            },
+            traceparent,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("ia_engine.Embed falhou: {e}"))?;
+    let query_embedding = embed_out.embeddings.into_iter().next().unwrap_or_default();
+
+    // 4. RAG via data_postgres.QueryCompose — best-effort: uma falha aqui não
+    // aborta a resposta, só segue sem contexto de treinamento.
+    let mut dados_treinamento = String::new();
+    // Plano ia-engine-jev: o motor Jev julga cada trecho sozinho, então eles
+    // viajam também separados (com id), e o comportamento à parte. O texto
+    // colado da LLM do motor atual continua com os 3 mais próximos, mesmo
+    // na sombra (que recebe os 10 separados).
+    let mut trechos: Vec<ia_engine::client::TrechoInput> = Vec::new();
+    let mut comportamento = String::new();
+    if !query_embedding.is_empty() {
+        let qc_payload = serde_json::json!({
+            "query_embedding": query_embedding,
+            "distance_threshold": vector_distance_threshold,
+            "chunk_top_k": chunk_top_k,
+        });
+        match chamar_rpc(
+            &state.pg_client,
+            &tenant_id_str,
+            "QueryCompose",
+            qc_payload,
+            causation_id,
+            traceparent,
+        )
+        .await
+        {
+            Ok(resp) => {
+                let mut partes: Vec<String> = Vec::new();
+                if let Some(c) = resp.get("comportamento").and_then(|v| v.as_str()) {
+                    partes.push(c.to_string());
+                    comportamento = c.to_string();
+                }
+                if let Some(docs) = resp.get("documentos").and_then(|v| v.as_array()) {
+                    for d in docs {
+                        if let Some(c) = d.get("conteudo").and_then(|v| v.as_str()) {
+                            if trechos.len() < 3 {
+                                partes.push(c.to_string());
+                            }
+                            trechos.push(ia_engine::client::TrechoInput {
+                                id: d
+                                    .get("id")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or(0)
+                                    .to_string(),
+                                conteudo: c.to_string(),
+                                distancia: d
+                                    .get("distancia")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                            });
+                        }
+                    }
+                }
+                dados_treinamento = partes.join("\n\n");
+            }
+            Err(e) => tracing::warn!("QueryCompose falhou (seguindo sem RAG): {:?}", e),
+        }
+    }
+
+    // 4a. Rodadas de coleta já feitas no atendimento (motor Jev): a regra
+    // "uma rodada só" é contada aqui. Best-effort: falha = 0.
+    let rodadas_coleta = if usa_jev {
+        chamar_rpc(
+            &state.pg_client,
+            &tenant_id_str,
+            "ObterRodadasColeta",
+            serde_json::json!({ "atendimento_id": atendimento_id }),
+            causation_id,
+            traceparent,
+        )
+        .await
+        .ok()
+        .and_then(|v| v.get("rodadas").and_then(|r| r.as_i64()))
+        .unwrap_or(0) as i32
+    } else {
+        0
+    };
 
     // 4b. Fluxos disponíveis do tenant (N6.3): dá ao Responder o catálogo para
     // decidir transferência. Best-effort/cacheado; lista vazia = sem transferência.
@@ -943,11 +1024,12 @@ async fn responder_via_ia(
     let span = tracing::Span::current();
     span.record("fluxos_count", fluxos.len());
     span.record("campos_pendentes_count", campos_pendentes.len());
+    span.record("trechos_count", trechos.len());
+    span.record("rodadas_coleta", rodadas_coleta);
 
     // 5. Gera a resposta. Motor atual: structured output + score triádico +
-    // safety-net dentro do ia_engine. Motor Jev: sinais antes de gerar, LLM só
-    // texto, conferência depois — tudo dentro do ia_engine_jev.
-    let motores = motores_do_tenant(state, tenant_uuid).await;
+    // safety-net dentro do ia_engine. Motor Jev: leitura única, ato decidido em
+    // código, LLM só redige e o Jev confere — tudo dentro do ia_engine_jev.
     let intents = if motores.motor == config_tenant::Motor::Llm {
         Vec::new()
     } else {
@@ -956,7 +1038,6 @@ async fn responder_via_ia(
             .as_ref()
             .clone()
     };
-    let n_trechos = trechos.len();
     let entrada = ia_engine::ResponderInput {
         tenant_id: tenant_id_str.clone(),
         atendimento_id: atendimento_id.to_string(),
@@ -969,13 +1050,19 @@ async fn responder_via_ia(
         intents,
         trechos,
         comportamento,
+        somente_decisao: false,
+        rodadas_coleta,
     };
 
-    // Sombra: o Jev responde ao lado, sem efeito nenhum na conversa — só o
-    // registro da decisão dele, para comparar com a do motor atual.
+    // Sombra: o Jev decide ao lado — só leitura, ato e trechos, sem LLM e com
+    // prioridade baixa na vazão da conta — e fica o registro da decisão dele,
+    // para comparar com a do motor atual.
     if let Some(sombra) = motores.sombra.clone() {
         let st = state.clone();
-        let entrada_sombra = entrada.clone();
+        let entrada_sombra = ia_engine::ResponderInput {
+            somente_decisao: true,
+            ..entrada.clone()
+        };
         let tp = traceparent.to_string();
         let causa = causation_id.to_string();
         let tenant = tenant_id_str.clone();
@@ -1039,23 +1126,81 @@ async fn responder_via_ia(
         .await;
     }
 
-    // A LLM prometeu transferir sem regra disparada: o motor gerou de novo. É
-    // o caso que mostra se o prompt está empurrando a LLM a decidir o que não é
-    // dela. Sem conteúdo: só o fato e o desfecho.
-    if resposta.regerada {
+    // A conferência reprovou a primeira redação e ela subiu para o modelo de
+    // escalada. É o que mostra onde o prompt ou o modelo pequeno falham. Sem
+    // conteúdo: só os nomes dos problemas e o desfecho.
+    if resposta.escalada {
         state.audit_logger.info(
             tenant_uuid,
-            "bot.transferencia_prometida_barrada",
-            "A IA prometeu transferir sem regra; a resposta foi gerada de novo",
+            "bot.resposta_escalada",
+            "A conferência reprovou a resposta; ela foi refeita no modelo de escalada",
             serde_json::json!({
                 "atendimento_id": atendimento_id,
                 "decisao": resposta.decisao,
-                "modelo": resposta.modelo,
+                "problemas": resposta.problemas,
+                "modelo_llm": resposta.modelo_llm,
             }),
             None,
             None,
             Some(causation_id.to_string()),
         );
+    }
+
+    // Motor Jev valendo (não a reserva): a rodada de coleta e a análise da
+    // mesma leitura. Em background: a resposta ao cliente não espera o banco.
+    if resposta.motor == "jev" && resposta.decisao != "reserva" {
+        if !resposta.campos_perguntados.is_empty() {
+            let st = state.clone();
+            let tenant = tenant_id_str.clone();
+            let campos = resposta.campos_perguntados.clone();
+            let (causa, tp) = (causation_id.to_string(), traceparent.to_string());
+            tokio::spawn(async move {
+                if let Err(e) = chamar_rpc(
+                    &st.pg_client,
+                    &tenant,
+                    "RegistrarRodadaColeta",
+                    serde_json::json!({ "atendimento_id": atendimento_id, "campos": campos }),
+                    &causa,
+                    &tp,
+                )
+                .await
+                {
+                    tracing::warn!(erro = %e, "falha ao registrar a rodada de coleta");
+                }
+            });
+        }
+        match (resposta.analise.clone(), mensagem_id) {
+            (Some(analise), Some(mensagem_id)) => {
+                let st = state.clone();
+                let tenant = tenant_id_str.clone();
+                let (causa, tp) = (causation_id.to_string(), traceparent.to_string());
+                tokio::spawn(async move {
+                    // O kill-switch da análise prévia do tenant vale aqui
+                    // também: desligada, só o tom é gravado.
+                    let (anexar, _) =
+                        config_tenant::analise_previa(st.redis_conn.as_ref(), tenant_uuid)
+                            .await
+                            .unwrap_or((true, Vec::new()));
+                    gravar_analise(
+                        &st,
+                        tenant_uuid,
+                        &tenant,
+                        atendimento_id,
+                        mensagem_id,
+                        &analise,
+                        "jev",
+                        anexar,
+                        &causa,
+                        &tp,
+                    )
+                    .await;
+                });
+            }
+            (Some(_), None) => {
+                tracing::debug!("análise do motor Jev sem mensagem para anexar");
+            }
+            _ => {}
+        }
     }
 
     // C1 — fecha o laço: o que a IA extraiu vira valor na ficha.
@@ -1143,14 +1288,33 @@ async fn responder_via_ia(
         .find(|p| *p != "duvida")
         .unwrap_or_default();
     span.record("motivo", motivo_curto);
-    // No motor Jev, a LLM só é chamada se houve a conferência depois de gerar:
-    // mais requisições que a de "antes" mais uma por trecho.
-    let llm_chamada = motor != "jev"
-        || resposta.decisao == "reserva"
-        || resposta.uso.requisicoes as usize > 1 + n_trechos;
+    // No motor Jev, a LLM só entra quando o ato pede redação.
+    let llm_chamada =
+        motor != "jev" || resposta.decisao == "reserva" || !resposta.modelo_llm.is_empty();
     span.record("llm_chamada", llm_chamada);
-    // A LLM prometeu transferir sem regra e a resposta foi gerada de novo.
-    span.record("regerada", resposta.regerada);
+    span.record("ato", resposta.ato.as_str());
+    span.record("escalada", resposta.escalada);
+    span.record("requisicoes", resposta.uso.requisicoes);
+    if motor == "jev" {
+        // O resumo da decisão num evento só, para os testes com a chave: o
+        // ato, por que, quanto custou e onde o tempo foi. Sem texto nenhum.
+        tracing::info!(
+            ato = resposta.ato.as_str(),
+            decisao = resposta.decisao.as_str(),
+            motivo = motivo_curto,
+            intencao = resposta.intencao_principal.as_str(),
+            confianca_intencao = resposta.confianca_intencao,
+            campos_perguntados = resposta.campos_perguntados.len(),
+            escalada = resposta.escalada,
+            problemas = ?resposta.problemas,
+            requisicoes = resposta.uso.requisicoes,
+            tokens_entrada = resposta.uso.tokens_entrada,
+            duracao_ms = resposta.uso.duracao_ms,
+            modelo_llm = resposta.modelo_llm.as_str(),
+            etapas = %etapas_json(&resposta.etapas),
+            "decisão do motor Jev"
+        );
+    }
 
     Ok(RespostaIa {
         texto: resposta.resposta_texto,
@@ -1159,7 +1323,8 @@ async fn responder_via_ia(
         motor,
         modelo: resposta.modelo,
         decisao_motor: resposta.decisao,
-        regerada: resposta.regerada,
+        ato: resposta.ato,
+        escalada: resposta.escalada,
     })
 }
 
@@ -1987,7 +2152,27 @@ async fn processar_mensagem_recebida(
     // `texto_para_ia` (não `content`): sentimento se mede sobre o que o CONTATO
     // escreveu. Mídia sem legenda tem `content` = URL da CDN, que não tem tom
     // nenhum a medir; e `de_mim` é fala do atendente, não do cliente.
-    if let (false, Some(texto_contato)) = (de_mim, msg_normalized.texto_para_ia()) {
+    // Motor Jev decidindo e bot que vai responder: o tom, as intenções e as
+    // entidades voltam junto com a resposta da rajada (leitura única) — chamar
+    // `Sentimento` e `Analyse` aqui seria ler a mesma mensagem três vezes.
+    // Com o bot calado (humano na conversa, bot desligado), a análise ainda
+    // roda aqui, e já traz o tom.
+    let decide_jev = motores_do_tenant(state, tenant_uuid).await.decide_nome == "jev";
+    let bot_vai_responder = resolve_body
+        .get("bot_pode_atender")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+        && resolve_body
+            .get("instancia_responde_bot")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
+        && resolve_body
+            .get("atendente_humano_id")
+            .and_then(|v| v.as_i64())
+            .is_none();
+    if let (false, false, Some(texto_contato)) =
+        (de_mim, decide_jev, msg_normalized.texto_para_ia())
+    {
         let state_sentimento = state.clone();
         let texto = texto_contato.to_string();
         let tenant_str = envelope.tenant_id.to_string();
@@ -2010,9 +2195,12 @@ async fn processar_mensagem_recebida(
     // 2e. Análise prévia (B9 / N10 E1): intenções e entidades da mensagem do
     // contato, em background — não soma latência à resposta, e falhar só deixa a
     // mensagem sem análise. É dela que sai o assunto automático (E2).
-    if let (false, Some(texto_contato), Some(mensagem_id)) =
-        (de_mim, msg_normalized.texto_para_ia(), mensagem_id)
-    {
+    if let (false, false, Some(texto_contato), Some(mensagem_id)) = (
+        de_mim,
+        decide_jev && bot_vai_responder,
+        msg_normalized.texto_para_ia(),
+        mensagem_id,
+    ) {
         let state_analise = state.clone();
         let texto = texto_contato.to_string();
         let tenant_str = envelope.tenant_id.to_string();
@@ -2099,8 +2287,9 @@ async fn processar_mensagem_recebida(
     // janela acionava o bot. Quem escrevia "oi" → "quero o preço" → "do produto X"
     // recebia resposta ao "oi". A v1 acumulava a rajada e respondia ao conjunto;
     // este bloco restaura esse comportamento.
-    let contexto_bot = ContextoBot {
+    let mut contexto_bot = ContextoBot {
         tenant_uuid,
+        mensagem_id,
         tenant_str: envelope.tenant_id.to_string(),
         atendimento_id,
         instance_id,
@@ -2175,6 +2364,7 @@ async fn processar_mensagem_recebida(
         &buffer_mensagens::MensagemBufferizada {
             message_id: msg_normalized.message_id.clone(),
             texto: texto_do_contato.clone().unwrap_or_default(),
+            mensagem_id,
         },
         janela,
     )
@@ -2208,6 +2398,10 @@ async fn processar_mensagem_recebida(
                 .await;
                 let quantidade = acumuladas.len();
                 let compilado = buffer_mensagens::compilar(&acumuladas);
+                // A análise da rajada vai para a última mensagem que a compôs.
+                if let Some(ultima) = buffer_mensagens::ultima_mensagem_id(&acumuladas) {
+                    contexto_bot.mensagem_id = Some(ultima);
+                }
 
                 // Span próprio: a task não herda o do handler, e sem ele a cadeia
                 // webhook → resposta some para a rajada inteira. `traceparent` do
@@ -2407,6 +2601,9 @@ async fn tentar_registrar_avaliacao(
 /// task sobrevive ao handler que a criou e não pode emprestar nada dele.
 struct ContextoBot {
     tenant_uuid: Uuid,
+    /// Última mensagem persistida da rajada: recebe a análise que o motor Jev
+    /// devolve junto com a resposta.
+    mensagem_id: Option<i32>,
     tenant_str: String,
     atendimento_id: i32,
     instance_id: i32,
@@ -2484,6 +2681,7 @@ async fn acionar_bot(
             state,
             tenant_uuid,
             atendimento_id,
+            ctx.mensagem_id,
             &pergunta,
             &ctx.event_id,
             &ctx.traceparent,
@@ -2678,6 +2876,7 @@ async fn acionar_bot(
                 Some("automatica") => "automatica",
                 Some("transferida") => "transferida",
                 Some("sem_info") => "sem_info",
+                Some("barrada") => "barrada",
                 _ => decisao_da_resposta(confianca_bot, transferida_pela_ia, minima_automatica),
             };
             // P16 — a resposta saiu, mas abaixo da confiança automática: o
@@ -2719,7 +2918,8 @@ async fn acionar_bot(
                         .as_ref()
                         .filter(|i| i.motor == "jev")
                         .and(confianca_bot),
-                    "regerada": info_ia.as_ref().map(|i| i.regerada).unwrap_or(false),
+                    "ato": info_ia.as_ref().map(|i| i.ato.as_str()),
+                    "escalada": info_ia.as_ref().map(|i| i.escalada).unwrap_or(false),
                     "reserva": info_ia
                         .as_ref()
                         .map(|i| i.decisao_motor == "reserva")
@@ -3181,28 +3381,52 @@ async fn avaliar_sentimento_best_effort(
     // montar o `LlmProviderConfigInput` que ia no request.
 
     let motores = motores_do_tenant(state, tenant_uuid).await;
-    let saida = match motores
-        .decide
-        .sentimento(
-            ia_engine::client::SentimentoInput {
-                tenant_id: tenant_str.to_string(),
-                historico: vec![ia_engine::ChatTurnInput {
-                    role: "human".to_string(),
-                    conteudo: texto.to_string(),
-                }],
-            },
-            traceparent,
-        )
-        .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::warn!(erro = %e, "ia_engine.Sentimento falhou; sentimento não atualizado");
-            return;
+    // Motor Jev: o tom sai da leitura única (o `Sentimento` dele é só da
+    // pesquisa de satisfação). Motor atual: o `Sentimento` de sempre.
+    let (nota, label) = if motores.decide_nome == "jev" {
+        match motores
+            .decide
+            .analyse(
+                ia_engine::client::AnalyseInput {
+                    tenant_id: tenant_str.to_string(),
+                    mensagem: texto.to_string(),
+                    ..Default::default()
+                },
+                traceparent,
+            )
+            .await
+        {
+            Ok(a) if a.sentimento_nota > 0 => (a.sentimento_nota, a.sentimento_label),
+            Ok(_) => return,
+            Err(e) => {
+                tracing::warn!(erro = %e, "leitura do tom falhou; sentimento não atualizado");
+                return;
+            }
+        }
+    } else {
+        match motores
+            .decide
+            .sentimento(
+                ia_engine::client::SentimentoInput {
+                    tenant_id: tenant_str.to_string(),
+                    historico: vec![ia_engine::ChatTurnInput {
+                        role: "human".to_string(),
+                        conteudo: texto.to_string(),
+                    }],
+                },
+                traceparent,
+            )
+            .await
+        {
+            Ok(s) => (s.nota, s.sentimento),
+            Err(e) => {
+                tracing::warn!(erro = %e, "ia_engine.Sentimento falhou; sentimento não atualizado");
+                return;
+            }
         }
     };
 
-    tracing::Span::current().record("nota", saida.nota);
+    tracing::Span::current().record("nota", nota);
 
     if let Err(e) = chamar_rpc(
         &state.pg_client,
@@ -3210,8 +3434,8 @@ async fn avaliar_sentimento_best_effort(
         "AtualizarSentimentoAtendimento",
         serde_json::json!({
             "atendimento_id": atendimento_id,
-            "nota": saida.nota,
-            "label": saida.sentimento,
+            "nota": nota,
+            "label": label,
         }),
         causation_id,
         traceparent,
@@ -3297,23 +3521,8 @@ async fn analisar_mensagem_best_effort(
         entidades: Vec::new(),
     };
 
-    if let Some(sombra) = motores.sombra.clone() {
-        let st = state.clone();
-        let entrada_sombra = entrada.clone();
-        let tp = traceparent.to_string();
-        let causa = causation_id.to_string();
-        let tenant = tenant_str.to_string();
-        tokio::spawn(async move {
-            match sombra.analyse(entrada_sombra, &tp).await {
-                Ok(a) => {
-                    let registro = registro_da_analise(atendimento_id, "jev", false, &a);
-                    registrar_decisao_ia(&st, &tenant, registro, &causa, &tp).await;
-                }
-                Err(e) => tracing::warn!(erro = %e, "motor Jev (sombra) falhou na análise"),
-            }
-        });
-    }
-
+    // Sem sombra aqui: na sombra, a decisão do Jev é registrada pela resposta
+    // (`somente_decisao`), que já inclui a leitura desta mensagem.
     let saida = match motores.decide.analyse(entrada, traceparent).await {
         Ok(s) => s,
         Err(e) => {
@@ -3334,8 +3543,94 @@ async fn analisar_mensagem_best_effort(
         },
     );
     span.record("modelo", saida.modelo.as_str());
-    if motores.motor != config_tenant::Motor::Llm {
-        let registro = registro_da_analise(atendimento_id, motores.decide_nome, true, &saida);
+    let assunto = gravar_analise(
+        state,
+        tenant_uuid,
+        tenant_str,
+        atendimento_id,
+        mensagem_id,
+        &saida,
+        motores.decide_nome,
+        true,
+        causation_id,
+        traceparent,
+    )
+    .await;
+    span.record("assunto_definido", assunto);
+    span.record("duracao_ms", inicio.elapsed().as_millis() as u64);
+}
+
+/// Grava a análise de uma mensagem: o registro da decisão (motores novos), as
+/// intenções e entidades (`AnexarAnaliseMensagem`) e, quando a leitura mediu,
+/// o tom do atendimento. Usada pelo `Analyse` e pela análise que o motor Jev
+/// devolve junto com a resposta. Best-effort; devolve se o assunto foi
+/// definido. Nada de texto em log: contagens.
+#[allow(clippy::too_many_arguments)]
+async fn gravar_analise(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    tenant_str: &str,
+    atendimento_id: i32,
+    mensagem_id: i32,
+    saida: &ia_engine::client::AnalyseOutput,
+    motor_padrao: &str,
+    anexar: bool,
+    causation_id: &str,
+    traceparent: &str,
+) -> bool {
+    let mut assunto_definido = false;
+    if anexar {
+        assunto_definido = anexar_intencoes_e_entidades(
+            state,
+            tenant_uuid,
+            tenant_str,
+            atendimento_id,
+            mensagem_id,
+            saida,
+            motor_padrao,
+            causation_id,
+            traceparent,
+        )
+        .await;
+    }
+    // Motor Jev: o tom veio na mesma leitura — é o sentimento do atendimento.
+    if saida.sentimento_nota > 0 {
+        if let Err(e) = chamar_rpc(
+            &state.pg_client,
+            tenant_str,
+            "AtualizarSentimentoAtendimento",
+            serde_json::json!({
+                "atendimento_id": atendimento_id,
+                "nota": saida.sentimento_nota,
+                "label": saida.sentimento_label,
+            }),
+            causation_id,
+            traceparent,
+        )
+        .await
+        {
+            tracing::warn!(erro = %e, "falha ao persistir o tom do atendimento");
+        }
+    }
+    assunto_definido
+}
+
+/// O registro da decisão (motor Jev) e a gravação de intenções e entidades na
+/// mensagem. Devolve se o assunto do atendimento foi definido.
+#[allow(clippy::too_many_arguments)]
+async fn anexar_intencoes_e_entidades(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    tenant_str: &str,
+    atendimento_id: i32,
+    mensagem_id: i32,
+    saida: &ia_engine::client::AnalyseOutput,
+    motor_padrao: &str,
+    causation_id: &str,
+    traceparent: &str,
+) -> bool {
+    if saida.motor == "jev" {
+        let registro = registro_da_analise(atendimento_id, motor_padrao, true, saida);
         registrar_decisao_ia(state, tenant_str, registro, causation_id, traceparent).await;
     }
     // O motor Jev já aplicou os pisos dele, cada um na sua escala (confiança
@@ -3358,6 +3653,7 @@ async fn analisar_mensagem_best_effort(
         .map(|e| serde_json::json!({ "tipo": e.tipo, "valor": e.valor, "confianca": e.confianca }))
         .collect();
 
+    let mut assunto_definido = false;
     match chamar_rpc(
         &state.pg_client,
         tenant_str,
@@ -3386,12 +3682,10 @@ async fn analisar_mensagem_best_effort(
     .await
     {
         Ok(resp) => {
-            span.record(
-                "assunto_definido",
-                resp.get("assunto_definido")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false),
-            );
+            assunto_definido = resp
+                .get("assunto_definido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             // P14 — contagem, nunca nomes nem conteúdo.
             let etiquetas = resp
                 .get("etiquetas_aplicadas")
@@ -3418,7 +3712,7 @@ async fn analisar_mensagem_best_effort(
         }
         Err(e) => tracing::warn!(erro = %e, "falha ao gravar a análise da mensagem"),
     }
-    span.record("duracao_ms", inicio.elapsed().as_millis() as u64);
+    assunto_definido
 }
 
 /// B9 — as tags das intenções cadastradas, no formato que o `Analyse` do motor
@@ -3491,7 +3785,54 @@ async fn historico_recente(
 
 #[cfg(test)]
 mod tests_analise {
-    use super::{intents_do_catalogo, registro_da_resposta, tipos_de_intencao};
+    use super::{
+        etapas_json, intents_do_catalogo, registro_da_resposta, texto_para_busca, tipos_de_intencao,
+    };
+
+    #[test]
+    fn mensagem_curta_e_buscada_com_a_ultima_fala_do_atendente() {
+        let turno = |role: &str, c: &str| super::ia_engine::ChatTurnInput {
+            role: role.to_string(),
+            conteudo: c.to_string(),
+        };
+        let hist = vec![
+            turno("human", "quero banner"),
+            turno("ai", "Qual material: lona ou vinil?"),
+            turno("human", "e em lona?"),
+        ];
+        assert_eq!(
+            texto_para_busca("e em lona?", &hist),
+            "Qual material: lona ou vinil?\ne em lona?"
+        );
+        let longa = "quero saber o prazo de entrega dos banners em lona";
+        assert_eq!(texto_para_busca(longa, &hist), longa);
+        assert_eq!(texto_para_busca("500", &[]), "500");
+    }
+
+    #[test]
+    fn etapas_somam_por_nome() {
+        let e = |etapa: &str, ms: i64| super::ia_engine::client::EtapaOutput {
+            etapa: etapa.to_string(),
+            ms,
+        };
+        let j = etapas_json(&[
+            e("leitura", 120),
+            e("conferencia", 90),
+            e("conferencia", 80),
+        ]);
+        assert_eq!(j, serde_json::json!({ "leitura": 120, "conferencia": 170 }));
+    }
+
+    #[test]
+    fn catalogo_traz_a_coleta() {
+        let resp = serde_json::json!({ "intents": [{
+            "tag": "panfletos", "campos_coleta": ["formato", 3],
+            "max_perguntas": 2, "apos_coleta": "continuar"
+        }]});
+        let i = &intents_do_catalogo(&resp)[0];
+        assert_eq!(i.campos_coleta, vec!["formato".to_string()]);
+        assert_eq!((i.max_perguntas, i.apos_coleta.as_str()), (2, "continuar"));
+    }
 
     #[test]
     fn junta_as_tags_das_intencoes_cadastradas() {
@@ -3540,6 +3881,8 @@ mod tests_analise {
             ..Default::default()
         };
         let reg = registro_da_resposta(10, "llm", true, &r, Some(2));
+        assert_eq!(reg["etapas"], serde_json::json!({}));
+        assert_eq!(reg["escalada"], false);
         assert_eq!(reg["motor"], "jev");
         assert_eq!(reg["regra_id"], 7);
         assert_eq!(reg["fluxo_id"], 2);

@@ -559,7 +559,24 @@ pub struct DecisaoIa {
     pub tokens_entrada: i64,
     pub requisicoes: i32,
     pub duracao_ms: i64,
+    /// Motor Jev (0049): o ato decidido, a cascata e o tempo por etapa.
+    pub ato: String,
+    pub escalada: bool,
+    pub problemas: serde_json::Value,
+    pub modelo_llm: String,
+    pub etapas: serde_json::Value,
+    pub campos_perguntados: serde_json::Value,
 }
+
+/// Atos que o motor Jev decide (ver `ia_engine_jev/decisoes/ato.py`).
+pub const ATOS: [&str; 6] = [
+    "transferir",
+    "responder",
+    "coletar",
+    "social",
+    "sem_info",
+    "barrada",
+];
 
 fn corte(s: &str, max: usize) -> String {
     s.chars().take(max).collect()
@@ -616,6 +633,23 @@ impl DecisaoIa {
                 .unwrap_or(0),
             requisicoes: p.get("requisicoes").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
             duracao_ms: p.get("duracao_ms").and_then(|v| v.as_i64()).unwrap_or(0),
+            // Ato fora da lista vira vazio: o registro não pode ganhar um valor
+            // que a calibração não sabe agrupar.
+            ato: Some(texto("ato"))
+                .filter(|a| ATOS.contains(&a.as_str()))
+                .unwrap_or_default(),
+            escalada: p.get("escalada").and_then(|v| v.as_bool()).unwrap_or(false),
+            problemas: lista("problemas"),
+            modelo_llm: corte(&texto("modelo_llm"), 60),
+            etapas: match p.get("etapas") {
+                Some(v @ serde_json::Value::Object(m))
+                    if m.values().all(serde_json::Value::is_number) =>
+                {
+                    v.clone()
+                }
+                _ => serde_json::json!({}),
+            },
+            campos_perguntados: lista("campos_perguntados"),
         })
     }
 }
@@ -629,8 +663,10 @@ pub async fn registrar_decisao(
         "INSERT INTO oraculo_decisao_ia \
             (tenant_id, atendimento_id, etapa, motor, vale, modelo, intencao, confianca_intencao, \
              decisao, transferiu, motivo, regra_id, fluxo_id, sinais, trechos_aprovados, \
-             trechos_descartados, confiabilidade, tokens_entrada, requisicoes, duracao_ms) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) \
+             trechos_descartados, confiabilidade, tokens_entrada, requisicoes, duracao_ms, \
+             ato, escalada, problemas, modelo_llm, etapas, campos_perguntados) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20, \
+                 $21,$22,$23,$24,$25,$26) \
          RETURNING id",
     )
     .bind(tenant_id)
@@ -653,6 +689,12 @@ pub async fn registrar_decisao(
     .bind(d.tokens_entrada)
     .bind(d.requisicoes)
     .bind(d.duracao_ms)
+    .bind(&d.ato)
+    .bind(d.escalada)
+    .bind(&d.problemas)
+    .bind(&d.modelo_llm)
+    .bind(&d.etapas)
+    .bind(&d.campos_perguntados)
     .fetch_one(&mut **tx)
     .await?;
     Ok(id)
@@ -716,6 +758,41 @@ pub async fn marcar_motor_da_mensagem(
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+/// Rodadas de coleta que o bot já fez no atendimento (motor Jev). Atendimento
+/// de outro tenant ou inexistente: 0 (o RLS esconde a linha).
+pub async fn rodadas_coleta(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    atendimento_id: i32,
+) -> Result<i32, DbError> {
+    let n: Option<i16> = sqlx::query_scalar(
+        "SELECT ia_coleta_rodadas FROM oraculo_atendimento WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(n.map(i32::from).unwrap_or(0))
+}
+
+/// Soma uma rodada de coleta e devolve o total (`None` = atendimento não
+/// encontrado). O teto de 100 só protege a coluna `SMALLINT`.
+pub async fn registrar_rodada_coleta(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    atendimento_id: i32,
+) -> Result<Option<i32>, DbError> {
+    let n: Option<i16> = sqlx::query_scalar(
+        "UPDATE oraculo_atendimento SET ia_coleta_rodadas = LEAST(ia_coleta_rodadas + 1, 100) \
+         WHERE tenant_id = $1 AND id = $2 RETURNING ia_coleta_rodadas",
+    )
+    .bind(tenant_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(n.map(i32::from))
 }
 
 /// Retenção de 90 dias: apaga decisões antigas de todos os tenants. Exige o
@@ -875,6 +952,22 @@ mod tests {
         assert_eq!(d.motivo.chars().count(), 200);
         assert_eq!(d.sinais, serde_json::json!([]));
         assert!(d.vale);
+        assert!(d.ato.is_empty() && d.etapas == serde_json::json!({}));
+        let com_ato = DecisaoIa::do_json(&serde_json::json!({
+            "etapa": "resposta", "motor": "jev", "ato": "coletar", "escalada": true,
+            "problemas": ["ecoa"], "etapas": { "leitura": 120, "redacao": 900 },
+            "campos_perguntados": ["quantidade"], "modelo_llm": "m".repeat(90),
+        }))
+        .unwrap();
+        assert_eq!(com_ato.ato, "coletar");
+        assert!(com_ato.escalada);
+        assert_eq!(com_ato.etapas["redacao"], 900);
+        assert_eq!(com_ato.modelo_llm.chars().count(), 60);
+        let torto = DecisaoIa::do_json(&serde_json::json!({
+            "etapa": "resposta", "motor": "jev", "ato": "inventado", "etapas": { "x": "texto" },
+        }))
+        .unwrap();
+        assert!(torto.ato.is_empty() && torto.etapas == serde_json::json!({}));
         assert!(DecisaoIa::do_json(&serde_json::json!({ "etapa": "x", "motor": "jev" })).is_err());
         assert!(
             DecisaoIa::do_json(&serde_json::json!({ "etapa": "analise", "motor": "gpt" })).is_err()

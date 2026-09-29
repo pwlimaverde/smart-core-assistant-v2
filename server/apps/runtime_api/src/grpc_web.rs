@@ -834,6 +834,18 @@ fn transferencia_do_json(v: &serde_json::Value) -> q::TransferenciaIa {
     }
 }
 
+/// Lista de textos de um campo JSON (itens que não são texto ficam de fora).
+fn lista_de_textos(v: &serde_json::Value, chave: &str) -> Vec<String> {
+    v.get(chave)
+        .and_then(|x| x.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|c| c.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// O catálogo de intenções do `ListIntentsReply`, como o motor Jev o recebe.
 fn intents_do_catalogo(v: &serde_json::Value) -> Vec<ia_client::client::IntentDefInput> {
     v.get("intents")
@@ -846,6 +858,10 @@ fn intents_do_catalogo(v: &serde_json::Value) -> Vec<ia_client::client::IntentDe
                     descricao: texto_de(i, "descricao"),
                     exemplo: texto_de(i, "exemplo"),
                     comportamento: texto_de(i, "comportamento"),
+                    campos_coleta: lista_de_textos(i, "campos_coleta"),
+                    max_perguntas: i.get("max_perguntas").and_then(|x| x.as_i64()).unwrap_or(0)
+                        as i32,
+                    apos_coleta: texto_de(i, "apos_coleta"),
                 })
                 .filter(|i| !i.tag.is_empty())
                 .collect()
@@ -4348,6 +4364,19 @@ impl AdminService for AdminFacade {
                 .into_iter()
                 .filter(|t| t.aprovado)
                 .map(|t| t.id)
+                .collect(),
+            ato: saida.ato,
+            campos_perguntados: saida.campos_perguntados,
+            escalada: saida.escalada,
+            problemas: saida.problemas,
+            modelo_llm: saida.modelo_llm,
+            etapas: saida
+                .etapas
+                .into_iter()
+                .map(|e| q::EtapaDoMotor {
+                    etapa: e.etapa,
+                    ms: e.ms,
+                })
                 .collect(),
         }))
     }
@@ -10681,6 +10710,11 @@ fn intent_do_json(v: &serde_json::Value) -> MyIntent {
             .unwrap_or(false),
         criado_em: v.get("criado_em").and_then(|x| x.as_i64()).unwrap_or(0),
         atualizado_em: v.get("atualizado_em").and_then(|x| x.as_i64()).unwrap_or(0),
+        campos_coleta: lista_de_textos(v, "campos_coleta"),
+        max_perguntas: v.get("max_perguntas").and_then(|x| x.as_i64()).unwrap_or(2) as i32,
+        apos_coleta: Some(texto("apos_coleta"))
+            .filter(|a| !a.is_empty())
+            .unwrap_or_else(|| "transferir".to_string()),
     }
 }
 
@@ -10713,6 +10747,11 @@ fn payload_intent(dados: &MyIntentDados) -> serde_json::Value {
         "descricao": dados.descricao.trim(),
         "exemplo": dados.exemplo.trim(),
         "comportamento": dados.comportamento.trim(),
+        // Normalizados no data_postgres (campos aparados, 1..5, transferir |
+        // continuar): a regra mora num lugar só.
+        "campos_coleta": dados.campos_coleta,
+        "max_perguntas": dados.max_perguntas,
+        "apos_coleta": dados.apos_coleta,
     })
 }
 

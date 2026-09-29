@@ -8957,6 +8957,25 @@ fn dados_da_intent(payload: &serde_json::Value) -> ports::treinamento::DadosInte
         descricao: texto("descricao"),
         exemplo: texto("exemplo"),
         comportamento: texto("comportamento"),
+        coleta: ports::treinamento::ColetaDaIntent::normalizar(
+            &payload
+                .get("campos_coleta")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|c| c.as_str().map(str::to_string))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+            payload
+                .get("max_perguntas")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0),
+            payload
+                .get("apos_coleta")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default(),
+        ),
     }
 }
 
@@ -8999,7 +9018,12 @@ async fn handler_create_intent(
                     &env,
                     "intent_criada",
                     format!("Intenção '{tag}' criada"),
-                    serde_json::json!({ "id": intent.id }),
+                    serde_json::json!({
+                        "id": intent.id,
+                        "campos_coleta": intent.campos_coleta,
+                        "max_perguntas": intent.max_perguntas,
+                        "apos_coleta": intent.apos_coleta,
+                    }),
                 )
                 .await;
             match serde_json::to_value(&intent) {
@@ -9027,6 +9051,7 @@ async fn handler_update_intent(
         return erro(error_core::AppError::Validation(motivo.into()), &env);
     }
     let tag = dados.tag.clone();
+    let coleta = dados.coleta.clone();
 
     let ctx = contexto_do_envelope(&env);
     match store.atualizar_intent(&ctx, id, dados).await {
@@ -9036,7 +9061,12 @@ async fn handler_update_intent(
                     &env,
                     "intent_atualizada",
                     format!("Intenção '{tag}' atualizada"),
-                    serde_json::json!({ "id": id }),
+                    serde_json::json!({
+                        "id": id,
+                        "campos_coleta": coleta.campos,
+                        "max_perguntas": coleta.max_perguntas,
+                        "apos_coleta": coleta.apos,
+                    }),
                 )
                 .await;
             ok_reply(

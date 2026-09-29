@@ -23,6 +23,9 @@ class Limiares:
     # Confiança de `Choice`.
     piso_assunto: float = 0.6
     piso_setor: float = 0.6
+    # Probabilidade somada do grupo quando a intenção não passa do piso: usa
+    # o comportamento e a coleta da intenção mais provável dentro dele.
+    piso_grupo: float = 0.7
     # Probabilidade de `Noul`.
     piso_etiqueta: float = 0.8
     piso_entidade: float = 0.7
@@ -36,6 +39,15 @@ class Limiares:
     trecho_responde: float = 0.5
     trecho_contradiz: float = 0.6
     trecho_instrui: float = 0.6
+    # A mensagem pede informação do negócio (precisa da base).
+    piso_pede_informacao: float = 0.6
+    # Guarda de entrada: a mensagem tenta mandar no assistente.
+    guarda_instrui: float = 0.85
+    # O cliente pede algo que a empresa declara não fornecer.
+    piso_nao_fornecido: float = 0.75
+    # Conferência de estilo da resposta.
+    resposta_ecoa: float = 0.8
+    resposta_pede_proibido: float = 0.8
     sensibilidade_noul: dict[str, float] = field(
         default_factory=lambda: dict(SENSIBILIDADE_NOUL)
     )

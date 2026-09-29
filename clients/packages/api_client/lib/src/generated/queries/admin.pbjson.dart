@@ -5759,6 +5759,9 @@ const MyIntent$json = {
     {'1': 'vetorizada', '3': 7, '4': 1, '5': 8, '10': 'vetorizada'},
     {'1': 'criado_em', '3': 8, '4': 1, '5': 3, '10': 'criadoEm'},
     {'1': 'atualizado_em', '3': 9, '4': 1, '5': 3, '10': 'atualizadoEm'},
+    {'1': 'campos_coleta', '3': 10, '4': 3, '5': 9, '10': 'camposColeta'},
+    {'1': 'max_perguntas', '3': 11, '4': 1, '5': 5, '10': 'maxPerguntas'},
+    {'1': 'apos_coleta', '3': 12, '4': 1, '5': 9, '10': 'aposColeta'},
   ],
 };
 
@@ -5768,7 +5771,9 @@ final $typed_data.Uint8List myIntentDescriptor = $convert.base64Decode(
     'ABKAlSBWdydXBvEhwKCWRlc2NyaWNhbxgEIAEoCVIJZGVzY3JpY2FvEhgKB2V4ZW1wbG8YBSAB'
     'KAlSB2V4ZW1wbG8SJAoNY29tcG9ydGFtZW50bxgGIAEoCVINY29tcG9ydGFtZW50bxIeCgp2ZX'
     'Rvcml6YWRhGAcgASgIUgp2ZXRvcml6YWRhEhsKCWNyaWFkb19lbRgIIAEoA1IIY3JpYWRvRW0S'
-    'IwoNYXR1YWxpemFkb19lbRgJIAEoA1IMYXR1YWxpemFkb0Vt');
+    'IwoNYXR1YWxpemFkb19lbRgJIAEoA1IMYXR1YWxpemFkb0VtEiMKDWNhbXBvc19jb2xldGEYCi'
+    'ADKAlSDGNhbXBvc0NvbGV0YRIjCg1tYXhfcGVyZ3VudGFzGAsgASgFUgxtYXhQZXJndW50YXMS'
+    'HwoLYXBvc19jb2xldGEYDCABKAlSCmFwb3NDb2xldGE=');
 
 @$core.Deprecated('Use listMyIntentsRequestDescriptor instead')
 const ListMyIntentsRequest$json = {
@@ -5808,6 +5813,9 @@ const MyIntentDados$json = {
     {'1': 'descricao', '3': 3, '4': 1, '5': 9, '10': 'descricao'},
     {'1': 'exemplo', '3': 4, '4': 1, '5': 9, '10': 'exemplo'},
     {'1': 'comportamento', '3': 5, '4': 1, '5': 9, '10': 'comportamento'},
+    {'1': 'campos_coleta', '3': 6, '4': 3, '5': 9, '10': 'camposColeta'},
+    {'1': 'max_perguntas', '3': 7, '4': 1, '5': 5, '10': 'maxPerguntas'},
+    {'1': 'apos_coleta', '3': 8, '4': 1, '5': 9, '10': 'aposColeta'},
   ],
 };
 
@@ -5815,7 +5823,9 @@ const MyIntentDados$json = {
 final $typed_data.Uint8List myIntentDadosDescriptor = $convert.base64Decode(
     'Cg1NeUludGVudERhZG9zEhAKA3RhZxgBIAEoCVIDdGFnEhQKBWdydXBvGAIgASgJUgVncnVwbx'
     'IcCglkZXNjcmljYW8YAyABKAlSCWRlc2NyaWNhbxIYCgdleGVtcGxvGAQgASgJUgdleGVtcGxv'
-    'EiQKDWNvbXBvcnRhbWVudG8YBSABKAlSDWNvbXBvcnRhbWVudG8=');
+    'EiQKDWNvbXBvcnRhbWVudG8YBSABKAlSDWNvbXBvcnRhbWVudG8SIwoNY2FtcG9zX2NvbGV0YR'
+    'gGIAMoCVIMY2FtcG9zQ29sZXRhEiMKDW1heF9wZXJndW50YXMYByABKAVSDG1heFBlcmd1bnRh'
+    'cxIfCgthcG9zX2NvbGV0YRgIIAEoCVIKYXBvc0NvbGV0YQ==');
 
 @$core.Deprecated('Use myIntentResponseDescriptor instead')
 const MyIntentResponse$json = {
@@ -5965,6 +5975,25 @@ const TestarPerguntaResponse$json = {
       '5': 9,
       '10': 'trechosAprovados'
     },
+    {'1': 'ato', '3': 15, '4': 1, '5': 9, '10': 'ato'},
+    {
+      '1': 'campos_perguntados',
+      '3': 16,
+      '4': 3,
+      '5': 9,
+      '10': 'camposPerguntados'
+    },
+    {'1': 'escalada', '3': 17, '4': 1, '5': 8, '10': 'escalada'},
+    {'1': 'problemas', '3': 18, '4': 3, '5': 9, '10': 'problemas'},
+    {'1': 'modelo_llm', '3': 19, '4': 1, '5': 9, '10': 'modeloLlm'},
+    {
+      '1': 'etapas',
+      '3': 20,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.EtapaDoMotor',
+      '10': 'etapas'
+    },
   ],
 };
 
@@ -5981,7 +6010,24 @@ final $typed_data.Uint8List testarPerguntaResponseDescriptor = $convert.base64De
     'U2luYWxWYWxvclIGc2luYWlzEi0KEmludGVuY2FvX3ByaW5jaXBhbBgLIAEoCVIRaW50ZW5jYW'
     '9QcmluY2lwYWwSLQoSY29uZmlhbmNhX2ludGVuY2FvGAwgASgBUhFjb25maWFuY2FJbnRlbmNh'
     'bxIYCgdkZWNpc2FvGA0gASgJUgdkZWNpc2FvEisKEXRyZWNob3NfYXByb3ZhZG9zGA4gAygJUh'
-    'B0cmVjaG9zQXByb3ZhZG9z');
+    'B0cmVjaG9zQXByb3ZhZG9zEhAKA2F0bxgPIAEoCVIDYXRvEi0KEmNhbXBvc19wZXJndW50YWRv'
+    'cxgQIAMoCVIRY2FtcG9zUGVyZ3VudGFkb3MSGgoIZXNjYWxhZGEYESABKAhSCGVzY2FsYWRhEh'
+    'wKCXByb2JsZW1hcxgSIAMoCVIJcHJvYmxlbWFzEh0KCm1vZGVsb19sbG0YEyABKAlSCW1vZGVs'
+    'b0xsbRJBCgZldGFwYXMYFCADKAsyKS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRXRhcG'
+    'FEb01vdG9yUgZldGFwYXM=');
+
+@$core.Deprecated('Use etapaDoMotorDescriptor instead')
+const EtapaDoMotor$json = {
+  '1': 'EtapaDoMotor',
+  '2': [
+    {'1': 'etapa', '3': 1, '4': 1, '5': 9, '10': 'etapa'},
+    {'1': 'ms', '3': 2, '4': 1, '5': 3, '10': 'ms'},
+  ],
+};
+
+/// Descriptor for `EtapaDoMotor`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List etapaDoMotorDescriptor = $convert.base64Decode(
+    'CgxFdGFwYURvTW90b3ISFAoFZXRhcGEYASABKAlSBWV0YXBhEg4KAm1zGAIgASgDUgJtcw==');
 
 @$core.Deprecated('Use regraTransferenciaDescriptor instead')
 const RegraTransferencia$json = {

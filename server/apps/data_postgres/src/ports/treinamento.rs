@@ -248,6 +248,15 @@ pub struct Intent {
     pub descricao: String,
     pub exemplo: String,
     pub comportamento: String,
+    /// Motor Jev — coleta estruturada: os dados essenciais que o bot pede
+    /// (tipo de entidade ou slug de campo do cartão), quantos por mensagem, e
+    /// o que fazer depois da rodada (`transferir` | `continuar`).
+    #[serde(default)]
+    pub campos_coleta: Vec<String>,
+    #[serde(default)]
+    pub max_perguntas: i32,
+    #[serde(default)]
+    pub apos_coleta: String,
     /// `false` enquanto o worker não gerou o vetor. Até lá a intenção não é
     /// encontrada pela busca semântica — e a tela precisa dizer isso.
     pub vetorizada: bool,
@@ -265,4 +274,78 @@ pub struct DadosIntent {
     pub descricao: String,
     pub exemplo: String,
     pub comportamento: String,
+    pub coleta: ColetaDaIntent,
+}
+
+/// A coleta estruturada de uma intenção, já normalizada (ver
+/// `ColetaDaIntent::normalizar`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColetaDaIntent {
+    pub campos: Vec<String>,
+    pub max_perguntas: i32,
+    pub apos: String,
+}
+
+impl Default for ColetaDaIntent {
+    fn default() -> Self {
+        Self {
+            campos: Vec::new(),
+            max_perguntas: MAX_PERGUNTAS_PADRAO,
+            apos: "transferir".to_string(),
+        }
+    }
+}
+
+pub const MAX_PERGUNTAS_PADRAO: i32 = 2;
+const MAX_CAMPOS_COLETA: usize = 10;
+const MAX_TAMANHO_CAMPO: usize = 60;
+
+impl ColetaDaIntent {
+    /// Campos aparados, sem repetição, até 10 com 60 caracteres cada;
+    /// perguntas entre 1 e 5 (fora disso, 2); `apos` desconhecido vira
+    /// `transferir`, que é o comportamento de quem não configurou nada.
+    pub fn normalizar(campos: &[String], max_perguntas: i64, apos: &str) -> Self {
+        let mut vistos: Vec<String> = Vec::new();
+        for c in campos {
+            let c: String = c.trim().chars().take(MAX_TAMANHO_CAMPO).collect();
+            if !c.is_empty() && !vistos.contains(&c) && vistos.len() < MAX_CAMPOS_COLETA {
+                vistos.push(c);
+            }
+        }
+        Self {
+            campos: vistos,
+            max_perguntas: if (1..=5).contains(&max_perguntas) {
+                max_perguntas as i32
+            } else {
+                MAX_PERGUNTAS_PADRAO
+            },
+            apos: if apos.trim() == "continuar" {
+                "continuar".to_string()
+            } else {
+                "transferir".to_string()
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_coleta {
+    use super::*;
+
+    #[test]
+    fn coleta_normalizada() {
+        let campos: Vec<String> = [" formato ", "", "formato", "arte"]
+            .iter()
+            .map(|s| s.to_string())
+            .chain((0..20).map(|n| format!("c{n}")))
+            .collect();
+        let c = ColetaDaIntent::normalizar(&campos, 9, "xyz");
+        assert_eq!(&c.campos[..2], &["formato".to_string(), "arte".to_string()]);
+        assert_eq!(c.campos.len(), 10);
+        assert_eq!(c.max_perguntas, 2);
+        assert_eq!(c.apos, "transferir");
+        let c2 = ColetaDaIntent::normalizar(&[], 3, "continuar");
+        assert_eq!((c2.max_perguntas, c2.apos.as_str()), (3, "continuar"));
+        assert_eq!(ColetaDaIntent::default().max_perguntas, 2);
+    }
 }

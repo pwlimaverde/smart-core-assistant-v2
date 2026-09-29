@@ -91,4 +91,18 @@ pub trait TransferenciaStore: Send + Sync {
 
     /// Retenção: apaga decisões com mais de `dias` (pool administrativo).
     async fn purgar_decisoes(&self, dias: i64) -> Result<u64, DbError>;
+
+    /// Motor Jev: rodadas de coleta já feitas no atendimento.
+    async fn rodadas_coleta(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<i32, DbError>;
+
+    /// Motor Jev: soma uma rodada de coleta (`None` = atendimento não existe).
+    async fn registrar_rodada_coleta(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<i32>, DbError>;
 }

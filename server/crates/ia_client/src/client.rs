@@ -50,6 +50,12 @@ pub struct IntentDefInput {
     pub descricao: String,
     pub exemplo: String,
     pub comportamento: String,
+    /// Coleta estruturada: dados essenciais (tipo de entidade ou slug de
+    /// campo), quantos por mensagem e o que fazer depois da rodada
+    /// (`transferir` | `continuar`).
+    pub campos_coleta: Vec<String>,
+    pub max_perguntas: i32,
+    pub apos_coleta: String,
 }
 
 /// Tipo de entidade com a estratégia de busca de valor.
@@ -126,6 +132,17 @@ pub struct AnalyseOutput {
     pub motor: String,
     pub modelo: String,
     pub uso: UsoOutput,
+    /// Motor Jev: o tom da mensagem, medido na mesma leitura (1..5 e
+    /// negativo | neutro | positivo). 0/vazio quando não medido.
+    pub sentimento_nota: i32,
+    pub sentimento_label: String,
+}
+
+/// Duração de uma etapa do motor Jev (leitura, trechos, redacao, ...).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct EtapaOutput {
+    pub etapa: String,
+    pub ms: i64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -167,6 +184,10 @@ pub struct ResponderInput {
     pub intents: Vec<IntentDefInput>,
     pub trechos: Vec<TrechoInput>,
     pub comportamento: String,
+    /// Sombra: só a decisão, sem LLM.
+    pub somente_decisao: bool,
+    /// Rodadas de coleta já feitas no atendimento.
+    pub rodadas_coleta: i32,
 }
 #[derive(Debug, Clone, Default)]
 pub struct ResponderOutput {
@@ -189,11 +210,21 @@ pub struct ResponderOutput {
     pub trechos: Vec<TrechoAvaliadoOutput>,
     pub intencao_principal: String,
     pub confianca_intencao: f64,
-    /// automatica | transferida | sem_info | a_revisar | reserva; vazio no
-    /// motor atual.
+    /// automatica | transferida | sem_info | a_revisar | barrada | reserva;
+    /// vazio no motor atual.
     pub decisao: String,
     pub regra_id: i64,
-    pub regerada: bool,
+    /// Motor Jev: o ato decidido (transferir | responder | coletar | social |
+    /// sem_info | barrada), os campos pedidos ao cliente (uma rodada de
+    /// coleta), a cascata e onde o tempo foi.
+    pub ato: String,
+    pub campos_perguntados: Vec<String>,
+    pub escalada: bool,
+    pub problemas: Vec<String>,
+    pub modelo_llm: String,
+    pub etapas: Vec<EtapaOutput>,
+    /// A análise da mesma leitura: o worker grava sem chamar o `Analyse`.
+    pub analise: Option<AnalyseOutput>,
 }
 
 /// Um campo extraído, como o modelo devolveu — sem validação.

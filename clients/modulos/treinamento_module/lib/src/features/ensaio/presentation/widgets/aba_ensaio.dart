@@ -294,16 +294,45 @@ class _PorqueDaDecisao extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             [
+              if (ensaio.ato.isNotEmpty) 'Ato: ${ensaio.ato}',
               'Decisão: ${ensaio.decisao.isEmpty ? '—' : ensaio.decisao}',
               if (ensaio.intencaoPrincipal.isNotEmpty)
                 'intenção: ${ensaio.intencaoPrincipal} '
                     '(${(ensaio.confiancaIntencao * 100).round()}%)',
               if (ensaio.modelo.isNotEmpty) ensaio.modelo,
+              if (ensaio.modeloLlm.isNotEmpty) 'redação: ${ensaio.modeloLlm}',
             ].join(' · '),
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: muted),
           ),
+          if (ensaio.camposPerguntados.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Pediu ao cliente: ${ensaio.camposPerguntados.join(', ')}',
+              key: const ValueKey('campos-perguntados'),
+            ),
+          ],
+          if (ensaio.escalada) ...[
+            const SizedBox(height: AppSpacing.xs),
+            // A primeira redação foi reprovada pela conferência e refeita no
+            // modelo maior: é o sinal de que o prompt ou o modelo pequeno
+            // falharam nesta pergunta.
+            Text(
+              'Refeita no modelo maior: ${ensaio.problemas.join(', ')}',
+              key: const ValueKey('escalada'),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+          if (ensaio.etapas.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Tempo: ${ensaio.tempoTotalMs} ms (${[for (final e in ensaio.etapas) '${e.etapa} ${e.ms}'].join(' · ')})',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: muted),
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           for (final s in ensaio.sinais)
             Row(
@@ -320,7 +349,10 @@ class _PorqueDaDecisao extends StatelessWidget {
                 const SizedBox(width: AppSpacing.xs),
                 Expanded(child: Text(s.nome)),
                 Text(
-                  '${(s.valor * 100).round()}% / ${(s.limiar * 100).round()}%',
+                  s.contagem
+                      ? '${s.valor.round()} / ${s.limiar.round()}'
+                      : '${(s.valor * 100).round()}% / '
+                            '${(s.limiar * 100).round()}%',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],

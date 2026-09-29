@@ -169,3 +169,53 @@ def test_motivo_da_metrica_sem_nome_de_regra():
     assert motivo_da_metrica("duvida:pede_humano") == "duvida_pede_humano"
     assert motivo_da_metrica("irritacao") == "irritacao"
     assert motivo_da_metrica("") == "desconhecido"
+
+
+# ------------------------------------------------------------- limitador
+async def test_limitador_alta_espera_e_segue_baixa_descarta():
+    from ia_engine_jev.typesafe import Descartada, Limitador
+
+    lim = Limitador(1, espera_max_s=0.05)
+    assert lim.capacidade == 1.0
+    assert await lim.adquirir("leitura") == pytest.approx(0.0, abs=5.0)
+    # Balde vazio: a conversa espera até o teto e segue mesmo assim.
+    assert await lim.adquirir("leitura") >= 40.0
+    # A sombra não disputa a última folga com a conversa.
+    with pytest.raises(Descartada):
+        await lim.adquirir("trecho", "baixa")
+    folgado = Limitador(100)
+    assert await folgado.adquirir("trecho", "baixa") == 0.0
+
+
+async def test_perguntar_descartada_vira_limite_sem_chamar_a_api(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from ia_engine_jev.typesafe import Limitador
+
+    cliente = TypeSafeJev("ts-chave", "jev-1.13.0", limitador=Limitador(1))
+    chamadas: list[int] = []
+
+    async def conta(**_kw: Any) -> Any:
+        chamadas.append(1)
+        return SimpleNamespace(
+            choices={}, nouls={}, scores={}, usage=None, model="jev-1.13.0"
+        )
+
+    monkeypatch.setattr(cliente._cliente, "system_one", conta)
+    with pytest.raises(JevLimite):
+        await cliente.perguntar(
+            "trecho", {}, {"n": PerguntaNoul("é?")}, prioridade="baixa"
+        )
+    assert chamadas == []
+
+
+def test_limitador_do_processo_le_o_ambiente(monkeypatch: pytest.MonkeyPatch):
+    from ia_engine_jev.typesafe import limitador as mod
+
+    monkeypatch.setattr(mod, "_limitador", None)
+    monkeypatch.setenv("JEV_REQ_POR_MINUTO", "abc")
+    assert mod.limitador_do_processo().capacidade == 1000.0
+    monkeypatch.setattr(mod, "_limitador", None)
+    monkeypatch.setenv("JEV_REQ_POR_MINUTO", "300")
+    assert mod.limitador_do_processo().capacidade == 300.0
+    monkeypatch.setattr(mod, "_limitador", None)

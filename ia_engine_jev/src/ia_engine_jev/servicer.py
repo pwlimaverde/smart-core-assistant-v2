@@ -31,9 +31,11 @@ from ia_engine_jev.config import (
 from ia_engine_jev.contracts import ai_engine_pb2 as pb
 from ia_engine_jev.contracts import ai_engine_pb2_grpc as pbg
 from ia_engine_jev.conversao import (
+    dados_da_coleta,
     entidades_da_config,
     fluxos_do_proto,
     intents_do_proto,
+    politica_da_config,
     trechos_do_proto,
     usa_jev,
 )
@@ -47,6 +49,7 @@ from ia_engine_jev.domain.errors import (
     MediaDownloadError,
     ProviderConfigError,
 )
+from ia_engine_jev.domain.jev import AnaliseJev, DecisaoResposta
 from ia_engine_jev.domain.models import LlmProviderSpec
 from ia_engine_jev.features.analise_jev import (
     AnaliseJevDataSource,
@@ -101,12 +104,6 @@ from ia_engine_jev.features.sentimento import (
     SentimentoRepository,
     SentimentoUsecase,
 )
-from ia_engine_jev.features.sentimento_jev import (
-    SentimentoJevDataSource,
-    SentimentoJevParameters,
-    SentimentoJevRepository,
-    SentimentoJevUsecase,
-)
 from ia_engine_jev.features.testar_regra import (
     ProvaDeRegraDataSource,
     ProvaDeRegraParameters,
@@ -128,6 +125,7 @@ from ia_engine_jev.telemetry import (
     contar_reserva,
     contar_transferencia,
     observar_rpc,
+    registrar_decisao_jev,
 )
 from ia_engine_jev.typesafe import ClienteJev, FabricaJev, JevNaoConfigurado
 
@@ -249,9 +247,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             context, request.mensagem, "mensagem", "Analyse", request.tenant_id
         )
         config = await self._config(context, "Analyse", request.tenant_id)
-        if usa_jev(config) and (
-            list(request.intents) or config.entity_descricoes or list(request.entidades)
-        ):
+        if usa_jev(config):
             return await self._analyse_jev(request, context, config)
         usecase = AnalyseUsecase(
             AnalyseRepository(
@@ -321,26 +317,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         )
         match result:
             case Success(analise):
-                return pb.AnalyseResponse(
-                    intents=[
-                        pb.Intent(tipo=i.tipo, confianca=i.confianca)
-                        for i in analise.intents
-                    ],
-                    entidades=[
-                        pb.Entidade(tipo=e.tipo, valor=e.valor, confianca=e.confianca)
-                        for e in analise.entidades
-                    ],
-                    intent_principal=analise.intent_principal,
-                    confianca_principal=analise.confianca_principal,
-                    intents_a_revisar=list(analise.intents_a_revisar),
-                    motor="jev",
-                    modelo=analise.modelo,
-                    uso=pb.UsoDoMotor(
-                        tokens_entrada=analise.tokens_entrada,
-                        requisicoes=analise.requisicoes,
-                        duracao_ms=analise.duracao_ms,
-                    ),
-                )
+                return _analise_pb(analise)
             case Failure(error):
                 await self._abort(context, error, "Analyse", request.tenant_id)
             case _:  # pragma: no cover - provado pelo mypy
@@ -387,8 +364,19 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             context, request.mensagem, "mensagem", "Responder", request.tenant_id
         )
         config = await self._config(context, "Responder", request.tenant_id)
+        if request.somente_decisao and not usa_jev(config):
+            # Sombra sem a chave: nada a comparar, e a reserva gastaria LLM.
+            await self._abort(
+                context,
+                JevNaoConfiguradoError(message="sombra sem TYPESAFE_API_KEY"),
+                "Responder",
+                request.tenant_id,
+            )
         if usa_jev(config):
-            resposta_jev = await self._responder_jev(request, config)
+            try:
+                resposta_jev = await self._responder_jev(request, config)
+            except _FalhaDaSombra as falha:
+                await self._abort(context, falha.erro, "Responder", request.tenant_id)
             if resposta_jev is not None:
                 return resposta_jev
             reserva = True
@@ -472,13 +460,21 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         """Resposta pelo motor Jev; `None` = cair na reserva (LLM com schema).
 
         Só falha do Jev leva à reserva: o cliente nunca fica sem resposta por
-        causa do fornecedor novo. Erro da LLM de geração segue como erro.
+        causa do fornecedor novo. Na sombra (`somente_decisao`) não há reserva:
+        a falha só deixa a decisão sem registro.
         """
+        sombra = request.somente_decisao
         try:
             jev = self._jev(config)
         except JevNaoConfigurado:
             contar_reserva("jev_nao_configurado")
             return None
+        intents = intents_do_proto(request.intents)
+        entidades = entidades_da_config(config)
+        pendentes = tuple(
+            CampoPendente(slug=c.slug, nome=c.nome, descricao=c.descricao, hint=c.hint)
+            for c in request.campos_pendentes
+        )
         usecase = ResponderJevUsecase(
             ResponderJevRepository(
                 ResponderJevDataSource(chat_model_factory=self._chat_model_factory)
@@ -491,22 +487,25 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 jev=jev,
                 llm=config.spec_llm(),
                 fluxos=fluxos_do_proto(request.fluxos_disponiveis),
-                intents=intents_do_proto(request.intents),
+                intents=intents,
+                entidades=entidades,
                 trechos=trechos_do_proto(request.trechos, request.dados_treinamento),
-                comportamento_vetor=request.comportamento,
                 campos_coletados=tuple(
                     CampoColetado(slug=c.slug, nome=c.nome, valor=c.valor)
                     for c in request.campos_coletados
                 ),
-                campos_pendentes=tuple(
-                    CampoPendente(
-                        slug=c.slug, nome=c.nome, descricao=c.descricao, hint=c.hint
-                    )
-                    for c in request.campos_pendentes
+                campos_pendentes=pendentes,
+                dados_coleta=dados_da_coleta(
+                    intents,
+                    entidades,
+                    [(c.slug, c.nome, c.descricao) for c in request.campos_pendentes]
+                    + [(c.slug, c.nome, "") for c in request.campos_coletados],
                 ),
+                rodadas_coleta=request.rodadas_coleta,
                 regras=tuple(config.regras_transferencia),
                 sinais=sinais_de(config.transferencia_sinais),
                 limiares=limiares_de(config.jev_config),
+                politica=politica_da_config(config),
                 fluxo_padrao_id=config.transferencia_fluxo_padrao_id,
                 piso_b4=config.confianca_minima_transferencia,
                 dados_empresa=config.dados_empresa,
@@ -515,45 +514,13 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 msg_transferencia=config.msg_transferencia,
                 msg_sem_info=config.msg_sem_info,
                 prompts=dict(config.prompts),
+                somente_decisao=sombra,
             )
         )
         match result:
             case Success(d):
-                if d.transferir:
-                    contar_transferencia(d.motivo)
-                return pb.ResponderResponse(
-                    resposta_texto=d.resposta_texto,
-                    transferir_atendimento=d.transferir,
-                    fluxo_transferencia=d.fluxo_transferencia,
-                    confiabilidade=d.confiabilidade,
-                    campos_extraidos=[
-                        pb.CampoExtraido(slug=s, valor_json=v, confianca=c)
-                        for s, v, c in d.campos_extraidos
-                    ],
-                    motivo_transferencia=d.motivo,
-                    sinais=[
-                        pb.SinalDaDecisao(nome=s.nome, valor=s.valor, limiar=s.limiar)
-                        for s in d.sinais
-                    ],
-                    motor="jev",
-                    modelo=d.modelo,
-                    uso=pb.UsoDoMotor(
-                        tokens_entrada=d.tokens_entrada,
-                        requisicoes=d.requisicoes,
-                        duracao_ms=d.duracao_ms,
-                    ),
-                    trechos=[
-                        pb.TrechoAvaliado(
-                            id=t.id, aprovado=t.aprovado, conflito=t.conflito
-                        )
-                        for t in d.trechos
-                    ],
-                    intencao_principal=d.intencao_principal,
-                    confianca_intencao=d.confianca_intencao,
-                    decisao=d.decisao,
-                    regra_id=d.regra_id,
-                    regerada=d.regerada,
-                )
+                registrar_decisao_jev(d, tenant_id=request.tenant_id, sombra=sombra)
+                return _resposta_pb(d)
             case Failure(
                 JevIndisponivelError()
                 | JevNaoConfiguradoError()
@@ -562,18 +529,24 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 logger.warning(
                     "Responder pelo Jev falhou; caindo na reserva",
                     tenant_id=request.tenant_id,
+                    sombra=sombra,
                     error_code=type(erro).__name__,
                 )
+                if sombra:
+                    raise _FalhaDaSombra(erro)
                 contar_reserva(type(erro).__name__)
                 return None
             case Failure(error):
-                # Erro da LLM de geração ou inesperado no caminho novo: a
+                # Erro da LLM de redação ou inesperado no caminho novo: a
                 # reserva tenta com a LLM com schema, que é o caminho atual.
                 logger.warning(
                     "Responder pelo Jev falhou fora do Jev",
                     tenant_id=request.tenant_id,
+                    sombra=sombra,
                     erro=type(error).__name__,
                 )
+                if sombra:
+                    raise _FalhaDaSombra(error)
                 contar_reserva("outro")
                 return None
             case _:  # pragma: no cover - provado pelo mypy
@@ -593,11 +566,9 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 "Sentimento",
                 request.tenant_id,
             )
+        # Motor Jev: o tom de cada mensagem sai da leitura única (`Analyse` e
+        # `Responder`); este RPC fica só com a pesquisa de satisfação, pela LLM.
         config = await self._config(context, "Sentimento", request.tenant_id)
-        if usa_jev(config):
-            avaliacao_jev = await self._sentimento_jev(request, config)
-            if avaliacao_jev is not None:
-                return avaliacao_jev
         usecase = SentimentoUsecase(
             SentimentoRepository(
                 SentimentoDataSource(chat_model_factory=self._chat_model_factory)
@@ -619,37 +590,6 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 )
             case Failure(error):
                 await self._abort(context, error, "Sentimento", request.tenant_id)
-            case _:  # pragma: no cover - provado pelo mypy
-                assert_never(result)
-
-    async def _sentimento_jev(
-        self, request: pb.SentimentoRequest, config: RuntimeConfig
-    ) -> pb.SentimentoResponse | None:
-        """Nota e sentimento pelo Jev; `None` = cair no caminho da LLM."""
-        try:
-            jev = self._jev(config)
-        except JevNaoConfigurado:
-            return None
-        usecase = SentimentoJevUsecase(
-            SentimentoJevRepository(SentimentoJevDataSource())
-        )
-        result = await usecase(
-            SentimentoJevParameters(historico=_history(request.historico), jev=jev)
-        )
-        match result:
-            case Success(avaliacao):
-                return pb.SentimentoResponse(
-                    nota=avaliacao.nota,
-                    sentimento=avaliacao.sentimento,
-                    feedback=avaliacao.feedback,
-                )
-            case Failure(error):
-                logger.warning(
-                    "Sentimento pelo Jev falhou; usando a LLM",
-                    tenant_id=request.tenant_id,
-                    erro=type(error).__name__,
-                )
-                return None
             case _:  # pragma: no cover - provado pelo mypy
                 assert_never(result)
 
@@ -847,3 +787,77 @@ def _status_for(error: AppError) -> grpc.StatusCode:
 
 def _history(historico: pb.ChatHistory) -> tuple[ChatTurnTuple, ...]:
     return tuple((t.role, t.conteudo) for t in historico.turnos)
+
+
+class _FalhaDaSombra(Exception):
+    """A sombra falhou: sem reserva, o RPC termina com o erro de domínio."""
+
+    def __init__(self, erro: AppError) -> None:
+        super().__init__(erro.message)
+        self.erro = erro
+
+
+def _analise_pb(analise: AnaliseJev) -> pb.AnalyseResponse:
+    return pb.AnalyseResponse(
+        intents=[
+            pb.Intent(tipo=i.tipo, confianca=i.confianca) for i in analise.intents
+        ],
+        entidades=[
+            pb.Entidade(tipo=e.tipo, valor=e.valor, confianca=e.confianca)
+            for e in analise.entidades
+        ],
+        intent_principal=analise.intent_principal,
+        confianca_principal=analise.confianca_principal,
+        intents_a_revisar=list(analise.intents_a_revisar),
+        motor="jev",
+        modelo=analise.modelo,
+        uso=pb.UsoDoMotor(
+            tokens_entrada=analise.tokens_entrada,
+            requisicoes=analise.requisicoes,
+            duracao_ms=analise.duracao_ms,
+        ),
+        sentimento_nota=analise.sentimento_nota,
+        sentimento_label=analise.sentimento_label,
+    )
+
+
+def _resposta_pb(d: DecisaoResposta) -> pb.ResponderResponse:
+    resposta = pb.ResponderResponse(
+        resposta_texto=d.resposta_texto,
+        transferir_atendimento=d.transferir,
+        fluxo_transferencia=d.fluxo_transferencia,
+        confiabilidade=d.confiabilidade,
+        campos_extraidos=[
+            pb.CampoExtraido(slug=s, valor_json=v, confianca=c)
+            for s, v, c in d.campos_extraidos
+        ],
+        motivo_transferencia=d.motivo,
+        sinais=[
+            pb.SinalDaDecisao(nome=s.nome, valor=s.valor, limiar=s.limiar)
+            for s in d.sinais
+        ],
+        motor="jev",
+        modelo=d.modelo,
+        uso=pb.UsoDoMotor(
+            tokens_entrada=d.tokens_entrada,
+            requisicoes=d.requisicoes,
+            duracao_ms=d.duracao_ms,
+        ),
+        trechos=[
+            pb.TrechoAvaliado(id=t.id, aprovado=t.aprovado, conflito=t.conflito)
+            for t in d.trechos
+        ],
+        intencao_principal=d.intencao_principal,
+        confianca_intencao=d.confianca_intencao,
+        decisao=d.decisao,
+        regra_id=d.regra_id,
+        ato=d.ato,
+        campos_perguntados=list(d.campos_perguntados),
+        escalada=d.escalada,
+        problemas=list(d.problemas),
+        modelo_llm=d.modelo_llm,
+        etapas=[pb.DuracaoEtapa(etapa=e, ms=ms) for e, ms in d.etapas],
+    )
+    if d.analise is not None:
+        resposta.analise.CopyFrom(_analise_pb(d.analise))
+    return resposta

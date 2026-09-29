@@ -22,6 +22,11 @@ from loguru import logger
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
 
+from ia_engine_jev.typesafe.limitador import (
+    Descartada,
+    Limitador,
+    limitador_do_processo,
+)
 from ia_engine_jev.typesafe.tipos import (
     Escolha,
     Nivel,
@@ -75,13 +80,19 @@ class JevLimite(JevErro):
 
 # ------------------------------------------------------------- contrato
 class ClienteJev(Protocol):
-    """O que as features precisam: uma requisição com várias perguntas."""
+    """O que as features precisam: uma requisição com várias perguntas.
+
+    `prioridade`: `alta` (conversa com o cliente) ou `baixa` (sombra,
+    avaliação) — ver `limitador.py`.
+    """
 
     async def perguntar(
         self,
         etapa: str,
         state: Any,
         perguntas: Mapping[str, Pergunta],
+        *,
+        prioridade: str = "alta",
     ) -> RespostaJev: ...
 
 
@@ -200,11 +211,13 @@ class TypeSafeJev:
         *,
         orcamento_s: float = 2.0,
         timeout_s: float = 2.0,
+        limitador: Limitador | None = None,
     ) -> None:
         import httpx2
         from typesafe_sdk import AsyncTypeSafeClient, RetryPolicy
 
         self._modelo = modelo or MODELO_PADRAO
+        self._limitador = limitador or limitador_do_processo()
         politica = RetryPolicy(
             max_retries=2,
             backoff_initial=0.2,
@@ -229,6 +242,8 @@ class TypeSafeJev:
         etapa: str,
         state: Any,
         perguntas: Mapping[str, Pergunta],
+        *,
+        prioridade: str = "alta",
     ) -> RespostaJev:
         from typesafe_sdk import TypeSafeAPIError, TypeSafeError
 
@@ -238,6 +253,14 @@ class TypeSafeJev:
             span.set_attribute("jev.etapa", etapa)
             span.set_attribute("jev.perguntas", len(perguntas))
             span.set_attribute("jev.modelo", self._modelo)
+            span.set_attribute("jev.prioridade", prioridade)
+            try:
+                espera_ms = await self._limitador.adquirir(etapa, prioridade)
+            except Descartada as exc:
+                m.requisicoes.add(1, {"etapa": etapa, "status": "descartada"})
+                span.set_status(Status(StatusCode.ERROR, "jev_descartada"))
+                raise JevLimite(str(exc)) from None
+            span.set_attribute("jev.fila_ms", int(espera_ms))
             inicio = time.perf_counter()
             status = "ok"
             try:

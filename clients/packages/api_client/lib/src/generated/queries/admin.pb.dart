@@ -23136,6 +23136,9 @@ class MyIntent extends $pb.GeneratedMessage {
     $core.bool? vetorizada,
     $fixnum.Int64? criadoEm,
     $fixnum.Int64? atualizadoEm,
+    $core.Iterable<$core.String>? camposColeta,
+    $core.int? maxPerguntas,
+    $core.String? aposColeta,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -23147,6 +23150,9 @@ class MyIntent extends $pb.GeneratedMessage {
     if (vetorizada != null) result.vetorizada = vetorizada;
     if (criadoEm != null) result.criadoEm = criadoEm;
     if (atualizadoEm != null) result.atualizadoEm = atualizadoEm;
+    if (camposColeta != null) result.camposColeta.addAll(camposColeta);
+    if (maxPerguntas != null) result.maxPerguntas = maxPerguntas;
+    if (aposColeta != null) result.aposColeta = aposColeta;
     return result;
   }
 
@@ -23173,6 +23179,9 @@ class MyIntent extends $pb.GeneratedMessage {
     ..aOB(7, _omitFieldNames ? '' : 'vetorizada')
     ..aInt64(8, _omitFieldNames ? '' : 'criadoEm')
     ..aInt64(9, _omitFieldNames ? '' : 'atualizadoEm')
+    ..pPS(10, _omitFieldNames ? '' : 'camposColeta')
+    ..aI(11, _omitFieldNames ? '' : 'maxPerguntas')
+    ..aOS(12, _omitFieldNames ? '' : 'aposColeta')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -23278,6 +23287,31 @@ class MyIntent extends $pb.GeneratedMessage {
   $core.bool hasAtualizadoEm() => $_has(8);
   @$pb.TagNumber(9)
   void clearAtualizadoEm() => $_clearField(9);
+
+  /// Motor Jev -- coleta estruturada: os dados essenciais que o bot pede
+  /// quando esta intencao e a escolhida (tipo de entidade ou slug de campo do
+  /// cartao), quantos no maximo por mensagem (1..5), e o que fazer quando a
+  /// rodada acaba: `transferir` ou `continuar`. Uma rodada so por atendimento.
+  @$pb.TagNumber(10)
+  $pb.PbList<$core.String> get camposColeta => $_getList(9);
+
+  @$pb.TagNumber(11)
+  $core.int get maxPerguntas => $_getIZ(10);
+  @$pb.TagNumber(11)
+  set maxPerguntas($core.int value) => $_setSignedInt32(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasMaxPerguntas() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearMaxPerguntas() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.String get aposColeta => $_getSZ(11);
+  @$pb.TagNumber(12)
+  set aposColeta($core.String value) => $_setString(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasAposColeta() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearAposColeta() => $_clearField(12);
 }
 
 class ListMyIntentsRequest extends $pb.GeneratedMessage {
@@ -23377,6 +23411,9 @@ class MyIntentDados extends $pb.GeneratedMessage {
     $core.String? descricao,
     $core.String? exemplo,
     $core.String? comportamento,
+    $core.Iterable<$core.String>? camposColeta,
+    $core.int? maxPerguntas,
+    $core.String? aposColeta,
   }) {
     final result = create();
     if (tag != null) result.tag = tag;
@@ -23384,6 +23421,9 @@ class MyIntentDados extends $pb.GeneratedMessage {
     if (descricao != null) result.descricao = descricao;
     if (exemplo != null) result.exemplo = exemplo;
     if (comportamento != null) result.comportamento = comportamento;
+    if (camposColeta != null) result.camposColeta.addAll(camposColeta);
+    if (maxPerguntas != null) result.maxPerguntas = maxPerguntas;
+    if (aposColeta != null) result.aposColeta = aposColeta;
     return result;
   }
 
@@ -23406,6 +23446,9 @@ class MyIntentDados extends $pb.GeneratedMessage {
     ..aOS(3, _omitFieldNames ? '' : 'descricao')
     ..aOS(4, _omitFieldNames ? '' : 'exemplo')
     ..aOS(5, _omitFieldNames ? '' : 'comportamento')
+    ..pPS(6, _omitFieldNames ? '' : 'camposColeta')
+    ..aI(7, _omitFieldNames ? '' : 'maxPerguntas')
+    ..aOS(8, _omitFieldNames ? '' : 'aposColeta')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -23471,6 +23514,29 @@ class MyIntentDados extends $pb.GeneratedMessage {
   $core.bool hasComportamento() => $_has(4);
   @$pb.TagNumber(5)
   void clearComportamento() => $_clearField(5);
+
+  /// Coleta estruturada (ver MyIntent). A atualizacao grava os tres: quem
+  /// edita envia os valores atuais junto.
+  @$pb.TagNumber(6)
+  $pb.PbList<$core.String> get camposColeta => $_getList(5);
+
+  @$pb.TagNumber(7)
+  $core.int get maxPerguntas => $_getIZ(6);
+  @$pb.TagNumber(7)
+  set maxPerguntas($core.int value) => $_setSignedInt32(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasMaxPerguntas() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearMaxPerguntas() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get aposColeta => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set aposColeta($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasAposColeta() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearAposColeta() => $_clearField(8);
 }
 
 class MyIntentResponse extends $pb.GeneratedMessage {
@@ -23799,6 +23865,12 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
     $core.double? confiancaIntencao,
     $core.String? decisao,
     $core.Iterable<$core.String>? trechosAprovados,
+    $core.String? ato,
+    $core.Iterable<$core.String>? camposPerguntados,
+    $core.bool? escalada,
+    $core.Iterable<$core.String>? problemas,
+    $core.String? modeloLlm,
+    $core.Iterable<EtapaDoMotor>? etapas,
   }) {
     final result = create();
     if (resposta != null) result.resposta = resposta;
@@ -23819,6 +23891,13 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
     if (decisao != null) result.decisao = decisao;
     if (trechosAprovados != null)
       result.trechosAprovados.addAll(trechosAprovados);
+    if (ato != null) result.ato = ato;
+    if (camposPerguntados != null)
+      result.camposPerguntados.addAll(camposPerguntados);
+    if (escalada != null) result.escalada = escalada;
+    if (problemas != null) result.problemas.addAll(problemas);
+    if (modeloLlm != null) result.modeloLlm = modeloLlm;
+    if (etapas != null) result.etapas.addAll(etapas);
     return result;
   }
 
@@ -23852,6 +23931,13 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
     ..aD(12, _omitFieldNames ? '' : 'confiancaIntencao')
     ..aOS(13, _omitFieldNames ? '' : 'decisao')
     ..pPS(14, _omitFieldNames ? '' : 'trechosAprovados')
+    ..aOS(15, _omitFieldNames ? '' : 'ato')
+    ..pPS(16, _omitFieldNames ? '' : 'camposPerguntados')
+    ..aOB(17, _omitFieldNames ? '' : 'escalada')
+    ..pPS(18, _omitFieldNames ? '' : 'problemas')
+    ..aOS(19, _omitFieldNames ? '' : 'modeloLlm')
+    ..pPM<EtapaDoMotor>(20, _omitFieldNames ? '' : 'etapas',
+        subBuilder: EtapaDoMotor.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -23973,7 +24059,7 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
   @$pb.TagNumber(12)
   void clearConfiancaIntencao() => $_clearField(12);
 
-  /// automatica | transferida | sem_info | a_revisar | reserva
+  /// automatica | transferida | sem_info | a_revisar | barrada | reserva
   @$pb.TagNumber(13)
   $core.String get decisao => $_getSZ(12);
   @$pb.TagNumber(13)
@@ -23986,6 +24072,114 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
   /// Ids dos trechos aprovados como evidência (os demais foram descartados).
   @$pb.TagNumber(14)
   $pb.PbList<$core.String> get trechosAprovados => $_getList(13);
+
+  /// Motor Jev: o ato decidido em codigo (transferir | responder | coletar |
+  /// social | sem_info | barrada), os dados que a resposta pediu, se a
+  /// conferencia reprovou a primeira redacao (e por que), o modelo da LLM e o
+  /// tempo de cada etapa.
+  @$pb.TagNumber(15)
+  $core.String get ato => $_getSZ(14);
+  @$pb.TagNumber(15)
+  set ato($core.String value) => $_setString(14, value);
+  @$pb.TagNumber(15)
+  $core.bool hasAto() => $_has(14);
+  @$pb.TagNumber(15)
+  void clearAto() => $_clearField(15);
+
+  @$pb.TagNumber(16)
+  $pb.PbList<$core.String> get camposPerguntados => $_getList(15);
+
+  @$pb.TagNumber(17)
+  $core.bool get escalada => $_getBF(16);
+  @$pb.TagNumber(17)
+  set escalada($core.bool value) => $_setBool(16, value);
+  @$pb.TagNumber(17)
+  $core.bool hasEscalada() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearEscalada() => $_clearField(17);
+
+  @$pb.TagNumber(18)
+  $pb.PbList<$core.String> get problemas => $_getList(17);
+
+  @$pb.TagNumber(19)
+  $core.String get modeloLlm => $_getSZ(18);
+  @$pb.TagNumber(19)
+  set modeloLlm($core.String value) => $_setString(18, value);
+  @$pb.TagNumber(19)
+  $core.bool hasModeloLlm() => $_has(18);
+  @$pb.TagNumber(19)
+  void clearModeloLlm() => $_clearField(19);
+
+  @$pb.TagNumber(20)
+  $pb.PbList<EtapaDoMotor> get etapas => $_getList(19);
+}
+
+/// Duracao de uma etapa do motor Jev no ensaio.
+class EtapaDoMotor extends $pb.GeneratedMessage {
+  factory EtapaDoMotor({
+    $core.String? etapa,
+    $fixnum.Int64? ms,
+  }) {
+    final result = create();
+    if (etapa != null) result.etapa = etapa;
+    if (ms != null) result.ms = ms;
+    return result;
+  }
+
+  EtapaDoMotor._();
+
+  factory EtapaDoMotor.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EtapaDoMotor.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EtapaDoMotor',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'etapa')
+    ..aInt64(2, _omitFieldNames ? '' : 'ms')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EtapaDoMotor clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EtapaDoMotor copyWith(void Function(EtapaDoMotor) updates) =>
+      super.copyWith((message) => updates(message as EtapaDoMotor))
+          as EtapaDoMotor;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EtapaDoMotor create() => EtapaDoMotor._();
+  @$core.override
+  EtapaDoMotor createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EtapaDoMotor getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EtapaDoMotor>(create);
+  static EtapaDoMotor? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get etapa => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set etapa($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasEtapa() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearEtapa() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get ms => $_getI64(1);
+  @$pb.TagNumber(2)
+  set ms($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasMs() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMs() => $_clearField(2);
 }
 
 /// Uma regra do cadastro. `gatilho_tipo`: condicao (frase exata, lida ao pé da

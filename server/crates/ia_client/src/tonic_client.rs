@@ -167,31 +167,7 @@ impl IaEngineClient for TonicIaEngineClient {
             .await
             .map_err(mapear_status)?
             .into_inner();
-        Ok(AnalyseOutput {
-            intents: resp
-                .intents
-                .into_iter()
-                .map(|i| IntentOutput {
-                    tipo: i.tipo,
-                    confianca: i.confianca,
-                })
-                .collect(),
-            entidades: resp
-                .entidades
-                .into_iter()
-                .map(|e| EntidadeOutput {
-                    tipo: e.tipo,
-                    valor: e.valor,
-                    confianca: e.confianca,
-                })
-                .collect(),
-            intent_principal: resp.intent_principal,
-            confianca_principal: resp.confianca_principal,
-            intents_a_revisar: resp.intents_a_revisar,
-            motor: resp.motor,
-            modelo: resp.modelo,
-            uso: uso_do_proto(resp.uso),
-        })
+        Ok(analise_do_proto(resp))
     }
 
     async fn embed(
@@ -260,6 +236,8 @@ impl IaEngineClient for TonicIaEngineClient {
                 })
                 .collect(),
             comportamento: req.comportamento,
+            somente_decisao: req.somente_decisao,
+            rodadas_coleta: req.rodadas_coleta,
         };
         let mut client = self.client.clone();
         let resp = client
@@ -307,7 +285,20 @@ impl IaEngineClient for TonicIaEngineClient {
             confianca_intencao: resp.confianca_intencao,
             decisao: resp.decisao,
             regra_id: resp.regra_id,
-            regerada: resp.regerada,
+            ato: resp.ato,
+            campos_perguntados: resp.campos_perguntados,
+            escalada: resp.escalada,
+            problemas: resp.problemas,
+            modelo_llm: resp.modelo_llm,
+            etapas: resp
+                .etapas
+                .into_iter()
+                .map(|e| EtapaOutput {
+                    etapa: e.etapa,
+                    ms: e.ms,
+                })
+                .collect(),
+            analise: resp.analise.map(analise_do_proto),
         })
     }
 
@@ -377,8 +368,41 @@ fn intents_para_proto(intents: Vec<IntentDefInput>) -> Vec<pb::IntentDef> {
             descricao: i.descricao,
             exemplo: i.exemplo,
             comportamento: i.comportamento,
+            campos_coleta: i.campos_coleta,
+            max_perguntas: i.max_perguntas,
+            apos_coleta: i.apos_coleta,
         })
         .collect()
+}
+
+fn analise_do_proto(resp: pb::AnalyseResponse) -> AnalyseOutput {
+    AnalyseOutput {
+        intents: resp
+            .intents
+            .into_iter()
+            .map(|i| IntentOutput {
+                tipo: i.tipo,
+                confianca: i.confianca,
+            })
+            .collect(),
+        entidades: resp
+            .entidades
+            .into_iter()
+            .map(|e| EntidadeOutput {
+                tipo: e.tipo,
+                valor: e.valor,
+                confianca: e.confianca,
+            })
+            .collect(),
+        intent_principal: resp.intent_principal,
+        confianca_principal: resp.confianca_principal,
+        intents_a_revisar: resp.intents_a_revisar,
+        motor: resp.motor,
+        modelo: resp.modelo,
+        uso: uso_do_proto(resp.uso),
+        sentimento_nota: resp.sentimento_nota,
+        sentimento_label: resp.sentimento_label,
+    }
 }
 
 fn uso_do_proto(uso: Option<pb::UsoDoMotor>) -> UsoOutput {

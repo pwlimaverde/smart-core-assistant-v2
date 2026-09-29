@@ -28,6 +28,20 @@ class IntentIa {
   /// alguém cadastra e conclui que o sistema não funciona.
   final bool vetorizada;
 
+  /// Motor Jev — os dados essenciais que o bot pede ao cliente quando esta
+  /// intenção é a escolhida (tipo de entidade ou campo do cartão), em ordem.
+  ///
+  /// A regra "no máximo N perguntas, uma única vez" deixa de ser texto do
+  /// comportamento: o servidor conta as rodadas.
+  final List<String> camposColeta;
+
+  /// Quantos dados, no máximo, numa mensagem (1 a 5).
+  final int maxPerguntas;
+
+  /// Depois da rodada (ou se o cliente já disse tudo): `transferir` ou
+  /// `continuar`.
+  final String aposColeta;
+
   const IntentIa({
     required this.id,
     required this.tag,
@@ -36,5 +50,8 @@ class IntentIa {
     required this.exemplo,
     required this.comportamento,
     required this.vetorizada,
+    this.camposColeta = const [],
+    this.maxPerguntas = 2,
+    this.aposColeta = 'transferir',
   });
 }

@@ -1,14 +1,15 @@
-"""Feature `Analyse` pelo Jev: intenção principal, várias intenções e entidades.
+"""Feature `Analyse` pelo Jev: a leitura única sem a parte da resposta.
 
-FETCH (datasource): uma requisição ao Jev com todas as perguntas; um segundo
-estágio quando o catálogo passa de ~240 intenções; a LLM pequena só para
-entidade `livre` presente, conferida por uma requisição a mais.
-PROCESS (usecase): decisão pura com os limiares do tenant.
+Usada quando o bot NÃO vai responder (atendente humano na conversa, bot
+desligado): intenções, entidades e tom numa requisição. A LLM pequena só entra
+para entidade `livre` presente — uma chamada para todas —, e a cópia é
+conferida por mais uma requisição ao Jev. Quando o bot responde, a análise
+volta junto com a resposta (`Responder`), e este RPC não é chamado.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -23,18 +24,21 @@ from py_return_success_or_error import (
     UsecaseBaseCallData,
 )
 
-from ia_engine_jev.candidatos import por_data, por_lista, por_regex
-from ia_engine_jev.decisoes.analise import decidir_entidades, decidir_intencoes
 from ia_engine_jev.decisoes.limiares import Limiares
 from ia_engine_jev.domain.jev import AnaliseJev, EntidadeDef, IntentDef
 from ia_engine_jev.domain.models import LlmProviderSpec
+from ia_engine_jev.features.leitura import (
+    ResultadoDaLeitura,
+    ler,
+    livres_presentes,
+    montar_analise,
+)
 from ia_engine_jev.jev import erro_de_dominio
-from ia_engine_jev.perguntas import entidades as pe
-from ia_engine_jev.perguntas import intencoes as pi
-from ia_engine_jev.perguntas.comum import estado_da_mensagem
+from ia_engine_jev.perguntas import conferencia as pc
+from ia_engine_jev.perguntas.leitura import PedidoDeLeitura
 from ia_engine_jev.shared.history import ChatTurnTuple
-from ia_engine_jev.shared.valor_livre import copiar_valor
-from ia_engine_jev.typesafe import ClienteJev, Escolha, Pergunta, RespostaJev, Uso
+from ia_engine_jev.shared.valor_livre import copiar_valores
+from ia_engine_jev.typesafe import ClienteJev, RespostaJev, Uso
 
 ChatModelFactory = Callable[[LlmProviderSpec], BaseChatModel]
 
@@ -54,43 +58,10 @@ class AnaliseJevParameters(Parameters):
 
 @dataclass(frozen=True)
 class DadosAnaliseJev:
-    resposta: RespostaJev
-    principal: Escolha | None
+    resultado: ResultadoDaLeitura
+    valores: dict[str, str]
     conferencia: RespostaJev | None
-    valores_livres: dict[str, str]
-    datas: dict[str, str]
     uso: Uso
-
-
-def _perguntas(
-    p: AnaliseJevParameters, datas: dict[str, str]
-) -> tuple[dict[str, Pergunta], dict[str, list[IntentDef]] | None]:
-    perguntas: dict[str, Pergunta] = {}
-    por_grupo: dict[str, list[IntentDef]] | None = None
-    if p.intents:
-        if pi.precisa_de_dois_estagios(p.intents):
-            por_grupo = pi.grupos(p.intents)
-            perguntas[pi.GRUPO] = pi.pergunta_grupo(por_grupo)
-        else:
-            perguntas[pi.PRINCIPAL] = pi.pergunta_principal(p.intents)
-        perguntas.update(pi.perguntas_multi(p.intents))
-    for ent in p.entidades:
-        perguntas[pe.id_presenca(ent.tipo)] = pe.pergunta_presenca(ent)
-        candidatos: Sequence[str] = ()
-        match ent.estrategia:
-            case "regex":
-                candidatos = por_regex(p.mensagem, ent.opcoes)
-            case "lista":
-                candidatos = por_lista(p.mensagem, ent.opcoes)
-            case "data":
-                achadas = por_data(p.mensagem, p.hoje)
-                datas.update(achadas)
-                candidatos = list(achadas)
-            case "varios":
-                perguntas.update(pe.perguntas_varios(ent))
-        if candidatos:
-            perguntas[pe.id_escolha(ent.tipo)] = pe.pergunta_escolha(ent, candidatos)
-    return perguntas, por_grupo
 
 
 class AnaliseJevDataSource(DataSource[DadosAnaliseJev, AnaliseJevParameters]):
@@ -98,58 +69,38 @@ class AnaliseJevDataSource(DataSource[DadosAnaliseJev, AnaliseJevParameters]):
         self._chat_model_factory = chat_model_factory
 
     async def __call__(self, p: AnaliseJevParameters) -> DadosAnaliseJev:
-        datas: dict[str, str] = {}
-        perguntas, por_grupo = _perguntas(p, datas)
-        if not perguntas:
-            return DadosAnaliseJev(RespostaJev(), None, None, {}, {}, Uso())
-        estado = estado_da_mensagem(p.mensagem, p.historico, p.dados_empresa)
-        resposta = await p.jev.perguntar("analise", estado, perguntas)
-        respostas = [resposta]
-
-        principal: Escolha | None = None
-        if por_grupo is not None:
-            grupo = resposta.escolha(pi.GRUPO)
-            if grupo and grupo.escolha in por_grupo:
-                segunda = await p.jev.perguntar(
-                    "analise_grupo",
-                    estado,
-                    {pi.PRINCIPAL: pi.pergunta_principal(por_grupo[grupo.escolha])},
-                )
-                respostas.append(segunda)
-                principal = segunda.escolha(pi.PRINCIPAL)
-
-        # Entidade `livre`: sem candidato no código, a LLM pequena copia o
-        # trecho — só quando o Jev disse que o valor está presente.
+        resultado = await ler(
+            PedidoDeLeitura(
+                mensagem=p.mensagem,
+                historico=p.historico,
+                intents=p.intents,
+                entidades=p.entidades,
+                dados_empresa=p.dados_empresa,
+                hoje=p.hoje,
+            ),
+            p.jev,
+            p.limiares,
+        )
+        respostas = list(resultado.respostas)
+        copiar = livres_presentes(resultado.leitura, p.entidades, (), p.limiares)
         valores: dict[str, str] = {}
-        livres = [
-            e
-            for e in p.entidades
-            if e.estrategia == "livre"
-            and resposta.noul(pe.id_presenca(e.tipo)) >= p.limiares.piso_entidade
-        ]
-        if livres:
-            llm = self._chat_model_factory(p.llm)
-            for ent in livres:
-                valor = await copiar_valor(llm, p.mensagem, ent.tipo, ent.descricao)
-                if valor:
-                    valores[ent.tipo] = valor
         conferencia: RespostaJev | None = None
+        if copiar:
+            valores = await copiar_valores(
+                self._chat_model_factory(p.llm), p.mensagem, copiar
+            )
         if valores:
+            por_chave = {c.chave: (c.nome, c.descricao) for c in copiar}
             conferencia = await p.jev.perguntar(
-                "analise_conferencia",
-                {**estado, "valores": valores},
-                {
-                    pe.id_conferencia(e.tipo): pe.pergunta_conferencia(
-                        e.tipo, e.descricao
-                    )
-                    for e in livres
-                    if e.tipo in valores
-                },
+                "conferencia",
+                pc.estado_da_resposta(p.mensagem, "", [], "", valores),
+                pc.perguntas_da_resposta(
+                    com_texto=False,
+                    valores={k: por_chave[k] for k in valores if k in por_chave},
+                ),
             )
             respostas.append(conferencia)
-        return DadosAnaliseJev(
-            resposta, principal, conferencia, valores, datas, Uso.de(respostas)
-        )
+        return DadosAnaliseJev(resultado, valores, conferencia, Uso.de(respostas))
 
 
 class AnaliseJevRepository(
@@ -167,29 +118,15 @@ class AnaliseJevUsecase(
     def process(
         self, data: DadosAnaliseJev, parameters: AnaliseJevParameters
     ) -> ReturnSuccessOrError[AnaliseJev, AppError]:
-        aceitas, principal, conf, a_revisar = decidir_intencoes(
-            data.resposta, parameters.intents, parameters.limiares, data.principal
-        )
-        entidades = decidir_entidades(
-            data.resposta,
-            parameters.mensagem,
-            parameters.entidades,
-            data.datas,
-            data.conferencia,
-            data.valores_livres,
-            parameters.limiares,
-        )
         return self.ok(
-            AnaliseJev(
-                intents=tuple(aceitas),
-                entidades=tuple(entidades),
-                intent_principal=principal,
-                confianca_principal=conf,
-                intents_a_revisar=tuple(a_revisar),
-                modelo=data.uso.modelo,
-                tokens_entrada=data.uso.tokens_entrada,
-                requisicoes=data.uso.requisicoes,
-                duracao_ms=data.uso.duracao_ms,
+            montar_analise(
+                data.resultado,
+                mensagem=parameters.mensagem,
+                entidades=parameters.entidades,
+                valores=data.valores,
+                conferencia=data.conferencia,
+                limiares=parameters.limiares,
+                uso=data.uso,
             )
         )
 

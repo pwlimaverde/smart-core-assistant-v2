@@ -1,19 +1,26 @@
-"""Prompt da LLM no motor Jev: ela só escreve o texto.
+"""Prompt da LLM no motor Jev: ela só redige o ato que o código decidiu.
 
-Sem schema, sem setor, sem confiança e sem regras de transferência — quem
-decide é o código com os sinais do Jev. A LLM recebe só os trechos aprovados,
-em dois blocos: evidência (responde à pergunta) e conflito (contradiz o que o
-cliente supõe, para corrigir com educação).
+Sem schema, sem setor, sem confiança e sem decidir transferência — quem decide
+é o código com a leitura do Jev. O prompt tem duas partes:
+
+1. **Fixa por tenant** (identidade, persona, regras, dados da empresa): vem
+   primeiro, igual a cada mensagem — é o que o cache de prefixo dos
+   provedores reaproveita.
+2. **Variável** (comportamento, dados coletados, evidência, a tarefa do ato,
+   a correção da escalada e, por último, data e hora). Data e hora no topo
+   invalidavam o cache a cada minuto.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from ia_engine_jev.domain.jev import Dado
 from ia_engine_jev.shared.history import ChatTurnTuple, to_lc_messages
 
 CHAVE_REGRAS_RESPOSTA = "PROMPT_REGRAS_RESPOSTA_JEV"
@@ -23,19 +30,28 @@ _REGRAS_PADRAO = (
     "1. Dê continuidade natural à conversa, usando o histórico.\n"
     "2. Use SÓ as informações da EVIDÊNCIA e dos DADOS DA EMPRESA. Não invente "
     "preço, prazo, desconto nem condição.\n"
-    "3. Se a evidência não cobre a pergunta, diga com honestidade que não tem "
-    "essa informação.\n"
-    "4. Responda em português, de forma sóbria, organizada e educada.\n"
-    "5. Se faltar um dado essencial do cliente, peça-o em UMA pergunta.\n"
-    "6. Nunca diga que vai transferir, encaminhar ou chamar alguém: isso não é "
-    "decisão sua.\n"
+    "3. Responda em português, de forma curta, sóbria e educada.\n"
+    "4. Não repita os dados que o cliente acabou de informar.\n"
+    "5. Nunca diga que vai transferir, encaminhar ou chamar alguém, mesmo que "
+    "a persona fale disso: quem decide a transferência é o sistema, não você.\n"
+    "6. Faça só as perguntas que a TAREFA pedir.\n"
 )
 
-AVISO_SEM_TRANSFERENCIA = (
-    "\n\nATENÇÃO: a resposta anterior dizia que o atendimento seria transferido. "
-    "Isso não vai acontecer. Responda sem mencionar transferência, "
-    "encaminhamento ou outra pessoa."
-)
+
+@dataclass(frozen=True)
+class PedidoDeRedacao:
+    ato: str
+    nome: str = ""
+    persona: str = ""
+    regras: str = ""
+    dados_empresa: str = ""
+    comportamento: str = ""
+    evidencia: Sequence[str] = ()
+    conflito: Sequence[str] = ()
+    coletados: Sequence[tuple[str, str]] = ()
+    perguntar: Sequence[Dado] = ()
+    nota_politica: str = ""
+    correcoes: Sequence[str] = ()
 
 
 def _identidade(nome: str, persona: str) -> str:
@@ -50,56 +66,79 @@ def _identidade(nome: str, persona: str) -> str:
 
 
 def _bloco(titulo: str, textos: Sequence[str]) -> str:
-    if not textos:
-        return ""
     corpo = "\n\n---\n\n".join(t.strip() for t in textos if t.strip())
-    return f"\n\n### {titulo}:\n{corpo}"
+    return f"\n\n### {titulo}:\n{corpo}" if corpo else ""
 
 
-def _campos(
-    coletados: Sequence[tuple[str, str]], pendentes: Sequence[tuple[str, str]]
-) -> str:
+def _lista_de_dados(dados: Sequence[Dado]) -> str:
+    return "\n".join(
+        f"- {d.nome}" + (f" ({d.descricao})" if d.descricao else "") for d in dados
+    )
+
+
+def _tarefa(p: PedidoDeRedacao) -> str:
     partes: list[str] = []
-    if coletados:
-        partes.append("\n\n### DADOS JÁ COLETADOS DO CLIENTE:")
-        partes.extend(f"- {nome}: {valor}" for nome, valor in coletados)
-    if pendentes:
-        partes.append("\n\n### DADOS AINDA NÃO COLETADOS:")
-        partes.extend(f"- {nome}: {descricao}" for nome, descricao in pendentes)
+    match p.ato:
+        case "responder":
+            partes.append(
+                "Responda à mensagem do cliente usando só a EVIDÊNCIA e os DADOS "
+                "DA EMPRESA."
+            )
+            if p.conflito:
+                partes.append(
+                    "Se o cliente supõe algo que o bloco CONFLITO contradiz, "
+                    "corrija com educação usando esse bloco."
+                )
+        case "coletar":
+            partes.append(
+                "Reconheça a mensagem em poucas palavras, sem repetir o que o "
+                "cliente disse."
+            )
+        case _:
+            partes.append(
+                "Responda de forma curta e cordial (cumprimento, agradecimento ou "
+                "conversa). Não peça dados do pedido."
+            )
+    if p.nota_politica.strip():
         partes.append(
-            "\nSe surgir a oportunidade, pergunte de forma natural, um de cada vez."
+            "O cliente pediu algo que a empresa NÃO fornece. Diga isso com "
+            f"cordialidade e ofereça o que há no lugar: {p.nota_politica.strip()}"
+        )
+    if p.perguntar:
+        partes.append(
+            "Peça ao cliente, numa única mensagem, só estes dados — nenhuma "
+            f"outra pergunta:\n{_lista_de_dados(p.perguntar)}"
         )
     return "\n".join(partes)
 
 
-def montar_prompt_sistema(
-    *,
-    nome: str,
-    persona: str,
-    regras: str,
-    comportamento: str,
-    dados_empresa: str,
-    evidencia: Sequence[str],
-    conflito: Sequence[str],
-    coletados: Sequence[tuple[str, str]],
-    pendentes: Sequence[tuple[str, str]],
-    agora: datetime | None = None,
-) -> str:
+def montar_prompt_sistema(p: PedidoDeRedacao, agora: datetime | None = None) -> str:
+    # 1. Parte fixa por tenant (prefixo cacheável).
+    texto = f"{_identidade(p.nome, p.persona)}\n\n{p.regras.strip() or _REGRAS_PADRAO}"
+    if p.dados_empresa.strip():
+        texto += f"\n\n### DADOS DA EMPRESA:\n{p.dados_empresa.strip()}"
+    # 2. Parte variável.
+    if p.comportamento.strip():
+        texto += f"\n\n### COMO CONDUZIR ESTE ASSUNTO:\n{p.comportamento.strip()}"
+    if p.coletados:
+        texto += "\n\n### DADOS JÁ INFORMADOS PELO CLIENTE:\n" + "\n".join(
+            f"- {nome}: {valor}" for nome, valor in p.coletados
+        )
+    if p.ato == "responder":
+        texto += _bloco("EVIDÊNCIA (base de conhecimento)", p.evidencia)
+        texto += _bloco("CONFLITO (corrija o cliente com educação)", p.conflito)
+        if not p.evidencia:
+            texto += (
+                "\n\n### EVIDÊNCIA:\nNenhum trecho da base cobre esta mensagem; "
+                "use só os DADOS DA EMPRESA."
+            )
+    texto += f"\n\n### SUA TAREFA NESTA MENSAGEM:\n{_tarefa(p)}"
+    if p.correcoes:
+        texto += "\n\n### ATENÇÃO — a versão anterior foi recusada. Corrija:\n" + (
+            "\n".join(f"- {c}" for c in p.correcoes)
+        )
     data = (agora or datetime.now()).strftime("%d/%m/%Y %H:%M")
-    texto = (
-        f"Data e hora atual: {data}\n\n"
-        f"{_identidade(nome, persona)}\n\n"
-        f"{regras.strip() or _REGRAS_PADRAO}"
-    )
-    if comportamento.strip():
-        texto += f"\n\n### COMO CONDUZIR ESTE ASSUNTO:\n{comportamento.strip()}"
-    texto += _campos(coletados, pendentes)
-    if dados_empresa.strip():
-        texto += f"\n\n### DADOS DA EMPRESA:\n{dados_empresa.strip()}"
-    texto += _bloco("EVIDÊNCIA (base de conhecimento)", evidencia)
-    texto += _bloco("CONFLITO (corrija o cliente com educação, usando isto)", conflito)
-    if not evidencia:
-        texto += "\n\n### EVIDÊNCIA:\nNenhuma informação da base cobre esta mensagem."
+    texto += f"\n\nData e hora atual: {data}"
     return texto
 
 

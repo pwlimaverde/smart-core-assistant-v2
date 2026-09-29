@@ -2386,6 +2386,13 @@ message MyIntent {
   bool vetorizada = 7;
   int64 criado_em = 8;
   int64 atualizado_em = 9;
+  // Motor Jev -- coleta estruturada: os dados essenciais que o bot pede
+  // quando esta intencao e a escolhida (tipo de entidade ou slug de campo do
+  // cartao), quantos no maximo por mensagem (1..5), e o que fazer quando a
+  // rodada acaba: `transferir` ou `continuar`. Uma rodada so por atendimento.
+  repeated string campos_coleta = 10;
+  int32 max_perguntas = 11;
+  string apos_coleta = 12;
 }
 
 message ListMyIntentsRequest {}
@@ -2400,6 +2407,11 @@ message MyIntentDados {
   string descricao = 3;
   string exemplo = 4;
   string comportamento = 5;
+  // Coleta estruturada (ver MyIntent). A atualizacao grava os tres: quem
+  // edita envia os valores atuais junto.
+  repeated string campos_coleta = 6;
+  int32 max_perguntas = 7;
+  string apos_coleta = 8;
 }
 
 message MyIntentResponse {
@@ -2445,10 +2457,26 @@ message TestarPerguntaResponse {
   repeated SinalValor sinais = 10;
   string intencao_principal = 11;
   double confianca_intencao = 12;
-  // automatica | transferida | sem_info | a_revisar | reserva
+  // automatica | transferida | sem_info | a_revisar | barrada | reserva
   string decisao = 13;
   // Ids dos trechos aprovados como evidência (os demais foram descartados).
   repeated string trechos_aprovados = 14;
+  // Motor Jev: o ato decidido em codigo (transferir | responder | coletar |
+  // social | sem_info | barrada), os dados que a resposta pediu, se a
+  // conferencia reprovou a primeira redacao (e por que), o modelo da LLM e o
+  // tempo de cada etapa.
+  string ato = 15;
+  repeated string campos_perguntados = 16;
+  bool escalada = 17;
+  repeated string problemas = 18;
+  string modelo_llm = 19;
+  repeated EtapaDoMotor etapas = 20;
+}
+
+// Duracao de uma etapa do motor Jev no ensaio.
+message EtapaDoMotor {
+  string etapa = 1;
+  int64 ms = 2;
 }
 
 // --- Plano ia-engine-jev: transferência para atendente ---

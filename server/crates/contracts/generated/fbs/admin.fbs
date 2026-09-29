@@ -1740,6 +1740,9 @@ table MyIntent {
   vetorizada:bool;
   criado_em:long;
   atualizado_em:long;
+  campos_coleta:[string];
+  max_perguntas:int;
+  apos_coleta:string;
 }
 
 table ListMyIntentsRequest {
@@ -1755,6 +1758,9 @@ table MyIntentDados {
   descricao:string;
   exemplo:string;
   comportamento:string;
+  campos_coleta:[string];
+  max_perguntas:int;
+  apos_coleta:string;
 }
 
 table MyIntentResponse {
@@ -1795,6 +1801,17 @@ table TestarPerguntaResponse {
   confianca_intencao:double;
   decisao:string;
   trechos_aprovados:[string];
+  ato:string;
+  campos_perguntados:[string];
+  escalada:bool;
+  problemas:[string];
+  modelo_llm:string;
+  etapas:[smartcore.contracts.queries.EtapaDoMotor];
+}
+
+table EtapaDoMotor {
+  etapa:string;
+  ms:long;
 }
 
 table RegraTransferencia {
