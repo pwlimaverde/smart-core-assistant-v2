@@ -26,6 +26,27 @@ from mcp_server.tools.registry import Categoria, Registro
 DRY_RUN = Field(default=False, description="Só simular.")
 
 
+# Descrições dos parâmetros de coleta (motor Jev). No escopo do módulo: com
+# `from __future__ import annotations`, as anotações são resolvidas nos
+# globais quando o FastMCP monta o schema.
+CAMPOS_COLETA = Field(
+    description=(
+        "Motor Jev — dados essenciais que o bot pede ao cliente nesta intenção, "
+        "em ordem de prioridade: tipo de entidade (ex.: 'quantidade_tiragem') "
+        "ou slug de campo do cartão. Até 10."
+    )
+)
+MAX_PERGUNTAS = Field(
+    description="Quantos dados, no máximo, o bot pede numa mensagem (1 a 5)."
+)
+APOS_COLETA = Field(
+    description=(
+        "Depois da rodada de coleta (uma por atendimento), ou se o cliente já "
+        "informou tudo: 'transferir' para um atendente ou 'continuar'."
+    )
+)
+
+
 def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> None:
     """Registra as tools de treinamento da IA."""
 
@@ -103,23 +124,6 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         )
 
     # -- Intenções (QueryCompose) --------------------------------------------
-
-    CAMPOS_COLETA = Field(
-        description=(
-            "Motor Jev — dados essenciais que o bot pede ao cliente nesta intenção, "
-            "em ordem de prioridade: tipo de entidade (ex.: 'quantidade_tiragem') "
-            "ou slug de campo do cartão. Até 10."
-        )
-    )
-    MAX_PERGUNTAS = Field(
-        description="Quantos dados, no máximo, o bot pede numa mensagem (1 a 5)."
-    )
-    APOS_COLETA = Field(
-        description=(
-            "Depois da rodada de coleta (uma por atendimento), ou se o cliente já "
-            "informou tudo: 'transferir' para um atendente ou 'continuar'."
-        )
-    )
 
     registro.registrar("list_intencoes", Categoria.LEITURA, ("treinamento:read",))
 

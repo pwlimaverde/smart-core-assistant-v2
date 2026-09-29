@@ -110,10 +110,12 @@ Future<void> _abrirFormulario({
                     controller: coleta,
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  Row(
+                  Column(
                     children: [
-                      Expanded(
+                      SizedBox(
+                        width: double.infinity,
                         child: DropdownButtonFormField<int>(
+                          isExpanded: true,
                           initialValue: maxPerguntas,
                           decoration: const InputDecoration(
                             labelText: 'Perguntas por mensagem',
@@ -127,9 +129,11 @@ Future<void> _abrirFormulario({
                               setStateDialog(() => maxPerguntas = v ?? 2),
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
+                      const SizedBox(height: AppSpacing.md),
+                      SizedBox(
+                        width: double.infinity,
                         child: DropdownButtonFormField<String>(
+                          isExpanded: true,
                           initialValue: aposColeta,
                           decoration: const InputDecoration(
                             labelText: 'Depois da coleta',
