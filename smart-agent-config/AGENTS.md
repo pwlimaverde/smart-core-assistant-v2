@@ -58,4 +58,5 @@ com `skipContentGeneration: true`.
 ## AI Context References
 - Documentation index: `.context/docs/README.md`
 - Agent playbooks: `.context/agents/README.md`
+- Skills (biblioteca única, leia sob demanda pelo caminho): `.context/skills/README.md`
 
