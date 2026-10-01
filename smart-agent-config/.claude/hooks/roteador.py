@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -41,6 +42,15 @@ DIR_SKILLS = RAIZ / ".context" / "skills"
 DIR_AGENTES = RAIZ / ".context" / "agents"
 ARQ_WORKFLOW = RAIZ / ".context" / "workflow" / "status.yaml"
 MODOS = ("on", "skills", "off")
+
+# Máquina que escreve o status: o mesmo repositório roda no PC e no VPS, e o
+# prefixo deixa claro de onde veio cada linha. ROTEADOR_MACHINE tem precedência
+# (o hostname do VPS Hostinger, srv1321059, não contém "vps").
+MACHINE_PREFIX = os.getenv("ROTEADOR_MACHINE") or (
+    "VPS" if "vps" in socket.gethostname().lower() else "LOCAL"
+)
+# Largura fixa para LOCAL e VPS alinharem na linha de status.
+_ROTULO_MAQUINA = f"[{MACHINE_PREFIX.upper()}]".ljust(8)
 
 
 # ------------------------------------------------------------ utilidades
@@ -253,7 +263,7 @@ def texto_status(config: dict, decisao: dict | None, modo: str) -> str:
 def gravar_status(texto: str) -> None:
     try:
         DIR_ESTADO.mkdir(parents=True, exist_ok=True)
-        ARQ_STATUS.write_text(texto + "\n", encoding="utf-8")
+        ARQ_STATUS.write_text(f"{_ROTULO_MAQUINA}{texto}\n", encoding="utf-8")
     except OSError:
         pass
 
@@ -736,6 +746,7 @@ def cli(argv: list[str]) -> int:
         return 0
     modo = ler_modo(config)
     ultima = ler_ultima_decisao()
+    print(f"máquina: {MACHINE_PREFIX}")
     print(f"modo: {modo}")
     print("chave TYPESAFE_API_KEY: " + ("presente" if os.environ.get("TYPESAFE_API_KEY") else "AUSENTE"))
     print("última decisão: " + (texto_status(config, ultima, modo) if ultima else "nenhuma"))
@@ -752,6 +763,7 @@ def main() -> int:
         config = carregar_config()
         registro, contexto = processar(entrada, config)
         registro["gancho_ms"] = int((time.perf_counter() - _INICIO) * 1000)
+        registro["maquina"] = MACHINE_PREFIX
         registrar(config, registro)
         gravar_status(texto_status(config, registro, registro.get("modo", "skills")))
         if contexto:
