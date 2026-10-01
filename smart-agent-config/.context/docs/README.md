@@ -26,8 +26,10 @@ git.
 - **Se só for executar planos**, não há motivo para exportar — o MCP lê o
   `.context/` direto.
 - **Se precisar exportar**, sempre com `preset` explícito (`claude`,
-  `antigravity`; sem preset ele espalha para .cursor/.windsurf/.cline/…) e, logo
-  depois, `git checkout -- .context/agents/`.
+  `antigravity`; sem preset ele espalha para .cursor/.windsurf/.cline/…),
+  **`skipSkills: true`** (as skills têm fonte única em `.context/skills/` e não são
+  mais exportadas — sem isso o export recria `.claude/skills/` e desfaz o seletor) e,
+  logo depois, `git checkout -- .context/agents/`.
 - **Conferir**: `.context/agents/backend-specialist.md` tem ~34 linhas de
   conteúdo real; se aparecer `AUTO-GENERATED`, a fonte foi corrompida.
 
@@ -37,6 +39,7 @@ com `skipContentGeneration: true`.
 ## Repository Snapshot
 - `doc_dev/` — planejamento canônico do projeto (arquitetura, modelagem de dados, padrões por linguagem, fases)
 - `.context/` — docs, agentes, skills e workflow coordenados pelo dotcontext (esta pasta)
+- Skills: **biblioteca única** em `.context/skills/` (catálogo no `README.md` de lá); um gancho com o Jev escolhe a skill de cada mensagem e, no modo `on`, o modelo/especialista — ver `tooling.md` ("Roteador de modelo e seletor de skill")
 - Stacks: **Rust** (backend), **Python** (`ia_engine`), **Flutter/Dart** (clients)
 
 ## Document Map
