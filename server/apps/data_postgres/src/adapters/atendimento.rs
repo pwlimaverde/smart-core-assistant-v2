@@ -2331,6 +2331,14 @@ impl AtendimentoStore for PgAtendimentoStore {
                     atendimento_id,
                 )
                 .await?;
+            // O "🤖 Análise de IA" que o cartão do Trello trazia no painel
+            // antigo: intenções, entidades, sentimento e a última decisão.
+            let analise = infrastructure_postgres::atendimentos::analise::analise_do_atendimento(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+            )
+            .await?;
             // P14 — quais destas a IA colocou (o ✨ da ficha).
             let da_ia = infrastructure_postgres::atendimentos::etiquetas::etiquetas_da_ia(
                 &mut tx,
@@ -2420,6 +2428,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                 "bot_pode_atender": bot_pode_atender,
                 "campos": campos,
                 "dados_do_contato": dados_do_contato,
+                "analise": analise,
             });
             Ok((json, tx))
         })

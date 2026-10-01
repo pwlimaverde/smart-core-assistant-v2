@@ -131,4 +131,14 @@ pub trait WhatsappStore: Send + Sync {
         &self,
         ctx: &RequestContext,
     ) -> Result<Vec<(i32, Option<i32>, String)>, DbError>;
+
+    /// Liga o contato à conexão por onde ele escreveu. É o que o envio do
+    /// atendente usa para saber por qual WhatsApp responder.
+    async fn vincular_contato(
+        &self,
+        ctx: &RequestContext,
+        instance_id: i32,
+        jid: &str,
+        contato_id: i32,
+    ) -> Result<(), DbError>;
 }

@@ -40,6 +40,9 @@ enum StatusEntrega {
       'delivered' => StatusEntrega.entregue,
       'read' => StatusEntrega.lida,
       'failed' => StatusEntrega.falhou,
+      // Sem conexão de WhatsApp para o contato: o servidor desistiu do envio,
+      // e um relógio daria a entender que ainda vai sair.
+      'dead_letter' => StatusEntrega.falhou,
       _ => StatusEntrega.pendente,
     };
   }

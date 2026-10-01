@@ -495,10 +495,11 @@ impl MensagemRepository for PostgresMensagemRepository {
                  ON oa.id = om.atendimento_id AND oa.tenant_id = om.tenant_id
                JOIN oraculo_contato oc
                  ON oc.id = oa.contato_id AND oc.tenant_id = oa.tenant_id
-               JOIN whatsapp_contact wc
-                 ON wc.contact_id = oc.id AND wc.tenant_id = oc.tenant_id AND wc.active = true
+               CROSS JOIN LATERAL (
+                   SELECT conexao_do_contato(oc.tenant_id, oc.id) AS instance_id
+               ) wc
                WHERE om.tenant_id = $1 AND om.id = $2 AND oc.telefone IS NOT NULL
-               ORDER BY wc.updated_at DESC
+                 AND wc.instance_id IS NOT NULL
                LIMIT 1"#,
         )
         .bind(ctx.tenant_id)
@@ -609,10 +610,11 @@ impl MensagemRepository for PostgresMensagemRepository {
                  ON oa.id = om.atendimento_id AND oa.tenant_id = om.tenant_id
                JOIN oraculo_contato oc
                  ON oc.id = oa.contato_id AND oc.tenant_id = oa.tenant_id
-               JOIN whatsapp_contact wc
-                 ON wc.contact_id = oc.id AND wc.tenant_id = oc.tenant_id AND wc.active = true
+               CROSS JOIN LATERAL (
+                   SELECT conexao_do_contato(oc.tenant_id, oc.id) AS instance_id
+               ) wc
                WHERE om.tenant_id = $1 AND om.id = $2 AND oc.telefone IS NOT NULL
-               ORDER BY wc.updated_at DESC
+                 AND wc.instance_id IS NOT NULL
                LIMIT 1"#,
         )
         .bind(ctx.tenant_id)
@@ -833,10 +835,11 @@ pub async fn marcar_lidas_do_contato(
            FROM oraculo_atendimento oa
            JOIN oraculo_contato oc
              ON oc.id = oa.contato_id AND oc.tenant_id = oa.tenant_id
-           JOIN whatsapp_contact wc
-             ON wc.contact_id = oc.id AND wc.tenant_id = oc.tenant_id AND wc.active = true
+           CROSS JOIN LATERAL (
+               SELECT conexao_do_contato(oc.tenant_id, oc.id) AS instance_id
+           ) wc
            WHERE oa.tenant_id = $1 AND oa.id = $2 AND oc.telefone IS NOT NULL
-           ORDER BY wc.updated_at DESC
+             AND wc.instance_id IS NOT NULL
            LIMIT 1"#,
     )
     .bind(ctx.tenant_id)
@@ -930,14 +933,15 @@ pub async fn resolver_destino_do_atendimento(
 ) -> Result<Option<(i64, String)>, DbError> {
     ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
     let row = sqlx::query_as::<_, (i64, String)>(
-        r#"SELECT wc.instance_id, oc.telefone
+        r#"SELECT wc.instance_id::bigint, oc.telefone
              FROM oraculo_atendimento oa
              JOIN oraculo_contato oc
                ON oc.id = oa.contato_id AND oc.tenant_id = oa.tenant_id
-             JOIN whatsapp_contact wc
-               ON wc.contact_id = oc.id AND wc.tenant_id = oc.tenant_id AND wc.active = true
+             CROSS JOIN LATERAL (
+                 SELECT conexao_do_contato(oc.tenant_id, oc.id) AS instance_id
+             ) wc
             WHERE oa.tenant_id = $1 AND oa.id = $2 AND oc.telefone IS NOT NULL
-            ORDER BY wc.updated_at DESC
+               AND wc.instance_id IS NOT NULL
             LIMIT 1"#,
     )
     .bind(ctx.tenant_id)

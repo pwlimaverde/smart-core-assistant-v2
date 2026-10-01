@@ -1990,6 +1990,37 @@ table DetalheAtendimentoResponse {
   bot_pode_atender:bool;
   campos:[smartcore.contracts.queries.ValorCampoDoAtendimento];
   dados_do_contato:[smartcore.contracts.queries.DadoDoContato];
+  analise:smartcore.contracts.queries.AnaliseDaConversa;
+}
+
+table AnaliseDaConversa {
+  intencoes:[smartcore.contracts.queries.IntencaoDaConversa];
+  entidades:[smartcore.contracts.queries.EntidadeDaConversa];
+  sentimento_label:string;
+  sentimento_nota:int;
+  ultima_decisao:smartcore.contracts.queries.DecisaoDaConversa;
+}
+
+table IntencaoDaConversa {
+  tipo:string;
+  confianca:double;
+  vezes:int;
+}
+
+table EntidadeDaConversa {
+  tipo:string;
+  valor:string;
+  confianca:double;
+}
+
+table DecisaoDaConversa {
+  motor:string;
+  ato:string;
+  decisao:string;
+  motivo:string;
+  transferiu:bool;
+  intencao:string;
+  criado_em:long;
 }
 
 table DadoDoContato {

@@ -10,6 +10,7 @@ import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
 import '../../domain/model/ficha.dart';
+import 'analise_do_proto.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
 import '../../domain/model/evento_timeline.dart';
@@ -580,6 +581,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
       botPodeAtender: resp.botPodeAtender,
       campos: resp.campos.map(_valorCampoDoProto).toList(),
       dadosDoContato: {for (final d in resp.dadosDoContato) d.chave: d.valor},
+      analise: analiseDoProto(resp),
     );
   }
 

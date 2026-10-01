@@ -6608,6 +6608,14 @@ const DetalheAtendimentoResponse$json = {
       '6': '.smartcore.contracts.queries.DadoDoContato',
       '10': 'dadosDoContato'
     },
+    {
+      '1': 'analise',
+      '3': 7,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.AnaliseDaConversa',
+      '10': 'analise'
+    },
   ],
 };
 
@@ -6620,7 +6628,103 @@ final $typed_data.Uint8List detalheAtendimentoResponseDescriptor = $convert.base
     'KAoQYm90X3BvZGVfYXRlbmRlchgEIAEoCFIOYm90UG9kZUF0ZW5kZXISTAoGY2FtcG9zGAUgAy'
     'gLMjQuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlZhbG9yQ2FtcG9Eb0F0ZW5kaW1lbnRv'
     'UgZjYW1wb3MSVAoQZGFkb3NfZG9fY29udGF0bxgGIAMoCzIqLnNtYXJ0Y29yZS5jb250cmFjdH'
-    'MucXVlcmllcy5EYWRvRG9Db250YXRvUg5kYWRvc0RvQ29udGF0bw==');
+    'MucXVlcmllcy5EYWRvRG9Db250YXRvUg5kYWRvc0RvQ29udGF0bxJICgdhbmFsaXNlGAcgASgL'
+    'Mi4uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkFuYWxpc2VEYUNvbnZlcnNhUgdhbmFsaX'
+    'Nl');
+
+@$core.Deprecated('Use analiseDaConversaDescriptor instead')
+const AnaliseDaConversa$json = {
+  '1': 'AnaliseDaConversa',
+  '2': [
+    {
+      '1': 'intencoes',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.IntencaoDaConversa',
+      '10': 'intencoes'
+    },
+    {
+      '1': 'entidades',
+      '3': 2,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.EntidadeDaConversa',
+      '10': 'entidades'
+    },
+    {'1': 'sentimento_label', '3': 3, '4': 1, '5': 9, '10': 'sentimentoLabel'},
+    {'1': 'sentimento_nota', '3': 4, '4': 1, '5': 5, '10': 'sentimentoNota'},
+    {
+      '1': 'ultima_decisao',
+      '3': 5,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.DecisaoDaConversa',
+      '10': 'ultimaDecisao'
+    },
+  ],
+};
+
+/// Descriptor for `AnaliseDaConversa`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List analiseDaConversaDescriptor = $convert.base64Decode(
+    'ChFBbmFsaXNlRGFDb252ZXJzYRJNCglpbnRlbmNvZXMYASADKAsyLy5zbWFydGNvcmUuY29udH'
+    'JhY3RzLnF1ZXJpZXMuSW50ZW5jYW9EYUNvbnZlcnNhUglpbnRlbmNvZXMSTQoJZW50aWRhZGVz'
+    'GAIgAygLMi8uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkVudGlkYWRlRGFDb252ZXJzYV'
+    'IJZW50aWRhZGVzEikKEHNlbnRpbWVudG9fbGFiZWwYAyABKAlSD3NlbnRpbWVudG9MYWJlbBIn'
+    'Cg9zZW50aW1lbnRvX25vdGEYBCABKAVSDnNlbnRpbWVudG9Ob3RhElUKDnVsdGltYV9kZWNpc2'
+    'FvGAUgASgLMi4uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkRlY2lzYW9EYUNvbnZlcnNh'
+    'Ug11bHRpbWFEZWNpc2Fv');
+
+@$core.Deprecated('Use intencaoDaConversaDescriptor instead')
+const IntencaoDaConversa$json = {
+  '1': 'IntencaoDaConversa',
+  '2': [
+    {'1': 'tipo', '3': 1, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'confianca', '3': 2, '4': 1, '5': 1, '10': 'confianca'},
+    {'1': 'vezes', '3': 3, '4': 1, '5': 5, '10': 'vezes'},
+  ],
+};
+
+/// Descriptor for `IntencaoDaConversa`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List intencaoDaConversaDescriptor = $convert.base64Decode(
+    'ChJJbnRlbmNhb0RhQ29udmVyc2ESEgoEdGlwbxgBIAEoCVIEdGlwbxIcCgljb25maWFuY2EYAi'
+    'ABKAFSCWNvbmZpYW5jYRIUCgV2ZXplcxgDIAEoBVIFdmV6ZXM=');
+
+@$core.Deprecated('Use entidadeDaConversaDescriptor instead')
+const EntidadeDaConversa$json = {
+  '1': 'EntidadeDaConversa',
+  '2': [
+    {'1': 'tipo', '3': 1, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'valor', '3': 2, '4': 1, '5': 9, '10': 'valor'},
+    {'1': 'confianca', '3': 3, '4': 1, '5': 1, '10': 'confianca'},
+  ],
+};
+
+/// Descriptor for `EntidadeDaConversa`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List entidadeDaConversaDescriptor = $convert.base64Decode(
+    'ChJFbnRpZGFkZURhQ29udmVyc2ESEgoEdGlwbxgBIAEoCVIEdGlwbxIUCgV2YWxvchgCIAEoCV'
+    'IFdmFsb3ISHAoJY29uZmlhbmNhGAMgASgBUgljb25maWFuY2E=');
+
+@$core.Deprecated('Use decisaoDaConversaDescriptor instead')
+const DecisaoDaConversa$json = {
+  '1': 'DecisaoDaConversa',
+  '2': [
+    {'1': 'motor', '3': 1, '4': 1, '5': 9, '10': 'motor'},
+    {'1': 'ato', '3': 2, '4': 1, '5': 9, '10': 'ato'},
+    {'1': 'decisao', '3': 3, '4': 1, '5': 9, '10': 'decisao'},
+    {'1': 'motivo', '3': 4, '4': 1, '5': 9, '10': 'motivo'},
+    {'1': 'transferiu', '3': 5, '4': 1, '5': 8, '10': 'transferiu'},
+    {'1': 'intencao', '3': 6, '4': 1, '5': 9, '10': 'intencao'},
+    {'1': 'criado_em', '3': 7, '4': 1, '5': 3, '10': 'criadoEm'},
+  ],
+};
+
+/// Descriptor for `DecisaoDaConversa`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List decisaoDaConversaDescriptor = $convert.base64Decode(
+    'ChFEZWNpc2FvRGFDb252ZXJzYRIUCgVtb3RvchgBIAEoCVIFbW90b3ISEAoDYXRvGAIgASgJUg'
+    'NhdG8SGAoHZGVjaXNhbxgDIAEoCVIHZGVjaXNhbxIWCgZtb3Rpdm8YBCABKAlSBm1vdGl2bxIe'
+    'Cgp0cmFuc2Zlcml1GAUgASgIUgp0cmFuc2Zlcml1EhoKCGludGVuY2FvGAYgASgJUghpbnRlbm'
+    'NhbxIbCgljcmlhZG9fZW0YByABKANSCGNyaWFkb0Vt');
 
 @$core.Deprecated('Use dadoDoContatoDescriptor instead')
 const DadoDoContato$json = {

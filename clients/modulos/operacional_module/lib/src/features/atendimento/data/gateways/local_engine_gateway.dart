@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'package:api_client/api_client.dart' as proto;
 import 'package:fixnum/fixnum.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -13,6 +15,7 @@ import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
 import '../../domain/model/ficha.dart';
+import 'analise_do_proto.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
 import 'atendimento_remote_gateway.dart';
@@ -284,7 +287,8 @@ final class LocalEngineGateway implements AtendimentoGateway {
       // índice com id negativo até o sync. Sem juntá-la aqui, ela sumiria da
       // conversa assim que a rede voltasse e antes de o envio completar.
       if (beforeId != null) return remotas;
-      return [...remotas, ...await _pendentesLocais(atendimentoId)];
+      final pendentes = await _pendentesLocais(atendimentoId);
+      return [...remotas, ...semAsJaEnviadas(pendentes, remotas)];
     } catch (e) {
       if (!_semRede(e)) rethrow;
     }
@@ -352,11 +356,15 @@ final class LocalEngineGateway implements AtendimentoGateway {
     try {
       // NUNCA logar `conteudo` (PII) — só trafega no corpo da chamada FFI.
       final engine = await _engine();
-      return await engine.sendOutboundMessage(
+      final idLocal = await engine.sendOutboundMessage(
         atendimentoId: atendimentoId,
         conteudo: conteudo,
         tipo: tipo,
       );
+      // Com rede, a mensagem sai agora: esperar o sync periódico deixava o
+      // relógio na bolha por até um minuto.
+      unawaited(_sincronizarBestEffort());
+      return idLocal;
     } catch (e) {
       throw _mapErro(e);
     }
@@ -396,9 +404,8 @@ final class LocalEngineGateway implements AtendimentoGateway {
   // P5 — a ficha vem do servidor: timeline, histórico e catálogo são leitura
   // de tabelas que o índice local não espelha.
   @override
-  Future<List<EventoDaTimeline>> listarTimeline({
-    required int atendimentoId,
-  }) => _remoto.listarTimeline(atendimentoId: atendimentoId);
+  Future<List<EventoDaTimeline>> listarTimeline({required int atendimentoId}) =>
+      _remoto.listarTimeline(atendimentoId: atendimentoId);
 
   /// P16 — direto ao servidor, como as outras operações do supervisor.
   @override
@@ -419,16 +426,11 @@ final class LocalEngineGateway implements AtendimentoGateway {
   Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
     required int contatoId,
     int limit = 20,
-  }) => _remoto.listarAtendimentosDoContato(
-    contatoId: contatoId,
-    limit: limit,
-  );
+  }) => _remoto.listarAtendimentosDoContato(contatoId: contatoId, limit: limit);
 
   @override
-  Future<void> removerNota({
-    required int notaId,
-    required int atendimentoId,
-  }) => _remoto.removerNota(notaId: notaId, atendimentoId: atendimentoId);
+  Future<void> removerNota({required int notaId, required int atendimentoId}) =>
+      _remoto.removerNota(notaId: notaId, atendimentoId: atendimentoId);
 
   @override
   Future<Etiqueta> atualizarEtiqueta({
@@ -615,6 +617,40 @@ final class LocalEngineGateway implements AtendimentoGateway {
   }
 
   /// Mensagens escritas sem rede (id negativo), ainda na fila de envio.
+  /// Tira das pendentes locais as que o servidor já devolveu.
+  ///
+  /// O aviso de "mensagem enviada" chega pelo stream antes de o sync promover
+  /// a cópia local (id negativo) ao id do servidor, e a recarga daquele
+  /// instante trazia as duas: a mesma mensagem duas vezes na conversa. Casa
+  /// pelo texto do atendente enviado a partir do momento em que ela foi
+  /// escrita, uma remota para cada pendente.
+  @visibleForTesting
+  static List<MensagemThread> semAsJaEnviadas(
+    List<MensagemThread> pendentes,
+    List<MensagemThread> remotas,
+  ) {
+    if (pendentes.isEmpty) return pendentes;
+    final livres = remotas
+        .where((m) => m.id > 0 && m.remetente == 'atendente')
+        .toList();
+    final saida = <MensagemThread>[];
+    for (final p in pendentes) {
+      final i = livres.indexWhere(
+        (r) =>
+            r.conteudo == p.conteudo &&
+            !r.timestamp.isBefore(
+              p.timestamp.subtract(const Duration(seconds: 5)),
+            ),
+      );
+      if (i < 0) {
+        saida.add(p);
+      } else {
+        livres.removeAt(i);
+      }
+    }
+    return saida;
+  }
+
   Future<List<MensagemThread>> _pendentesLocais(int atendimentoId) async {
     try {
       final engine = await _engine();
@@ -780,6 +816,7 @@ final class LocalEngineGateway implements AtendimentoGateway {
       botPodeAtender: resp.botPodeAtender,
       campos: resp.campos.map(_valorCampoDoProto).toList(),
       dadosDoContato: {for (final d in resp.dadosDoContato) d.chave: d.valor},
+      analise: analiseDoProto(resp),
     );
   }
 

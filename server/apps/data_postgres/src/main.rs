@@ -3725,9 +3725,13 @@ async fn handler_resolve_atendimento_para_contato(
     // ida extra ao banco no caminho quente. Ausente ou ilegível resolve para
     // "responde": a instância nasce com `resposta_bot = TRUE` e uma falha de
     // leitura não pode calar o bot de quem nunca o desligou.
-    let instancia_responde_bot = match payload_json.get("instance_id").and_then(|v| v.as_i64()) {
+    let instance_id = payload_json
+        .get("instance_id")
+        .and_then(|v| v.as_i64())
+        .map(|id| id as i32);
+    let instancia_responde_bot = match instance_id {
         Some(id) => whatsapp
-            .buscar_instancia(&contexto_do_envelope(&env), id as i32)
+            .buscar_instancia(&contexto_do_envelope(&env), id)
             .await
             .ok()
             .flatten()
@@ -3741,19 +3745,37 @@ async fn handler_resolve_atendimento_para_contato(
         .resolver_atendimento_para_contato(&ctx, phone, push_name)
         .await
     {
-        Ok((contato_id, atendimento, is_new)) => ok_reply(
-            &env,
-            "ResolveAtendimentoParaContatoReply",
-            serde_json::json!({
-                "status": "success",
-                "contato_id": contato_id,
-                "atendimento_id": atendimento.id,
-                "bot_pode_atender": atendimento.bot_pode_atender,
-                "instancia_responde_bot": instancia_responde_bot,
-                "atendente_humano_id": atendimento.atendente_humano_id,
-                "is_new": is_new,
-            }),
-        ),
+        Ok((contato_id, atendimento, is_new)) => {
+            // Sem este vínculo o envio do atendente não sabe por qual conexão
+            // responder e a mensagem vai para dead-letter. Falhar aqui não pode
+            // perder a mensagem recebida: só registra e segue.
+            if let Some(instancia) = instance_id.filter(|id| *id > 0) {
+                if let Err(err) = whatsapp
+                    .vincular_contato(&ctx, instancia, phone, contato_id)
+                    .await
+                {
+                    tracing::warn!(
+                        instance_id = instancia,
+                        contato_id = contato_id,
+                        erro = %err,
+                        "falha ao vincular o contato à conexão de WhatsApp"
+                    );
+                }
+            }
+            ok_reply(
+                &env,
+                "ResolveAtendimentoParaContatoReply",
+                serde_json::json!({
+                    "status": "success",
+                    "contato_id": contato_id,
+                    "atendimento_id": atendimento.id,
+                    "bot_pode_atender": atendimento.bot_pode_atender,
+                    "instancia_responde_bot": instancia_responde_bot,
+                    "atendente_humano_id": atendimento.atendente_humano_id,
+                    "is_new": is_new,
+                }),
+            )
+        }
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
 }
@@ -12670,6 +12692,110 @@ mod tests_atendimento_cliente_unit {
             foto_perfil: None,
             foto_perfil_url_origem: None,
         }
+    }
+
+    fn atendimento_fake(
+        id: i32,
+    ) -> infrastructure_postgres::atendimentos::atendimentos::Atendimento {
+        infrastructure_postgres::atendimentos::atendimentos::Atendimento {
+            id,
+            tenant_id: uuid::Uuid::nil(),
+            contato_id: 569,
+            departamento_id: None,
+            fluxo_atendimento_id: None,
+            status: "fila".to_string(),
+            etapa_atual_id: None,
+            data_inicio: chrono::Utc::now(),
+            data_fim: None,
+            data_ultima_mensagem: None,
+            assunto: None,
+            prioridade: "normal".to_string(),
+            atendente_humano_id: None,
+            contexto_conversa: serde_json::json!({}),
+            historico_status: serde_json::json!([]),
+            tags: serde_json::json!([]),
+            avaliacao: None,
+            feedback: None,
+            data_primeira_resposta: None,
+            bot_pode_atender: true,
+            sentimento_nota: None,
+            sentimento_label: None,
+        }
+    }
+
+    /// Sem o vínculo contato↔conexão, o envio do atendente ia para dead-letter
+    /// (`sem_whatsapp_contact_ativo`): a mensagem recebida é que o cria.
+    #[tokio::test]
+    async fn resolver_contato_vincula_o_contato_a_conexao_da_mensagem() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_resolver_atendimento_para_contato()
+            .times(1)
+            .returning(|_, _, _| Ok((569, atendimento_fake(466), false)));
+        let mut whatsapp = crate::ports::MockWhatsappStore::new();
+        whatsapp
+            .expect_buscar_instancia()
+            .returning(|_, _| Ok(None));
+        whatsapp
+            .expect_vincular_contato()
+            .times(1)
+            .withf(|_, instancia, jid, contato| {
+                *instancia == 181 && jid == "558897141275" && *contato == 569
+            })
+            .returning(|_, _, _, _| Ok(()));
+        let env = envelope_com_payload(
+            "ResolveAtendimentoParaContato",
+            serde_json::json!({ "phone": "558897141275", "instance_id": 181 }),
+        );
+
+        let resp = handler_resolve_atendimento_para_contato(&store, &whatsapp, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Falhar ao vincular não pode perder a mensagem recebida.
+    #[tokio::test]
+    async fn resolver_contato_segue_mesmo_se_o_vinculo_falhar() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_resolver_atendimento_para_contato()
+            .returning(|_, _, _| Ok((569, atendimento_fake(466), false)));
+        let mut whatsapp = crate::ports::MockWhatsappStore::new();
+        whatsapp
+            .expect_buscar_instancia()
+            .returning(|_, _| Ok(None));
+        whatsapp
+            .expect_vincular_contato()
+            .returning(|_, _, _, _| Err(infrastructure_postgres::DbError::NotFound));
+        let env = envelope_com_payload(
+            "ResolveAtendimentoParaContato",
+            serde_json::json!({ "phone": "558897141275", "instance_id": 181 }),
+        );
+
+        let resp = handler_resolve_atendimento_para_contato(&store, &whatsapp, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["atendimento_id"], 466);
+    }
+
+    /// Sem conexão no evento (worker antigo), não há o que vincular.
+    #[tokio::test]
+    async fn resolver_contato_sem_conexao_nao_vincula() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_resolver_atendimento_para_contato()
+            .returning(|_, _, _| Ok((569, atendimento_fake(466), true)));
+        let mut whatsapp = crate::ports::MockWhatsappStore::new();
+        whatsapp.expect_vincular_contato().times(0);
+        let env = envelope_com_payload(
+            "ResolveAtendimentoParaContato",
+            serde_json::json!({ "phone": "558897141275" }),
+        );
+
+        let resp = handler_resolve_atendimento_para_contato(&store, &whatsapp, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
     }
 
     /// HAPPY PATH: get_thread devolve as mensagens da thread.

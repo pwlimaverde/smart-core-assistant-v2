@@ -206,6 +206,9 @@ class _Conteudo extends StatelessWidget {
               ],
             ),
           ),
+        // O "Análise de IA" do cartão do Trello no painel antigo: o que a IA
+        // leu da conversa e o que o motor decidiu por último.
+        if (!ficha.analise.vazia) _SecaoDaAnalise(analise: ficha.analise),
         // P15 — o que a IA encontrou do contato nas conversas e não tem coluna
         // no cadastro. Só de leitura: é pista, não cadastro.
         if (ficha.dadosDoContato.isNotEmpty)
@@ -453,6 +456,63 @@ class _Secao extends StatelessWidget {
 }
 
 /// Uma linha chave/valor do painel (`ws-info__field`).
+/// A análise da IA da conversa, só de leitura.
+class _SecaoDaAnalise extends StatelessWidget {
+  final AnaliseDaIa analise;
+
+  const _SecaoDaAnalise({required this.analise});
+
+  static String _pct(double v) => '${(v * 100).round()}%';
+
+  static const _atos = {
+    'transferir': 'Transferiu',
+    'responder': 'Respondeu',
+    'coletar': 'Pediu dados',
+    'social': 'Conversa social',
+    'sem_info': 'Sem informação',
+    'barrada': 'Barrou a mensagem',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final decisao = analise.ultimaDecisao;
+    return _Secao(
+      titulo: 'Análise da IA',
+      dica: 'O que a IA leu nas mensagens desta conversa.',
+      child: Column(
+        children: [
+          if (analise.sentimentoLabel.isNotEmpty)
+            CampoDoPainel(
+              chave: 'Sentimento',
+              valor: analise.sentimentoNota > 0
+                  ? '${analise.sentimentoLabel} (${analise.sentimentoNota})'
+                  : analise.sentimentoLabel,
+            ),
+          if (decisao != null)
+            CampoDoPainel(
+              chave: 'Última decisão',
+              valor: [
+                _atos[decisao.ato] ??
+                    (decisao.transferiu ? 'Transferiu' : decisao.ato),
+                if (decisao.motivo.isNotEmpty) decisao.motivo,
+                if (decisao.motor.isNotEmpty) 'motor ${decisao.motor}',
+              ].where((t) => t.isNotEmpty).join(' · '),
+            ),
+          for (final i in analise.intencoes)
+            CampoDoPainel(
+              chave: 'Intenção',
+              valor:
+                  '${i.tipo} · ${_pct(i.confianca)}'
+                  '${i.vezes > 1 ? ' · ${i.vezes}×' : ''}',
+            ),
+          for (final e in analise.entidades)
+            CampoDoPainel(chave: e.tipo, valor: e.valor),
+        ],
+      ),
+    );
+  }
+}
+
 class CampoDoPainel extends StatelessWidget {
   final String chave;
   final String valor;

@@ -25,6 +25,7 @@ use contracts::grpc::queries::{
     AjustarEscoposMcpGrantRequest,
     AjustarEscoposMcpGrantResponse,
     AlternarEtiquetaRequest,
+    AnaliseDaConversa,
     ApiKeyEntry as ProtoApiKeyEntry,
     AtendimentoEvent,
     AtendimentoIdRequest,
@@ -66,6 +67,7 @@ use contracts::grpc::queries::{
     CriarNumeroIgnoradoRequest,
     DadoDoContato,
     DadosMyCliente,
+    DecisaoDaConversa,
     DefinirBotDaConversaRequest,
     DefinirBotDaConversaResponse,
     DefinirDepartamentoDaConexaoRequest,
@@ -82,6 +84,7 @@ use contracts::grpc::queries::{
     DetalheAtendimentoResponse,
     DetalheDaConexaoRequest,
     DetalheDaConexaoResponse,
+    EntidadeDaConversa,
     EnviarMidiaAtendimentoRequest,
     EnviarMidiaAtendimentoResponse,
     EnviarPresencaRequest,
@@ -122,6 +125,7 @@ use contracts::grpc::queries::{
     GetVersaoDoAppResponse,
     IniciarAtendimentoManualRequest,
     IniciarAtendimentoManualResponse,
+    IntencaoDaConversa,
     ItemExcluido,
     ListAtendimentosRequest,
     ListAtendimentosResponse,
@@ -8977,6 +8981,7 @@ impl AdminService for AdminFacade {
                         .collect()
                 })
                 .unwrap_or_default(),
+            analise: corpo.get("analise").map(analise_do_json),
         }))
     }
 
@@ -10654,6 +10659,60 @@ fn texto_do(v: &serde_json::Value, chave: &str) -> String {
         .and_then(|x| x.as_str())
         .unwrap_or_default()
         .to_string()
+}
+
+/// A análise da IA da conversa, do JSON do `data_postgres` para o proto.
+fn analise_do_json(v: &serde_json::Value) -> AnaliseDaConversa {
+    let texto = |o: &serde_json::Value, k: &str| {
+        o.get(k)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let numero = |o: &serde_json::Value, k: &str| o.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
+    let lista = |k: &str| {
+        v.get(k)
+            .and_then(|x| x.as_array())
+            .cloned()
+            .unwrap_or_default()
+    };
+    AnaliseDaConversa {
+        intencoes: lista("intencoes")
+            .iter()
+            .map(|i| IntencaoDaConversa {
+                tipo: texto(i, "tipo"),
+                confianca: numero(i, "confianca"),
+                vezes: i.get("vezes").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+            })
+            .collect(),
+        entidades: lista("entidades")
+            .iter()
+            .map(|e| EntidadeDaConversa {
+                tipo: texto(e, "tipo"),
+                valor: texto(e, "valor"),
+                confianca: numero(e, "confianca"),
+            })
+            .collect(),
+        sentimento_label: texto(v, "sentimento_label"),
+        sentimento_nota: v
+            .get("sentimento_nota")
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0) as i32,
+        ultima_decisao: v.get("ultima_decisao").filter(|d| d.is_object()).map(|d| {
+            DecisaoDaConversa {
+                motor: texto(d, "motor"),
+                ato: texto(d, "ato"),
+                decisao: texto(d, "decisao"),
+                motivo: texto(d, "motivo"),
+                transferiu: d
+                    .get("transferiu")
+                    .and_then(|x| x.as_bool())
+                    .unwrap_or(false),
+                intencao: texto(d, "intencao"),
+                criado_em: d.get("criado_em").and_then(|x| x.as_i64()).unwrap_or(0),
+            }
+        }),
+    }
 }
 
 fn etiqueta_do_json(v: &serde_json::Value) -> ProtoEtiqueta {
