@@ -76,7 +76,10 @@ jobs:
         working-directory: server
         env:
           SQLX_OFFLINE: "true"
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        # double_must_use fica de fora: o clippy do Rust estável de 10/2026 passou
+        # a acusar o `#[must_use]` que o `async_trait` e o tonic geram em todo
+        # método async de trait — não há o que corrigir no nosso código.
+        run: cargo clippy --all-targets --all-features -- -D warnings -A clippy::double_must_use
 
       # Cria o role restrito smartcore_app_rt (NOBYPASSRLS) e configura privilégios
       # padrão para as tabelas que as migrations criam em runtime (rodadas pelo
