@@ -1991,6 +1991,37 @@ table DetalheAtendimentoResponse {
   bot_pode_atender:bool;
   campos:[ValorCampoDoAtendimento];
   dados_do_contato:[DadoDoContato];
+  analise:AnaliseDaConversa;
+}
+
+table AnaliseDaConversa {
+  intencoes:[IntencaoDaConversa];
+  entidades:[EntidadeDaConversa];
+  sentimento_label:string;
+  sentimento_nota:int;
+  ultima_decisao:DecisaoDaConversa;
+}
+
+table IntencaoDaConversa {
+  tipo:string;
+  confianca:double;
+  vezes:int;
+}
+
+table EntidadeDaConversa {
+  tipo:string;
+  valor:string;
+  confianca:double;
+}
+
+table DecisaoDaConversa {
+  motor:string;
+  ato:string;
+  decisao:string;
+  motivo:string;
+  transferiu:bool;
+  intencao:string;
+  criado_em:long;
 }
 
 table DadoDoContato {

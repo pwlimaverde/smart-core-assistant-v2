@@ -26457,6 +26457,7 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
     $core.bool? botPodeAtender,
     $core.Iterable<ValorCampoDoAtendimento>? campos,
     $core.Iterable<DadoDoContato>? dadosDoContato,
+    AnaliseDaConversa? analise,
   }) {
     final result = create();
     if (catalogo != null) result.catalogo.addAll(catalogo);
@@ -26465,6 +26466,7 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
     if (botPodeAtender != null) result.botPodeAtender = botPodeAtender;
     if (campos != null) result.campos.addAll(campos);
     if (dadosDoContato != null) result.dadosDoContato.addAll(dadosDoContato);
+    if (analise != null) result.analise = analise;
     return result;
   }
 
@@ -26492,6 +26494,8 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
         subBuilder: ValorCampoDoAtendimento.create)
     ..pPM<DadoDoContato>(6, _omitFieldNames ? '' : 'dadosDoContato',
         subBuilder: DadoDoContato.create)
+    ..aOM<AnaliseDaConversa>(7, _omitFieldNames ? '' : 'analise',
+        subBuilder: AnaliseDaConversa.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -26550,6 +26554,406 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
   /// pares e não map<>: o conversor proto→flatbuffers não entende map.
   @$pb.TagNumber(6)
   $pb.PbList<DadoDoContato> get dadosDoContato => $_getList(5);
+
+  /// A analise da IA da conversa — o "Analise de IA" que o cartao do Trello
+  /// trazia no painel antigo.
+  @$pb.TagNumber(7)
+  AnaliseDaConversa get analise => $_getN(6);
+  @$pb.TagNumber(7)
+  set analise(AnaliseDaConversa value) => $_setField(7, value);
+  @$pb.TagNumber(7)
+  $core.bool hasAnalise() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearAnalise() => $_clearField(7);
+  @$pb.TagNumber(7)
+  AnaliseDaConversa ensureAnalise() => $_ensure(6);
+}
+
+/// O que a IA leu da conversa, para a ficha.
+class AnaliseDaConversa extends $pb.GeneratedMessage {
+  factory AnaliseDaConversa({
+    $core.Iterable<IntencaoDaConversa>? intencoes,
+    $core.Iterable<EntidadeDaConversa>? entidades,
+    $core.String? sentimentoLabel,
+    $core.int? sentimentoNota,
+    DecisaoDaConversa? ultimaDecisao,
+  }) {
+    final result = create();
+    if (intencoes != null) result.intencoes.addAll(intencoes);
+    if (entidades != null) result.entidades.addAll(entidades);
+    if (sentimentoLabel != null) result.sentimentoLabel = sentimentoLabel;
+    if (sentimentoNota != null) result.sentimentoNota = sentimentoNota;
+    if (ultimaDecisao != null) result.ultimaDecisao = ultimaDecisao;
+    return result;
+  }
+
+  AnaliseDaConversa._();
+
+  factory AnaliseDaConversa.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AnaliseDaConversa.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AnaliseDaConversa',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<IntencaoDaConversa>(1, _omitFieldNames ? '' : 'intencoes',
+        subBuilder: IntencaoDaConversa.create)
+    ..pPM<EntidadeDaConversa>(2, _omitFieldNames ? '' : 'entidades',
+        subBuilder: EntidadeDaConversa.create)
+    ..aOS(3, _omitFieldNames ? '' : 'sentimentoLabel')
+    ..aI(4, _omitFieldNames ? '' : 'sentimentoNota')
+    ..aOM<DecisaoDaConversa>(5, _omitFieldNames ? '' : 'ultimaDecisao',
+        subBuilder: DecisaoDaConversa.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AnaliseDaConversa clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AnaliseDaConversa copyWith(void Function(AnaliseDaConversa) updates) =>
+      super.copyWith((message) => updates(message as AnaliseDaConversa))
+          as AnaliseDaConversa;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AnaliseDaConversa create() => AnaliseDaConversa._();
+  @$core.override
+  AnaliseDaConversa createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AnaliseDaConversa getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AnaliseDaConversa>(create);
+  static AnaliseDaConversa? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<IntencaoDaConversa> get intencoes => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $pb.PbList<EntidadeDaConversa> get entidades => $_getList(1);
+
+  @$pb.TagNumber(3)
+  $core.String get sentimentoLabel => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set sentimentoLabel($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasSentimentoLabel() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearSentimentoLabel() => $_clearField(3);
+
+  /// 0 = sem nota.
+  @$pb.TagNumber(4)
+  $core.int get sentimentoNota => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set sentimentoNota($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasSentimentoNota() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearSentimentoNota() => $_clearField(4);
+
+  /// Ausente = o motor ainda nao decidiu nada nesta conversa.
+  @$pb.TagNumber(5)
+  DecisaoDaConversa get ultimaDecisao => $_getN(4);
+  @$pb.TagNumber(5)
+  set ultimaDecisao(DecisaoDaConversa value) => $_setField(5, value);
+  @$pb.TagNumber(5)
+  $core.bool hasUltimaDecisao() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearUltimaDecisao() => $_clearField(5);
+  @$pb.TagNumber(5)
+  DecisaoDaConversa ensureUltimaDecisao() => $_ensure(4);
+}
+
+class IntencaoDaConversa extends $pb.GeneratedMessage {
+  factory IntencaoDaConversa({
+    $core.String? tipo,
+    $core.double? confianca,
+    $core.int? vezes,
+  }) {
+    final result = create();
+    if (tipo != null) result.tipo = tipo;
+    if (confianca != null) result.confianca = confianca;
+    if (vezes != null) result.vezes = vezes;
+    return result;
+  }
+
+  IntencaoDaConversa._();
+
+  factory IntencaoDaConversa.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory IntencaoDaConversa.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'IntencaoDaConversa',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tipo')
+    ..aD(2, _omitFieldNames ? '' : 'confianca')
+    ..aI(3, _omitFieldNames ? '' : 'vezes')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  IntencaoDaConversa clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  IntencaoDaConversa copyWith(void Function(IntencaoDaConversa) updates) =>
+      super.copyWith((message) => updates(message as IntencaoDaConversa))
+          as IntencaoDaConversa;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static IntencaoDaConversa create() => IntencaoDaConversa._();
+  @$core.override
+  IntencaoDaConversa createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static IntencaoDaConversa getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<IntencaoDaConversa>(create);
+  static IntencaoDaConversa? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tipo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tipo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTipo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTipo() => $_clearField(1);
+
+  /// A maior confianca com que apareceu.
+  @$pb.TagNumber(2)
+  $core.double get confianca => $_getN(1);
+  @$pb.TagNumber(2)
+  set confianca($core.double value) => $_setDouble(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasConfianca() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearConfianca() => $_clearField(2);
+
+  /// Em quantas mensagens apareceu.
+  @$pb.TagNumber(3)
+  $core.int get vezes => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set vezes($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasVezes() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearVezes() => $_clearField(3);
+}
+
+class EntidadeDaConversa extends $pb.GeneratedMessage {
+  factory EntidadeDaConversa({
+    $core.String? tipo,
+    $core.String? valor,
+    $core.double? confianca,
+  }) {
+    final result = create();
+    if (tipo != null) result.tipo = tipo;
+    if (valor != null) result.valor = valor;
+    if (confianca != null) result.confianca = confianca;
+    return result;
+  }
+
+  EntidadeDaConversa._();
+
+  factory EntidadeDaConversa.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EntidadeDaConversa.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EntidadeDaConversa',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tipo')
+    ..aOS(2, _omitFieldNames ? '' : 'valor')
+    ..aD(3, _omitFieldNames ? '' : 'confianca')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EntidadeDaConversa clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EntidadeDaConversa copyWith(void Function(EntidadeDaConversa) updates) =>
+      super.copyWith((message) => updates(message as EntidadeDaConversa))
+          as EntidadeDaConversa;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EntidadeDaConversa create() => EntidadeDaConversa._();
+  @$core.override
+  EntidadeDaConversa createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EntidadeDaConversa getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EntidadeDaConversa>(create);
+  static EntidadeDaConversa? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tipo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tipo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTipo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTipo() => $_clearField(1);
+
+  /// O valor mais recente.
+  @$pb.TagNumber(2)
+  $core.String get valor => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set valor($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasValor() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearValor() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.double get confianca => $_getN(2);
+  @$pb.TagNumber(3)
+  set confianca($core.double value) => $_setDouble(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasConfianca() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearConfianca() => $_clearField(3);
+}
+
+class DecisaoDaConversa extends $pb.GeneratedMessage {
+  factory DecisaoDaConversa({
+    $core.String? motor,
+    $core.String? ato,
+    $core.String? decisao,
+    $core.String? motivo,
+    $core.bool? transferiu,
+    $core.String? intencao,
+    $fixnum.Int64? criadoEm,
+  }) {
+    final result = create();
+    if (motor != null) result.motor = motor;
+    if (ato != null) result.ato = ato;
+    if (decisao != null) result.decisao = decisao;
+    if (motivo != null) result.motivo = motivo;
+    if (transferiu != null) result.transferiu = transferiu;
+    if (intencao != null) result.intencao = intencao;
+    if (criadoEm != null) result.criadoEm = criadoEm;
+    return result;
+  }
+
+  DecisaoDaConversa._();
+
+  factory DecisaoDaConversa.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DecisaoDaConversa.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DecisaoDaConversa',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'motor')
+    ..aOS(2, _omitFieldNames ? '' : 'ato')
+    ..aOS(3, _omitFieldNames ? '' : 'decisao')
+    ..aOS(4, _omitFieldNames ? '' : 'motivo')
+    ..aOB(5, _omitFieldNames ? '' : 'transferiu')
+    ..aOS(6, _omitFieldNames ? '' : 'intencao')
+    ..aInt64(7, _omitFieldNames ? '' : 'criadoEm')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DecisaoDaConversa clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DecisaoDaConversa copyWith(void Function(DecisaoDaConversa) updates) =>
+      super.copyWith((message) => updates(message as DecisaoDaConversa))
+          as DecisaoDaConversa;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DecisaoDaConversa create() => DecisaoDaConversa._();
+  @$core.override
+  DecisaoDaConversa createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DecisaoDaConversa getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DecisaoDaConversa>(create);
+  static DecisaoDaConversa? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get motor => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set motor($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasMotor() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearMotor() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get ato => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set ato($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAto() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAto() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get decisao => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set decisao($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDecisao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDecisao() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get motivo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set motivo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasMotivo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearMotivo() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.bool get transferiu => $_getBF(4);
+  @$pb.TagNumber(5)
+  set transferiu($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasTransferiu() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearTransferiu() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get intencao => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set intencao($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasIntencao() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearIntencao() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get criadoEm => $_getI64(6);
+  @$pb.TagNumber(7)
+  set criadoEm($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasCriadoEm() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearCriadoEm() => $_clearField(7);
 }
 
 /// P15 — um dado do contato achado pela IA (ex.: cidade = Recife).

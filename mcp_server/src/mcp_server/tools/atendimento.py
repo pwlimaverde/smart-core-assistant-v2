@@ -49,7 +49,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     ) -> dict[str, object]:
         """A ficha de um atendimento: etiquetas aplicadas (e o catálogo de
         etiquetas do negócio), notas internas, campos personalizados com valor,
-        dados do contato que a IA encontrou e se o bot responde nesta conversa.
+        dados do contato que a IA encontrou, se o bot responde nesta conversa e
+        a análise da IA (`analise`: intenções e entidades lidas nas mensagens,
+        sentimento e a última decisão do motor — ato, motivo, se transferiu).
 
         Use antes de etiquetar, anotar ou preencher campo: é daqui que saem os
         ids de etiqueta e de campo.

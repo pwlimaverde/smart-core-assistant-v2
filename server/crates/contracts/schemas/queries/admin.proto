@@ -2679,6 +2679,45 @@ message DetalheAtendimentoResponse {
   // cadastro (cidade, empresa, documento…). Só leitura na ficha. Lista de
   // pares e não map<>: o conversor proto→flatbuffers não entende map.
   repeated DadoDoContato dados_do_contato = 6;
+  // A analise da IA da conversa — o "Analise de IA" que o cartao do Trello
+  // trazia no painel antigo.
+  AnaliseDaConversa analise = 7;
+}
+
+// O que a IA leu da conversa, para a ficha.
+message AnaliseDaConversa {
+  repeated IntencaoDaConversa intencoes = 1;
+  repeated EntidadeDaConversa entidades = 2;
+  string sentimento_label = 3;
+  // 0 = sem nota.
+  int32 sentimento_nota = 4;
+  // Ausente = o motor ainda nao decidiu nada nesta conversa.
+  DecisaoDaConversa ultima_decisao = 5;
+}
+
+message IntencaoDaConversa {
+  string tipo = 1;
+  // A maior confianca com que apareceu.
+  double confianca = 2;
+  // Em quantas mensagens apareceu.
+  int32 vezes = 3;
+}
+
+message EntidadeDaConversa {
+  string tipo = 1;
+  // O valor mais recente.
+  string valor = 2;
+  double confianca = 3;
+}
+
+message DecisaoDaConversa {
+  string motor = 1;
+  string ato = 2;
+  string decisao = 3;
+  string motivo = 4;
+  bool transferiu = 5;
+  string intencao = 6;
+  int64 criado_em = 7;
 }
 
 // P15 — um dado do contato achado pela IA (ex.: cidade = Recife).

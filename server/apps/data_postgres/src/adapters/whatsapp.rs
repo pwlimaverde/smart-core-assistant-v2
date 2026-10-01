@@ -10,7 +10,8 @@ use infrastructure_postgres::crypto::CipherManager;
 use infrastructure_postgres::integracoes::conexoes;
 use infrastructure_postgres::integracoes::conexoes::DetalheDaConexao;
 use infrastructure_postgres::integracoes::whatsapp::{
-    PostgresWhatsappInstanceRepository, WhatsappInstance, WhatsappInstanceRepository,
+    PostgresWhatsappContactRepository, PostgresWhatsappInstanceRepository,
+    WhatsappContactRepository, WhatsappInstance, WhatsappInstanceRepository,
 };
 use infrastructure_postgres::integracoes::whitelist::{
     PostgresWhiteListRepository, WhiteList, WhiteListRepository,
@@ -374,6 +375,26 @@ impl WhatsappStore for PgWhatsappStore {
                 })
                 .collect();
             Ok((saida, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, instance_id = instance_id, contato_id = contato_id))]
+    async fn vincular_contato(
+        &self,
+        ctx: &RequestContext,
+        instance_id: i32,
+        jid: &str,
+        contato_id: i32,
+    ) -> Result<(), DbError> {
+        let repo = PostgresWhatsappContactRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let jid = jid.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.criar_ou_atualizar(&mut tx, &ctx, instance_id, &jid, Some(contato_id))
+                .await?;
+            Ok(((), tx))
         })
         .await
     }

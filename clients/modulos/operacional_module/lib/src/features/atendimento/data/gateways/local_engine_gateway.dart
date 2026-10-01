@@ -13,9 +13,11 @@ import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
 import '../../domain/model/ficha.dart';
+import 'analise_do_proto.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
 import 'atendimento_remote_gateway.dart';
+import 'pendentes_locais.dart';
 import '../../domain/model/evento_timeline.dart';
 import '../../domain/model/contato_da_conversa.dart';
 
@@ -284,7 +286,8 @@ final class LocalEngineGateway implements AtendimentoGateway {
       // índice com id negativo até o sync. Sem juntá-la aqui, ela sumiria da
       // conversa assim que a rede voltasse e antes de o envio completar.
       if (beforeId != null) return remotas;
-      return [...remotas, ...await _pendentesLocais(atendimentoId)];
+      final pendentes = await _pendentesLocais(atendimentoId);
+      return [...remotas, ...semAsJaEnviadas(pendentes, remotas)];
     } catch (e) {
       if (!_semRede(e)) rethrow;
     }
@@ -352,11 +355,15 @@ final class LocalEngineGateway implements AtendimentoGateway {
     try {
       // NUNCA logar `conteudo` (PII) — só trafega no corpo da chamada FFI.
       final engine = await _engine();
-      return await engine.sendOutboundMessage(
+      final idLocal = await engine.sendOutboundMessage(
         atendimentoId: atendimentoId,
         conteudo: conteudo,
         tipo: tipo,
       );
+      // Com rede, a mensagem sai agora: esperar o sync periódico deixava o
+      // relógio na bolha por até um minuto.
+      unawaited(_sincronizarBestEffort());
+      return idLocal;
     } catch (e) {
       throw _mapErro(e);
     }
@@ -396,9 +403,8 @@ final class LocalEngineGateway implements AtendimentoGateway {
   // P5 — a ficha vem do servidor: timeline, histórico e catálogo são leitura
   // de tabelas que o índice local não espelha.
   @override
-  Future<List<EventoDaTimeline>> listarTimeline({
-    required int atendimentoId,
-  }) => _remoto.listarTimeline(atendimentoId: atendimentoId);
+  Future<List<EventoDaTimeline>> listarTimeline({required int atendimentoId}) =>
+      _remoto.listarTimeline(atendimentoId: atendimentoId);
 
   /// P16 — direto ao servidor, como as outras operações do supervisor.
   @override
@@ -419,16 +425,11 @@ final class LocalEngineGateway implements AtendimentoGateway {
   Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
     required int contatoId,
     int limit = 20,
-  }) => _remoto.listarAtendimentosDoContato(
-    contatoId: contatoId,
-    limit: limit,
-  );
+  }) => _remoto.listarAtendimentosDoContato(contatoId: contatoId, limit: limit);
 
   @override
-  Future<void> removerNota({
-    required int notaId,
-    required int atendimentoId,
-  }) => _remoto.removerNota(notaId: notaId, atendimentoId: atendimentoId);
+  Future<void> removerNota({required int notaId, required int atendimentoId}) =>
+      _remoto.removerNota(notaId: notaId, atendimentoId: atendimentoId);
 
   @override
   Future<Etiqueta> atualizarEtiqueta({
@@ -780,6 +781,7 @@ final class LocalEngineGateway implements AtendimentoGateway {
       botPodeAtender: resp.botPodeAtender,
       campos: resp.campos.map(_valorCampoDoProto).toList(),
       dadosDoContato: {for (final d in resp.dadosDoContato) d.chave: d.valor},
+      analise: analiseDoProto(resp),
     );
   }
 

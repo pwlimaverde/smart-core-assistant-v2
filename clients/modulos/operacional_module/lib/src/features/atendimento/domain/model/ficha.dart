@@ -27,6 +27,42 @@ class Etiqueta {
   });
 }
 
+/// O que a IA leu da conversa — o "Análise de IA" que o cartão do Trello
+/// trazia no painel antigo.
+@immutable
+class AnaliseDaIa {
+  /// Mais recentes primeiro: `tipo`, a maior confiança e em quantas
+  /// mensagens apareceu.
+  final List<({String tipo, double confianca, int vezes})> intencoes;
+
+  /// O valor mais recente de cada entidade.
+  final List<({String tipo, String valor, double confianca})> entidades;
+
+  final String sentimentoLabel;
+
+  /// 0 = sem nota.
+  final int sentimentoNota;
+
+  /// A última decisão do motor que valeu para o cliente. `null` enquanto o
+  /// motor não decidiu nada nesta conversa.
+  final ({String motor, String ato, String motivo, bool transferiu})?
+  ultimaDecisao;
+
+  const AnaliseDaIa({
+    this.intencoes = const [],
+    this.entidades = const [],
+    this.sentimentoLabel = '',
+    this.sentimentoNota = 0,
+    this.ultimaDecisao,
+  });
+
+  bool get vazia =>
+      intencoes.isEmpty &&
+      entidades.isEmpty &&
+      sentimentoLabel.isEmpty &&
+      ultimaDecisao == null;
+}
+
 /// Anotação interna sobre o atendimento. O contato nunca a vê.
 @immutable
 class Nota {
@@ -119,6 +155,9 @@ class FichaAtendimento {
   /// P15 — o que a IA encontrou do contato e não tem coluna no cadastro.
   final Map<String, String> dadosDoContato;
 
+  /// O que a IA leu da conversa. Vazia num servidor que não manda o campo.
+  final AnaliseDaIa analise;
+
   const FichaAtendimento({
     required this.catalogo,
     required this.aplicadas,
@@ -126,6 +165,7 @@ class FichaAtendimento {
     this.botPodeAtender = true,
     this.campos = const [],
     this.dadosDoContato = const {},
+    this.analise = const AnaliseDaIa(),
   });
 
   /// Reconstrói a ficha trocando só o que foi passado.
@@ -141,6 +181,7 @@ class FichaAtendimento {
     bool? botPodeAtender,
     List<ValorCampo>? campos,
     Map<String, String>? dadosDoContato,
+    AnaliseDaIa? analise,
   }) => FichaAtendimento(
     catalogo: catalogo ?? this.catalogo,
     aplicadas: aplicadas ?? this.aplicadas,
@@ -148,6 +189,7 @@ class FichaAtendimento {
     botPodeAtender: botPodeAtender ?? this.botPodeAtender,
     campos: campos ?? this.campos,
     dadosDoContato: dadosDoContato ?? this.dadosDoContato,
+    analise: analise ?? this.analise,
   );
 
   Set<int> get idsAplicados => aplicadas.map((e) => e.id).toSet();

@@ -1,3 +1,4 @@
+pub mod analise;
 pub mod atendimentos;
 pub mod campos;
 pub mod etiquetas;
