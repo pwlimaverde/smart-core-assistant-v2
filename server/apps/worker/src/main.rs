@@ -3050,7 +3050,7 @@ async fn processar_pipeline_midia(
     // "invalid media type" e nenhuma mídia era salva.
     let message = match raw_event.get("data").and_then(|d| d.get("message")) {
         Some(d) if d.is_object() => d.clone(),
-        None => {
+        _ => {
             span.record("error_code", "sem_data");
             tracing::warn!("pipeline de mídia abortado: evento sem a mensagem do WhatsApp");
             return;
