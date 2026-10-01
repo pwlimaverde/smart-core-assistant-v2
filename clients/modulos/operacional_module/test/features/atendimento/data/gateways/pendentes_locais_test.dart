@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:operacional_module/src/features/atendimento/data/gateways/local_engine_gateway.dart';
+import 'package:operacional_module/src/features/atendimento/data/gateways/pendentes_locais.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/mensagem_thread.dart';
 
 MensagemThread _msg(
@@ -26,37 +26,28 @@ void main() {
       _msg(390, 'custa 380', t0.add(const Duration(seconds: 1))),
     ];
 
-    expect(LocalEngineGateway.semAsJaEnviadas(pendentes, remotas), isEmpty);
+    expect(semAsJaEnviadas(pendentes, remotas), isEmpty);
   });
 
   test('a pendente que ainda não chegou ao servidor continua', () {
     final pendentes = [_msg(-1, 'custa 380', t0)];
     final remotas = [_msg(388, 'custa 380', t0, de: '558897141275')];
 
-    expect(
-      LocalEngineGateway.semAsJaEnviadas(pendentes, remotas),
-      hasLength(1),
-    );
+    expect(semAsJaEnviadas(pendentes, remotas), hasLength(1));
   });
 
   test('texto repetido casa uma remota para cada pendente', () {
     final pendentes = [_msg(-2, 'ok', t0), _msg(-1, 'ok', t0)];
     final remotas = [_msg(390, 'ok', t0)];
 
-    expect(
-      LocalEngineGateway.semAsJaEnviadas(pendentes, remotas),
-      hasLength(1),
-    );
+    expect(semAsJaEnviadas(pendentes, remotas), hasLength(1));
   });
 
   test('remota bem anterior à pendente não é ela', () {
     final pendentes = [_msg(-1, 'ok', t0)];
     final remotas = [_msg(300, 'ok', t0.subtract(const Duration(hours: 1)))];
 
-    expect(
-      LocalEngineGateway.semAsJaEnviadas(pendentes, remotas),
-      hasLength(1),
-    );
+    expect(semAsJaEnviadas(pendentes, remotas), hasLength(1));
   });
 
   test('dead_letter aparece como falha, não como relógio', () {

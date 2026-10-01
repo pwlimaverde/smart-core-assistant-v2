@@ -202,6 +202,74 @@ void main() {
       expect(find.text('cidade'), findsOneWidget);
     });
 
+    testWidgets('mostra a análise da IA, como o cartão do Trello', (
+      tester,
+    ) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = const FichaAtendimento(
+          catalogo: [],
+          aplicadas: [],
+          notas: [],
+          analise: AnaliseDaIa(
+            intencoes: [
+              (tipo: 'coleta_dados_panfleto', confianca: 0.83, vezes: 2),
+              (tipo: 'saudacao', confianca: 1.0, vezes: 1),
+            ],
+            entidades: [(tipo: 'quantidade', valor: '2000', confianca: 0.9)],
+            sentimentoLabel: 'neutro',
+            sentimentoNota: 3,
+            ultimaDecisao: (
+              motor: 'jev',
+              ato: 'coletar',
+              motivo: 'coleta',
+              transferiu: false,
+            ),
+          ),
+        );
+
+      await montar(tester, gateway);
+
+      expect(find.text('ANÁLISE DA IA'), findsOneWidget);
+      expect(find.text('coleta_dados_panfleto · 83% · 2×'), findsOneWidget);
+      expect(find.text('saudacao · 100%'), findsOneWidget);
+      expect(find.text('2000'), findsOneWidget);
+      expect(find.text('neutro (3)'), findsOneWidget);
+      expect(find.text('Pediu dados · coleta · motor jev'), findsOneWidget);
+    });
+
+    testWidgets('decisão de ato desconhecido que transferiu diz isso', (
+      tester,
+    ) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = const FichaAtendimento(
+          catalogo: [],
+          aplicadas: [],
+          notas: [],
+          analise: AnaliseDaIa(
+            sentimentoLabel: 'negativo',
+            ultimaDecisao: (
+              motor: '',
+              ato: 'outro',
+              motivo: '',
+              transferiu: true,
+            ),
+          ),
+        );
+
+      await montar(tester, gateway);
+
+      expect(find.text('negativo'), findsOneWidget);
+      expect(find.text('Transferiu'), findsOneWidget);
+    });
+
+    testWidgets('sem análise a seção não aparece', (tester) async {
+      final gateway = FakeAtendimentoGateway();
+
+      await montar(tester, gateway);
+
+      expect(find.text('ANÁLISE DA IA'), findsNothing);
+    });
+
     testWidgets('conversa sem etiqueta diz isso, sem parecer erro', (
       tester,
     ) async {

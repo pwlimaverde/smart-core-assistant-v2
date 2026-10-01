@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
-
 import 'package:api_client/api_client.dart' as proto;
 import 'package:fixnum/fixnum.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -19,6 +17,7 @@ import 'analise_do_proto.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
 import 'atendimento_remote_gateway.dart';
+import 'pendentes_locais.dart';
 import '../../domain/model/evento_timeline.dart';
 import '../../domain/model/contato_da_conversa.dart';
 
@@ -617,40 +616,6 @@ final class LocalEngineGateway implements AtendimentoGateway {
   }
 
   /// Mensagens escritas sem rede (id negativo), ainda na fila de envio.
-  /// Tira das pendentes locais as que o servidor já devolveu.
-  ///
-  /// O aviso de "mensagem enviada" chega pelo stream antes de o sync promover
-  /// a cópia local (id negativo) ao id do servidor, e a recarga daquele
-  /// instante trazia as duas: a mesma mensagem duas vezes na conversa. Casa
-  /// pelo texto do atendente enviado a partir do momento em que ela foi
-  /// escrita, uma remota para cada pendente.
-  @visibleForTesting
-  static List<MensagemThread> semAsJaEnviadas(
-    List<MensagemThread> pendentes,
-    List<MensagemThread> remotas,
-  ) {
-    if (pendentes.isEmpty) return pendentes;
-    final livres = remotas
-        .where((m) => m.id > 0 && m.remetente == 'atendente')
-        .toList();
-    final saida = <MensagemThread>[];
-    for (final p in pendentes) {
-      final i = livres.indexWhere(
-        (r) =>
-            r.conteudo == p.conteudo &&
-            !r.timestamp.isBefore(
-              p.timestamp.subtract(const Duration(seconds: 5)),
-            ),
-      );
-      if (i < 0) {
-        saida.add(p);
-      } else {
-        livres.removeAt(i);
-      }
-    }
-    return saida;
-  }
-
   Future<List<MensagemThread>> _pendentesLocais(int atendimentoId) async {
     try {
       final engine = await _engine();
