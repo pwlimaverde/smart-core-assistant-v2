@@ -419,10 +419,12 @@ def test_pede_humano_duvida_e_irritacao():
 
 def test_destino_setor_padrao_e_ultimos_recursos():
     setor = resposta(escolhas={pt.SETOR: ("Comercial - vendas", 0.9)})
-    assert escolher_destino(None, setor, FLUXOS, 20, L) == "Comercial - vendas"
-    fraco = resposta(escolhas={pt.SETOR: ("Comercial - vendas", 0.2)})
-    assert escolher_destino(None, fraco, FLUXOS, 20, L) == "Financeiro - boletos"
-    assert escolher_destino(None, fraco, FLUXOS, None, L) == "Comercial - vendas"
+    # O padrão do tenant vence o setor do Jev.
+    assert escolher_destino(None, setor, FLUXOS, 20, L) == "Financeiro - boletos"
+    assert escolher_destino(None, setor, FLUXOS, None, L) == "Comercial - vendas"
+    fraco = resposta(escolhas={pt.SETOR: ("Financeiro - boletos", 0.2)})
+    assert escolher_destino(None, fraco, FLUXOS, 99, L) == "Financeiro - boletos"
+    assert escolher_destino(None, fraco, FLUXOS, None, L) == "Financeiro - boletos"
     assert escolher_destino(None, resposta(), FLUXOS, None, L) == "Comercial - vendas"
     assert escolher_destino(None, resposta(), (), None, L) == ""
 

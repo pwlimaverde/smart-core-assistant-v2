@@ -301,6 +301,27 @@ async def test_escalada_troca_de_modelo_e_marca_a_revisar(
     assert not r.transferir_atendimento
 
 
+async def test_coleta_que_a_redacao_recusa_vira_transferencia(
+    fake_chat_factory, fake_embeddings_factory
+):
+    def roteiro(etapa: str, _s: Any, _p: Any) -> RespostaJev:
+        if etapa == "leitura":
+            return resposta(escolhas={pi.PRINCIPAL: ("panfletos", 0.9)})
+        return resposta(nouls={pc.RESPOSTA_APOIADA: 0.9, pc.RESPOSTA_TRANSFERE: 0.95})
+
+    async with _stub(
+        FakeJev(roteiro),
+        fake_chat_factory,
+        fake_embeddings_factory,
+        transferencia_fluxo_padrao_id=10,
+    ) as stub:
+        r = await stub.Responder(_responder(mensagem="4000 panfletos 10x15 com arte"))
+    assert r.transferir_atendimento and r.ato == "transferir"
+    assert r.motivo_transferencia == "coleta_concluida"
+    assert r.fluxo_transferencia == "Comercial - vendas"
+    assert any(s.nome == "coleta_concluida_pela_redacao" for s in r.sinais)
+
+
 async def test_social_e_guarda_de_entrada(fake_chat_factory, fake_embeddings_factory):
     guarda = {"ativo": False}
 

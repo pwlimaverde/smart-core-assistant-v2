@@ -59,12 +59,14 @@ from ia_engine_jev.decisoes.ato import (
 )
 from ia_engine_jev.decisoes.conferencia import (
     CORRECOES,
+    PROBLEMA_TRANSFERE,
     Conferencia,
     conferir,
     desfecho,
 )
 from ia_engine_jev.decisoes.limiares import Limiares, SinaisTransferencia
 from ia_engine_jev.decisoes.transferencia import (
+    MOTIVO_COLETA,
     MOTIVO_SEM_APOIO,
     avaliar_trechos,
     escolher_destino,
@@ -457,6 +459,20 @@ class ResponderJevRepository(
         return erro_de_dominio(exception)
 
 
+def _coleta_ja_concluida(
+    plano: Plano, data: DadosResposta, efetiva: IntentDef | None
+) -> bool:
+    """A resposta devia pedir dados, mas insistiu em encerrar e transferir."""
+    return (
+        bool(plano.perguntar)
+        and data.desfecho == "a_revisar"
+        and data.conferencia is not None
+        and PROBLEMA_TRANSFERE in data.conferencia.problemas
+        and efetiva is not None
+        and efetiva.apos_coleta == "transferir"
+    )
+
+
 def _valor_json(valor: str) -> str:
     """O valor tipado como JSON; o servidor revalida contra o catálogo."""
     v = valor.strip()
@@ -587,6 +603,12 @@ class ResponderJevUsecase(
                 return self.ok(
                     simples(msg_sem_info, "sem_info", "sem_info", "conferencia")
                 )
+        if _coleta_ja_concluida(plano, data, leitura.efetiva):
+            # Pedimos dados, mas a redação — duas vezes — preferiu encerrar:
+            # o cliente já tinha dito o que faltava e o Jev não reconheceu.
+            # A coleta acabou; vale o "depois da coleta" da intenção.
+            sinais.append(Sinal("coleta_concluida_pela_redacao", 1.0, 1.0))
+            return self.ok(transferir(replace(plano, motivo=MOTIVO_COLETA), apoiada))
         perguntados = tuple(d.id for d in plano.perguntar)
         return self.ok(
             DecisaoResposta(

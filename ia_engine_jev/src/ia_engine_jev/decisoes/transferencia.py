@@ -203,11 +203,14 @@ def escolher_destino(
     fluxo_padrao_id: int | None,
     limiares: Limiares,
 ) -> str:
-    """Chave do fluxo de destino: regra → setor do Jev → padrão do tenant.
+    """Chave do fluxo de destino: regra → padrão do tenant → setor do Jev.
 
-    Sem nenhum desses, o setor mais provável mesmo abaixo do piso, e por fim o
-    primeiro fluxo: uma transferência sem destino deixaria a conversa parada
-    com o cliente ouvindo que foi transferido.
+    O fluxo padrão vem antes do setor: é a escolha explícita do tenant, e o
+    setor do Jev tende a apontar para o fluxo onde a conversa já está (o de
+    pré-atendimento, que descreve "processar os atendimentos"). Sem nenhum
+    desses, o setor mais provável mesmo abaixo do piso, e por fim o primeiro
+    fluxo: uma transferência sem destino deixaria a conversa parada com o
+    cliente ouvindo que foi transferido.
     """
     if not fluxos:
         return ""
@@ -216,12 +219,12 @@ def escolher_destino(
         chave = por_id.get(str(regra.destino_fluxo_id))
         if chave:
             return chave
+    if fluxo_padrao_id is not None and str(fluxo_padrao_id) in por_id:
+        return por_id[str(fluxo_padrao_id)]
     setor = resposta.escolha(pt.SETOR)
     setor_valido = setor is not None and setor.escolha in por_id.values()
     if setor_valido and setor is not None and setor.confianca >= limiares.piso_setor:
         return setor.escolha
-    if fluxo_padrao_id is not None and str(fluxo_padrao_id) in por_id:
-        return por_id[str(fluxo_padrao_id)]
     if setor_valido and setor is not None:
         return setor.escolha
     return fluxos[0].chave
