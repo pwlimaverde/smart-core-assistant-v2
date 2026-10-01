@@ -31,3 +31,6 @@ CONVENTIONS.md
 .context/runtime/
 .context/**/archive/
 
+
+# Estado local do roteador de modelo/seletor de skill (log, cache, modo, status)
+.claude/roteador/

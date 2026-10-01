@@ -1,0 +1,77 @@
+{
+  "jev": {
+    "url": "https://api.typesafe.ai/v1/systemone",
+    "modelo": "jev-1.13.0",
+    "timeout_s": 4.0
+  },
+  "modo_padrao": "skills",
+  "limiares": {
+    "risco_sobe_nivel": 0.7,
+    "confianca_nivel_min": 0.6,
+    "continuacao_herda": 0.55,
+    "confianca_especialista_min": 0.5,
+    "chance_skill_min": 0.5,
+    "confianca_skill_min": 0.65,
+    "soma_par_concorrente_min": 0.6
+  },
+  "janela_tarefa_anterior_min": 120,
+  "log_max_bytes": 5242880,
+  "niveis": {
+    "simples": { "modelo": "haiku", "rotulo": "Haiku", "atalho": "rapido" },
+    "rotina": { "modelo": "sonnet", "rotulo": "Sonnet", "atalho": "padrao" },
+    "dificil": { "modelo": "opus", "rotulo": "Opus", "atalho": "profundo" }
+  },
+  "nivel_em_falha": "rotina",
+  "skills_fora_do_jev_prefixos": ["prevc-", "dotcontext-"],
+  "fase_para_skill": {
+    "P": "prevc-planning",
+    "R": "prevc-review",
+    "E": "prevc-execution",
+    "V": "prevc-validation",
+    "C": "prevc-confirmation"
+  },
+  "pares_concorrentes": [
+    {
+      "par": ["test-generation", "test-rust"],
+      "especializada": "test-rust",
+      "gatilhos": ["rust", "cargo", "tokio", "sqlx", "crate", "nextest"]
+    },
+    {
+      "par": ["code-review", "pr-review"],
+      "especializada": "pr-review",
+      "gatilhos": ["pr", "pull request", "merge request"]
+    },
+    {
+      "par": ["code-review", "refactoring"],
+      "especializada": "refactoring",
+      "gatilhos": ["refator", "refactor", "reorganiz", "extrair", "simplific"]
+    }
+  ],
+  "skill_para_especialista": {
+    "test-rust": "Test Writer",
+    "test-generation": "Test Writer",
+    "security-audit": "Security Auditor",
+    "api-design": "Architect Specialist",
+    "bug-investigation": "Bug Fixer",
+    "refactoring": "Refactoring Specialist",
+    "documentation": "Documentation Writer",
+    "code-review": "Code Reviewer",
+    "pr-review": "Code Reviewer",
+    "feature-breakdown": "Architect Specialist",
+    "plan-restructuring": "Architect Specialist",
+    "commit-message": "general-purpose"
+  },
+  "skills_manuais": [
+    "plan-restructuring",
+    "feature-breakdown",
+    "pr-review",
+    "commit-message",
+    "prevc-planning",
+    "prevc-review",
+    "prevc-execution",
+    "prevc-validation",
+    "prevc-confirmation",
+    "prevc-final-review"
+  ],
+  "projeto": "Smart Core Assistant v2: SaaS multi-tenant de atendimento por WhatsApp. Backend Rust em workspace (apps clientes finos; banco só via data_postgres por RPC; contratos .proto→FlatBuffers/gRPC; RLS por tenant; bus Redis), ia_engine e ia_engine_jev em Python via gRPC, clientes Flutter (web via gRPC-Web, mobile), deploy Docker em VPS com CI no GitHub Actions."
+}
