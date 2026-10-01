@@ -1,6 +1,10 @@
 pub mod envelope;
 pub use envelope::TenantEnvelope;
 
+// Código gerado pelo tonic: o clippy novo (double_must_use) acusa o
+// `#[must_use]` que o gerador põe nos métodos async do cliente. Não é código
+// nosso para corrigir, então o lint fica de fora, como no FlatBuffers abaixo.
+#[allow(clippy::all)]
 pub mod grpc {
     pub mod contracts {
         tonic::include_proto!("smartcore.contracts");
