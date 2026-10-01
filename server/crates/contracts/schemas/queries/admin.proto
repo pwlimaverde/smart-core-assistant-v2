@@ -86,6 +86,9 @@ message GetTenantConfigResponse {
   string msg_pesquisa_satisfacao = 32;
   optional int32 minutos_inatividade_encerra = 33;
   optional bool transcription_enabled = 34;
+  // Motor das decisões da IA em vigor (llm | sombra | jev), já resolvido com o
+  // global — é o que o seletor do painel mostra ao abrir.
+  string motor_analise = 35;
 }
 
 message UpdateTenantConfigRequest {

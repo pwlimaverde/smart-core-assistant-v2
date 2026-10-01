@@ -79,6 +79,7 @@ table GetTenantConfigResponse {
   msg_pesquisa_satisfacao:string;
   minutos_inatividade_encerra:int;
   transcription_enabled:bool;
+  motor_analise:string;
 }
 
 table UpdateTenantConfigRequest {

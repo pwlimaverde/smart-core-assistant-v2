@@ -621,6 +621,7 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
     $core.String? msgPesquisaSatisfacao,
     $core.int? minutosInatividadeEncerra,
     $core.bool? transcriptionEnabled,
+    $core.String? motorAnalise,
   }) {
     final result = create();
     if (dadosEmpresa != null) result.dadosEmpresa = dadosEmpresa;
@@ -668,6 +669,7 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
       result.minutosInatividadeEncerra = minutosInatividadeEncerra;
     if (transcriptionEnabled != null)
       result.transcriptionEnabled = transcriptionEnabled;
+    if (motorAnalise != null) result.motorAnalise = motorAnalise;
     return result;
   }
 
@@ -721,6 +723,7 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
     ..aOS(32, _omitFieldNames ? '' : 'msgPesquisaSatisfacao')
     ..aI(33, _omitFieldNames ? '' : 'minutosInatividadeEncerra')
     ..aOB(34, _omitFieldNames ? '' : 'transcriptionEnabled')
+    ..aOS(35, _omitFieldNames ? '' : 'motorAnalise')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1043,6 +1046,17 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
   $core.bool hasTranscriptionEnabled() => $_has(33);
   @$pb.TagNumber(34)
   void clearTranscriptionEnabled() => $_clearField(34);
+
+  /// Motor das decisões da IA em vigor (llm | sombra | jev), já resolvido com o
+  /// global — é o que o seletor do painel mostra ao abrir.
+  @$pb.TagNumber(35)
+  $core.String get motorAnalise => $_getSZ(34);
+  @$pb.TagNumber(35)
+  set motorAnalise($core.String value) => $_setString(34, value);
+  @$pb.TagNumber(35)
+  $core.bool hasMotorAnalise() => $_has(34);
+  @$pb.TagNumber(35)
+  void clearMotorAnalise() => $_clearField(35);
 }
 
 class UpdateTenantConfigRequest extends $pb.GeneratedMessage {

@@ -115,6 +115,10 @@ MSG_TRANSFERENCIA_GENERICA = (
     "Vou transferir seu atendimento para um de nossos atendentes, que poderá "
     "ajudá-lo melhor. Aguarde um momento, por favor."
 )
+# Guarda de entrada: resposta neutra, sem prometer encaminhamento (não há).
+MSG_BARRADA = (
+    "Posso ajudar com dúvidas sobre os nossos produtos e serviços. Como posso ajudar?"
+)
 MSG_SEM_INFO_GENERICA = (
     "Não encontrei essa informação por aqui. Pode me dar mais detalhes, ou "
     "prefere falar com um atendente?"
@@ -459,6 +463,16 @@ class ResponderJevRepository(
         return erro_de_dominio(exception)
 
 
+_ENCAMINHA = re.compile(
+    r"\b(repass|encaminh|transfer|atendente|vendedor|retorn)", re.IGNORECASE
+)
+
+
+def _menciona_encaminhar(msg_sem_info: str) -> bool:
+    """A mensagem de "não encontrei" do tenant já fala em repassar a alguém?"""
+    return bool(_ENCAMINHA.search(msg_sem_info or ""))
+
+
 def _coleta_ja_concluida(
     plano: Plano, data: DadosResposta, efetiva: IntentDef | None
 ) -> bool:
@@ -547,6 +561,7 @@ class ResponderJevUsecase(
                     msg_transferencia=msg_transf,
                     msg_sem_info=msg_sem_info,
                     aviso_fora_do_horario=aviso,
+                    sem_info_ja_encaminha=_menciona_encaminhar(p.msg_sem_info),
                 ),
                 transferir=True,
                 fluxo_transferencia=escolher_destino(
@@ -580,9 +595,7 @@ class ResponderJevUsecase(
 
         match plano.ato:
             case "barrada":
-                return self.ok(
-                    simples(msg_sem_info, "barrada", "barrada", plano.motivo)
-                )
+                return self.ok(simples(MSG_BARRADA, "barrada", "barrada", plano.motivo))
             case "transferir":
                 return self.ok(transferir(plano))
             case "sem_info":
@@ -628,6 +641,7 @@ class ResponderJevUsecase(
 
 
 __all__ = [
+    "MSG_BARRADA",
     "MSG_SEM_INFO_GENERICA",
     "MSG_TRANSFERENCIA_GENERICA",
     "DadosResposta",

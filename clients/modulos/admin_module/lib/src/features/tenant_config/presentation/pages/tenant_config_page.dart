@@ -15,14 +15,19 @@ class _MotorDaIa extends StatefulWidget {
   )
   onAplicar;
 
-  const _MotorDaIa({required this.onAplicar});
+  /// O motor em vigor no tenant: é a opção que o seletor mostra ao abrir.
+  final String inicial;
+
+  const _MotorDaIa({super.key, required this.onAplicar, this.inicial = ''});
 
   @override
   State<_MotorDaIa> createState() => _MotorDaIaState();
 }
 
 class _MotorDaIaState extends State<_MotorDaIa> {
-  String _motor = 'sombra';
+  late String _motor = _explicacao.containsKey(widget.inicial)
+      ? widget.inicial
+      : 'sombra';
   bool _aplicando = false;
   String? _resultado;
 
@@ -204,6 +209,9 @@ class _TenantConfigPageState extends State<TenantConfigPage>
     });
   }
 
+  /// Motor em vigor no tenant carregado (abre selecionado no seletor).
+  String _motorAtual = '';
+
   void _populateFields(TenantConfig config) {
     _dadosEmpresaCtrl.text = config.dadosEmpresa;
     _personaBotCtrl.text = config.personaBot;
@@ -230,6 +238,7 @@ class _TenantConfigPageState extends State<TenantConfigPage>
     _openaiKeyCtrl.text = config.apiKeys['openai_api_key'] ?? '';
     _groqKeyCtrl.text = config.apiKeys['groq_api_key'] ?? '';
     _googleKeyCtrl.text = config.apiKeys['google_api_key'] ?? '';
+    _motorAtual = config.motorAnalise;
   }
 
   @override
@@ -389,6 +398,9 @@ class _TenantConfigPageState extends State<TenantConfigPage>
       child: Column(
         children: [
           _MotorDaIa(
+            // A chave recria o seletor quando outro tenant é carregado.
+            key: ValueKey('motor-$_motorAtual-${_tenantIdController.text}'),
+            inicial: _motorAtual,
             onAplicar: (motor) => _controller.definirMotor(
               tenantId: _tenantIdController.text.trim(),
               motor: motor,

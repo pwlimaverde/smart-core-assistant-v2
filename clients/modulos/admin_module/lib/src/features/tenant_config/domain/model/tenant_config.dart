@@ -20,6 +20,10 @@ class TenantConfig {
   final String vectorDistanceThreshold;
   final Map<String, String> apiKeys;
 
+  /// Motor das decisões da IA em vigor (llm | sombra | jev). Vazio quando o
+  /// servidor não informou.
+  final String motorAnalise;
+
   const TenantConfig({
     required this.dadosEmpresa,
     required this.personaBot,
@@ -41,5 +45,6 @@ class TenantConfig {
     required this.similarityThreshold,
     required this.vectorDistanceThreshold,
     required this.apiKeys,
+    this.motorAnalise = '',
   });
 }

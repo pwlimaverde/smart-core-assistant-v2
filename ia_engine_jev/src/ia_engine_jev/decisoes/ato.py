@@ -216,14 +216,22 @@ def texto_da_transferencia(
     msg_transferencia: str,
     msg_sem_info: str,
     aviso_fora_do_horario: str = "",
+    sem_info_ja_encaminha: bool = False,
 ) -> str:
-    """Mensagem do tenant para a transferência, montada em código."""
+    """Mensagem do tenant para a transferência, montada em código.
+
+    `sem_info_ja_encaminha`: a mensagem de "não encontrei" do tenant já diz
+    que vai repassar a alguém — na transferência por base sem resposta, somar
+    a de transferência repetiria o encaminhamento.
+    """
     base = (plano.regra.mensagem.strip() if plano.regra else "") or msg_transferencia
     partes: list[str] = []
     if plano.prefixo.strip():
         partes.append(plano.prefixo.strip())
     elif plano.motivo == MOTIVO_BASE:
         partes.append(msg_sem_info)
+        if sem_info_ja_encaminha and not plano.regra:
+            base = ""
     partes.append(base)
     if aviso_fora_do_horario.strip():
         partes.append(aviso_fora_do_horario.strip())

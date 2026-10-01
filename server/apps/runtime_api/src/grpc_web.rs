@@ -1185,6 +1185,8 @@ fn mapear_tenant_config_response(val: &serde_json::Value) -> GetTenantConfigResp
             .and_then(|v| v.as_i64())
             .map(|v| v as i32),
         transcription_enabled: val.get("transcription_enabled").and_then(|v| v.as_bool()),
+        // Preenchido pelo handler (vem do cache de config, não deste JSON).
+        motor_analise: String::new(),
     }
 }
 
@@ -2256,6 +2258,7 @@ impl AdminService for AdminFacade {
         let claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
         let traceparent = traceparent_do_metadata(&req);
         let inner = req.into_inner();
+        let tenant_alvo = inner.tenant_id.clone();
 
         let payload = serde_json::json!({
             "tenant_id": inner.tenant_id,
@@ -2291,7 +2294,9 @@ impl AdminService for AdminFacade {
 
                 let val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
-                Ok(Response::new(mapear_tenant_config_response(&val)))
+                let mut config = mapear_tenant_config_response(&val);
+                config.motor_analise = self.motor_do_tenant(&tenant_alvo, &traceparent).await;
+                Ok(Response::new(config))
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }

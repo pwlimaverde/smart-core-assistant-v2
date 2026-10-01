@@ -206,37 +206,42 @@ class _EvolutionPageState extends State<EvolutionPage> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                      ElevatedButton.icon(
-                        icon: isLoading
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              )
-                            : const Icon(Icons.sync_alt, size: 16),
-                        label: Text(
-                          isLoading ? 'Testando...' : 'Testar Conectividade',
-                        ),
-                        onPressed: isLoading
-                            ? null
-                            : () => _testConnection(tenant.id),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+                          ElevatedButton.icon(
+                            icon: isLoading
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : const Icon(Icons.sync_alt, size: 16),
+                            label: Text(
+                              isLoading
+                                  ? 'Testando...'
+                                  : 'Testar Conectividade',
+                            ),
+                            onPressed: isLoading
+                                ? null
+                                : () => _testConnection(tenant.id),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
                           const SizedBox(width: 8),
                           // P9 — o `test-connection` da v1 para a IA. Chave
                           // expirada só aparecia quando o bot parava.
                           OutlinedButton.icon(
-                            icon: const Icon(Icons.psychology_outlined, size: 16),
+                            icon: const Icon(
+                              Icons.psychology_outlined,
+                              size: 16,
+                            ),
                             label: const Text('Testar IA'),
                             onPressed: () => _testarIa(tenant.id),
                           ),

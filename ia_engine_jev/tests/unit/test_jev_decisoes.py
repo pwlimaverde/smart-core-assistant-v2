@@ -603,6 +603,14 @@ def test_horario_e_texto_da_transferencia():
         msg_sem_info="sem info",
     )
     assert base == "sem info\n\npadrão"
+    repassa = texto_da_transferencia(
+        Plano("transferir", motivo="base_sem_resposta"),
+        msg_transferencia="padrão",
+        msg_sem_info="Não sei, vou repassar ao Paulo.",
+        aviso_fora_do_horario="Amanhã.",
+        sem_info_ja_encaminha=True,
+    )
+    assert repassa == "Não sei, vou repassar ao Paulo.\n\nAmanhã."
 
 
 # ----------------------------------------------------------- conferência

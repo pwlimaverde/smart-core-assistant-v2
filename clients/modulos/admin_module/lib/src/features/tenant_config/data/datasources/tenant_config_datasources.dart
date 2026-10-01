@@ -66,6 +66,7 @@ final class GetTenantConfigDatasource
       similarityThreshold: resp.similarityThreshold,
       vectorDistanceThreshold: resp.vectorDistanceThreshold,
       apiKeys: apiKeys,
+      motorAnalise: resp.motorAnalise,
     );
   }
 }

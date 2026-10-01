@@ -282,6 +282,7 @@ const GetTenantConfigResponse$json = {
       '10': 'transcriptionEnabled',
       '17': true
     },
+    {'1': 'motor_analise', '3': 35, '4': 1, '5': 9, '10': 'motorAnalise'},
   ],
   '8': [
     {'1': '_analise_previa_habilitada'},
@@ -321,9 +322,10 @@ final $typed_data.Uint8List getTenantConfigResponseDescriptor = $convert.base64D
     'FTYXRpc2ZhY2FvQXRpdmGIAQESNgoXbXNnX3Blc3F1aXNhX3NhdGlzZmFjYW8YICABKAlSFW1z'
     'Z1Blc3F1aXNhU2F0aXNmYWNhbxJDChttaW51dG9zX2luYXRpdmlkYWRlX2VuY2VycmEYISABKA'
     'VIAlIZbWludXRvc0luYXRpdmlkYWRlRW5jZXJyYYgBARI4ChV0cmFuc2NyaXB0aW9uX2VuYWJs'
-    'ZWQYIiABKAhIA1IUdHJhbnNjcmlwdGlvbkVuYWJsZWSIAQFCHAoaX2FuYWxpc2VfcHJldmlhX2'
-    'hhYmlsaXRhZGFCHAoaX3Blc3F1aXNhX3NhdGlzZmFjYW9fYXRpdmFCHgocX21pbnV0b3NfaW5h'
-    'dGl2aWRhZGVfZW5jZXJyYUIYChZfdHJhbnNjcmlwdGlvbl9lbmFibGVk');
+    'ZWQYIiABKAhIA1IUdHJhbnNjcmlwdGlvbkVuYWJsZWSIAQESIwoNbW90b3JfYW5hbGlzZRgjIA'
+    'EoCVIMbW90b3JBbmFsaXNlQhwKGl9hbmFsaXNlX3ByZXZpYV9oYWJpbGl0YWRhQhwKGl9wZXNx'
+    'dWlzYV9zYXRpc2ZhY2FvX2F0aXZhQh4KHF9taW51dG9zX2luYXRpdmlkYWRlX2VuY2VycmFCGA'
+    'oWX3RyYW5zY3JpcHRpb25fZW5hYmxlZA==');
 
 @$core.Deprecated('Use updateTenantConfigRequestDescriptor instead')
 const UpdateTenantConfigRequest$json = {
