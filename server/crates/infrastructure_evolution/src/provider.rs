@@ -721,14 +721,16 @@ impl MediaDownloader for EvolutionProvider {
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
 
         let resp = Self::ok_or_api(resp).await?;
-        let parsed: DownloadMediaResp = resp
-            .json()
-            .await
+        let corpo = Self::json_do_provedor(resp).await?;
+        let parsed: DownloadMediaResp = serde_json::from_value(corpo)
             .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
+        // A evolution-go devolve uma data URL (`data:audio/ogg;base64,…`); a
+        // Evolution v2 devolvia o base64 puro e o `mimetype` à parte.
+        let (mime_da_url, base64) = separar_data_url(&parsed.base64);
         Ok(MediaDownloadResult {
-            base64: parsed.base64,
-            mime_type: parsed.mimetype,
+            base64,
+            mime_type: parsed.mimetype.or(mime_da_url),
         })
     }
 }
@@ -844,8 +846,37 @@ impl MessagingProvider for EvolutionProvider {
     }
 }
 
+/// Separa `data:<mime>;base64,<dados>` em mime e dados. Base64 puro passa
+/// como está, sem mime.
+fn separar_data_url(valor: &str) -> (Option<String>, String) {
+    let Some(resto) = valor.strip_prefix("data:") else {
+        return (None, valor.to_string());
+    };
+    match resto.split_once(',') {
+        Some((cabecalho, dados)) => {
+            let mime = cabecalho
+                .split(';')
+                .next()
+                .filter(|m| !m.is_empty())
+                .map(str::to_string);
+            (mime, dados.to_string())
+        }
+        None => (None, valor.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn data_url_da_evolution_go_vira_mime_e_dados() {
+        let (mime, dados) = super::separar_data_url("data:audio/ogg; codecs=opus;base64,QUJD");
+        assert_eq!(mime.as_deref(), Some("audio/ogg"));
+        assert_eq!(dados, "QUJD");
+        let (mime, dados) = super::separar_data_url("QUJD");
+        assert_eq!(mime, None);
+        assert_eq!(dados, "QUJD");
+    }
+
     use super::*;
 
     // `map_state` é lógica pura de normalização dos vários rótulos de estado que a

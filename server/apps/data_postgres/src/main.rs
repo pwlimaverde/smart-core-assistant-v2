@@ -3715,9 +3715,13 @@ async fn handler_resolve_atendimento_para_contato(
         }
     };
 
+    // Vazio = sem nome (inclusive a mensagem enviada pelo próprio aparelho,
+    // que o worker manda sem nome): não vira nome de contato.
     let push_name = payload_json
         .get("push_name")
         .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
 
     // D3: a barreira mais externa do bot é a da INSTÂNCIA, e ela é resolvida
@@ -3958,10 +3962,10 @@ async fn handler_update_message_status(
         .atualizar_status_mensagem(&ctx, message_id_whatsapp, status)
         .await
     {
-        Ok(_) => ok_reply(
+        Ok(atendimento_id) => ok_reply(
             &env,
             "UpdateMessageStatusReply",
-            serde_json::json!({ "status": "success" }),
+            serde_json::json!({ "status": "success", "atendimento_id": atendimento_id }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }

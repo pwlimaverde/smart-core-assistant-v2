@@ -361,6 +361,8 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
             "CONNECTION".to_string(),
             "PRESENCE".to_string(),
             "QRCODE".to_string(),
+            // Recibos de entrega e leitura: sem eles o ✓✓ nunca aparece.
+            "READ_RECEIPT".to_string(),
         ],
     };
 
@@ -667,6 +669,8 @@ async fn handler_reconnect_whatsapp_instance(mut state: AppState, env: Envelope)
             "CONNECTION".to_string(),
             "PRESENCE".to_string(),
             "QRCODE".to_string(),
+            // Recibos de entrega e leitura: sem eles o ✓✓ nunca aparece.
+            "READ_RECEIPT".to_string(),
         ],
     };
 
@@ -1020,6 +1024,8 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
             "CONNECTION".to_string(),
             "PRESENCE".to_string(),
             "QRCODE".to_string(),
+            // Recibos de entrega e leitura: sem eles o ✓✓ nunca aparece.
+            "READ_RECEIPT".to_string(),
         ],
     };
 
@@ -1099,6 +1105,8 @@ fn webhook_da_instancia(provider_name: &str, tenant_id: &str, db_id: i64) -> Web
             "CONNECTION".to_string(),
             "PRESENCE".to_string(),
             "QRCODE".to_string(),
+            // Recibos de entrega e leitura: sem eles o ✓✓ nunca aparece.
+            "READ_RECEIPT".to_string(),
         ],
     }
 }
@@ -2441,6 +2449,7 @@ mod tests {
         );
         assert!(w.subscribe.iter().any(|e| e == "CONNECTION"));
         assert!(w.subscribe.iter().any(|e| e == "MESSAGE"));
+        assert!(w.subscribe.iter().any(|e| e == "READ_RECEIPT"));
     }
 
     #[test]

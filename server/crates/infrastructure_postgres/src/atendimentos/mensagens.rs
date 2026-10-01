@@ -163,7 +163,7 @@ pub trait MensagemRepository: Send + Sync {
         ctx: &RequestContext,
         message_id_whatsapp: &str,
         status: &str,
-    ) -> Result<(), DbError>;
+    ) -> Result<Option<i32>, DbError>;
 
     /// Varredura CROSS-TENANT (scheduler do worker, F4.3b): mensagens com mídia
     /// ainda não purgada e mais antigas que `idade_max_dias`. `ctx` só para escopo.
@@ -408,21 +408,24 @@ impl MensagemRepository for PostgresMensagemRepository {
         ctx: &RequestContext,
         message_id_whatsapp: &str,
         status: &str,
-    ) -> Result<(), DbError> {
-        sqlx::query(
+    ) -> Result<Option<i32>, DbError> {
+        // Devolve o atendimento para quem chamou avisar a conversa aberta: sem
+        // ele, o ✓/✓✓ só aparecia ao fechar e abrir a janela.
+        let atendimento = sqlx::query_scalar::<_, i32>(
             r#"UPDATE oraculo_mensagem
                SET status_envio = $3,
                    data_entregue = CASE WHEN $3 = 'delivered' AND data_entregue IS NULL THEN NOW() ELSE data_entregue END,
                    data_lida = CASE WHEN $3 = 'read' AND data_lida IS NULL THEN NOW() ELSE data_lida END,
                    lido = CASE WHEN $3 = 'read' THEN true ELSE lido END
-               WHERE tenant_id = $1 AND message_id_whatsapp = $2"#,
+               WHERE tenant_id = $1 AND message_id_whatsapp = $2
+               RETURNING atendimento_id"#,
         )
         .bind(ctx.tenant_id)
         .bind(message_id_whatsapp)
         .bind(status)
-        .execute(&mut **tx)
+        .fetch_all(&mut **tx)
         .await?;
-        Ok(())
+        Ok(atendimento.into_iter().next())
     }
 
     #[tracing::instrument(skip_all, fields(limite = limite, idade_max_dias = idade_max_dias))]

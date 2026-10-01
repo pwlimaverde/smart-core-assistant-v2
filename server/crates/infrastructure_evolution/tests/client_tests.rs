@@ -1239,3 +1239,31 @@ async fn test_send_media_formato_da_evolution_go() {
         .unwrap();
     assert_eq!(res.message_id, "MIDIA-1");
 }
+
+#[tokio::test]
+async fn test_media_downloader_formato_da_evolution_go() {
+    // Envelope `data` com data URL no lugar do base64 puro.
+    let (server, provider) = setup().await;
+    let token = SecretString::from("t".to_string());
+    Mock::given(method("POST"))
+        .and(path("/message/downloadmedia"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "message": "success",
+            "data": { "base64": "data:audio/ogg; codecs=opus;base64,T2xh", "timestamp": "" }
+        })))
+        .mount(&server)
+        .await;
+
+    let res = provider
+        .media_downloader()
+        .unwrap()
+        .download_media(
+            "i",
+            &token,
+            &serde_json::json!({ "audioMessage": { "URL": "u" } }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.base64, "T2xh");
+    assert_eq!(res.mime_type.as_deref(), Some("audio/ogg"));
+}

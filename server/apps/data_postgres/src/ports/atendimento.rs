@@ -484,7 +484,7 @@ pub trait AtendimentoStore: Send + Sync {
         ctx: &RequestContext,
         message_id_whatsapp: &str,
         status: &str,
-    ) -> Result<(), DbError>;
+    ) -> Result<Option<i32>, DbError>;
 
     /// Aplica a política de ticket/Kanban: para um atendimento ainda não posicionado,
     /// resolve o fluxo padrão, coloca-o na etapa inicial ('fila'), registra o

@@ -1,6 +1,6 @@
 use axum::{
     body::Bytes,
-    extract::{Path, State},
+    extract::{DefaultBodyLimit, Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::post,
@@ -24,6 +24,9 @@ fn mascarar_telefone(phone: &str) -> String {
     let visiveis: String = digitos[digitos.len() - 4..].iter().collect();
     format!("{}{}", "*".repeat(digitos.len() - 4), visiveis)
 }
+
+/// Corpo máximo de um webhook: mídia de 13 MB em base64 com folga.
+const LIMITE_DO_WEBHOOK: usize = 32 * 1024 * 1024;
 
 pub trait WebhookNormalizer: Send + Sync {
     fn provider_name(&self) -> &'static str;
@@ -96,6 +99,10 @@ async fn main() -> anyhow::Result<()> {
         // travar sem que nada acusasse. Responder aqui exercita o roteador do
         // axum, não só a porta aberta.
         .route("/health", axum::routing::get(|| async { "ok" }))
+        // A evolution-go manda a mídia em base64 dentro do webhook (até 13 MB
+        // de arquivo, ~17 MB codificado). No limite padrão do axum (2 MB) o
+        // webhook voltava 413 e a mensagem do cliente se perdia inteira.
+        .layer(DefaultBodyLimit::max(LIMITE_DO_WEBHOOK))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9200").await?;
@@ -755,6 +762,8 @@ fn canonical_event(raw: &str) -> Option<&'static str> {
         "PRESENCE" | "presence.update" | "Presence" | "PRESENCE_UPDATE" => Some("PRESENCE"),
         "CONTACTS" | "contacts.update" | "Contacts" | "CONTACTS_UPDATE" => Some("CONTACTS"),
         "QRCODE" | "qrcode.updated" | "QRCode" | "QRCODE_UPDATED" => Some("QRCODE"),
+        // Recibo de entrega/leitura da evolution-go (o `events.Receipt` do whatsmeow).
+        "Receipt" | "READ_RECEIPT" | "RECEIPT" => Some("RECEIPT"),
         _ => {
             let normalized = raw.to_uppercase().replace('.', "_");
             let normalized_singular = if normalized.ends_with('S') {
@@ -827,6 +836,9 @@ fn translate_go_payload(payload: &serde_json::Value) -> serde_json::Value {
     let media_type = info.get("MediaType").and_then(|m| m.as_str()).unwrap_or("");
 
     let mut message_out = go_message.clone();
+    if let Some(m) = message_out.as_object_mut() {
+        m.remove("base64");
+    }
     let mut message_type_out = serde_json::Value::Null;
 
     if !media_type.is_empty() {
@@ -850,11 +862,10 @@ fn translate_go_payload(payload: &serde_json::Value) -> serde_json::Value {
                 }
             }
 
-            if let Some(top_b64) = go_message.get("base64") {
-                if !sub.contains_key("base64") {
-                    sub.insert("base64".to_string(), top_b64.clone());
-                }
-            }
+            // O base64 que a evolution-go embute (até ~17 MB) não segue para o
+            // barramento: o worker baixa a mídia pelo provedor, e um evento desse
+            // tamanho pesaria em cada consumidor do stream.
+            sub.remove("base64");
 
             message_out = serde_json::json!({
                 &sub_key: sub
@@ -903,6 +914,21 @@ impl WebhookNormalizer for EvolutionNormalizer {
     ) -> Option<(&'static str, contracts::TenantEnvelope<serde_json::Value>)> {
         let canonical = canonical_event(event)?;
 
+        // O recibo não tem `Info`: vira direto o evento de status que o worker
+        // já sabe aplicar. Tipo que não muda o ✓ (retry, sender…) é descartado.
+        if canonical == "RECEIPT" {
+            let status = status_do_recibo(raw)?;
+            let topic = "whatsapp.message.status";
+            return Some((
+                topic,
+                contracts::TenantEnvelope::novo(
+                    tenant_id,
+                    topic.to_string(),
+                    build_message_payload(&status, instance_id),
+                ),
+            ));
+        }
+
         let translated = if raw.get("data").and_then(|d| d.get("Info")).is_some() {
             translate_go_payload(raw)
         } else {
@@ -938,6 +964,37 @@ impl WebhookNormalizer for EvolutionNormalizer {
             contracts::TenantEnvelope::novo(tenant_id, topic.to_string(), payload),
         ))
     }
+}
+
+/// O recibo da evolution-go no formato de status que o worker aplica:
+/// `{"data": {"status", "key": {"id"}, "ids": [...]}}`.
+///
+/// O whatsmeow manda `Type` vazio para "entregue", `read` para lida e `played`
+/// para áudio ouvido. `read-self` é a leitura feita no próprio aparelho do
+/// negócio (de mensagem do cliente), não muda o ✓ do que enviamos.
+fn status_do_recibo(raw: &serde_json::Value) -> Option<serde_json::Value> {
+    let data = raw.get("data")?;
+    let ids: Vec<String> = data
+        .get("MessageIDs")
+        .and_then(|v| v.as_array())?
+        .iter()
+        .filter_map(|v| v.as_str().map(str::to_string))
+        .filter(|s| !s.is_empty())
+        .collect();
+    let primeiro = ids.first()?.clone();
+    let tipo = data.get("Type").and_then(|v| v.as_str()).unwrap_or("");
+    let status = match tipo {
+        "" | "delivered" => "delivered",
+        "read" | "played" => "read",
+        _ => return None,
+    };
+    Some(serde_json::json!({
+        "data": {
+            "status": status,
+            "key": { "id": primeiro },
+            "ids": ids,
+        }
+    }))
 }
 
 fn build_message_payload(raw: &serde_json::Value, instance_id: i32) -> serde_json::Value {
@@ -977,6 +1034,64 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use serde_json::json;
     use tower::ServiceExt;
+
+    #[test]
+    fn recibo_de_leitura_vira_status_com_todos_os_ids() {
+        let raw = json!({
+            "event": "Receipt",
+            "data": {
+                "Chat": "558897141275@s.whatsapp.net",
+                "MessageIDs": ["3EB0A", "3EB0B"],
+                "Type": "read"
+            }
+        });
+        let (topico, env) = EvolutionNormalizer
+            .normalize("Receipt", &raw, uuid::Uuid::nil(), 181)
+            .expect("recibo de leitura vira evento");
+        assert_eq!(topico, "whatsapp.message.status");
+        let data = &env.payload["raw_event"]["data"];
+        assert_eq!(data["status"], "read");
+        assert_eq!(data["key"]["id"], "3EB0A");
+        assert_eq!(data["ids"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn midia_da_evolution_go_segue_sem_o_base64() {
+        let raw = json!({
+            "event": "Message",
+            "data": {
+                "Info": { "ID": "A1", "Chat": "5588@s.whatsapp.net", "MediaType": "audio" },
+                "Message": {
+                    "audioMessage": { "URL": "https://mmg", "mimetype": "audio/ogg" },
+                    "base64": "QUJD"
+                }
+            }
+        });
+        let t = translate_go_payload(&raw);
+        let audio = &t["data"]["message"]["audioMessage"];
+        assert_eq!(audio["url"], "https://mmg");
+        assert!(audio.get("base64").is_none());
+    }
+
+    #[test]
+    fn recibo_sem_tipo_e_entrega() {
+        let raw = json!({ "event": "Receipt", "data": { "MessageIDs": ["3EB0A"], "Type": "" } });
+        let (_, env) = EvolutionNormalizer
+            .normalize("Receipt", &raw, uuid::Uuid::nil(), 181)
+            .unwrap();
+        assert_eq!(env.payload["raw_event"]["data"]["status"], "delivered");
+    }
+
+    #[test]
+    fn recibo_que_nao_muda_o_status_e_descartado() {
+        for tipo in ["read-self", "retry", "sender"] {
+            let raw =
+                json!({ "event": "Receipt", "data": { "MessageIDs": ["3EB0A"], "Type": tipo } });
+            assert!(EvolutionNormalizer
+                .normalize("Receipt", &raw, uuid::Uuid::nil(), 181)
+                .is_none());
+        }
+    }
 
     /// A lista de ignorados guarda telefone: remetente por LID confere pelo
     /// alternativo.
