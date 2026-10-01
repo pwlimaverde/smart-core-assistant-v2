@@ -98,6 +98,22 @@ impl EvolutionProvider {
             .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
         Ok(desembrulhar(bruto))
     }
+
+    /// O id de um envio que o provedor já aceitou (2xx). Nunca falha: corpo
+    /// ilegível ou sem id viram id vazio, com aviso no log — a mensagem saiu,
+    /// e tratar isso como erro provocaria o reenvio.
+    pub(crate) async fn id_do_envio(resp: reqwest::Response) -> String {
+        match Self::json_do_provedor(resp).await {
+            Ok(v) => id_da_mensagem_enviada(&v).unwrap_or_else(|| {
+                tracing::warn!("envio aceito pelo provedor sem o id da mensagem");
+                String::new()
+            }),
+            Err(e) => {
+                tracing::warn!(erro = %e, "envio aceito pelo provedor com resposta ilegível");
+                String::new()
+            }
+        }
+    }
 }
 
 /// Tira o conteúdo de dentro de `{"data": ...}` quando o envelope está presente.
@@ -111,15 +127,22 @@ pub(crate) fn desembrulhar(v: serde_json::Value) -> serde_json::Value {
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub(crate) struct MessageKey {
-    pub(crate) id: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub(crate) struct SendMessageResp {
-    pub(crate) key: Option<MessageKey>,
-    pub(crate) id: Option<String>,
+/// O id da mensagem que o provedor acabou de enviar, já sem o envelope.
+///
+/// A evolution-go devolve `{"data": {"Info": {"ID": "…"}, "Message": …}}`
+/// (o `MessageInfo` do whatsmeow, sem tags json). A Evolution v2 devolvia
+/// `{"key": {"id": "…"}}` ou o `id` na raiz — continuam aceitos.
+pub(crate) fn id_da_mensagem_enviada(v: &serde_json::Value) -> Option<String> {
+    let texto = |x: Option<&serde_json::Value>| {
+        x.and_then(|x| x.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let info = v.get("Info").or_else(|| v.get("info"));
+    texto(info.and_then(|i| i.get("ID").or_else(|| i.get("id"))))
+        .or_else(|| texto(v.get("key").and_then(|k| k.get("id"))))
+        .or_else(|| texto(v.get("id")))
+        .or_else(|| texto(v.get("messageId")))
 }
 
 #[derive(Deserialize, Debug)]

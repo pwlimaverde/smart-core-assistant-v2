@@ -262,6 +262,27 @@ void main() {
       expect(find.text('Transferiu'), findsOneWidget);
     });
 
+    testWidgets('decisão só de análise aparece traduzida', (tester) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = const FichaAtendimento(
+          catalogo: [],
+          aplicadas: [],
+          notas: [],
+          analise: AnaliseDaIa(
+            ultimaDecisao: (
+              motor: 'jev',
+              ato: 'a_revisar',
+              motivo: '',
+              transferiu: false,
+            ),
+          ),
+        );
+
+      await montar(tester, gateway);
+
+      expect(find.text('Resposta a revisar · motor jev'), findsOneWidget);
+    });
+
     testWidgets('sem análise a seção não aparece', (tester) async {
       final gateway = FakeAtendimentoGateway();
 

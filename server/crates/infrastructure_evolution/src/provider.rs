@@ -1,4 +1,4 @@
-use crate::client::{AvatarResp, DownloadMediaResp, EvolutionProvider, SendMessageResp};
+use crate::client::{id_da_mensagem_enviada, AvatarResp, DownloadMediaResp, EvolutionProvider};
 use async_trait::async_trait;
 use infrastructure_messaging::{
     AdvancedSettings, AdvancedSettingsControl, ConnectionState, CreateInstanceResult,
@@ -486,20 +486,10 @@ impl MessageSender for EvolutionProvider {
                         }
                     } else {
                         let resp = Self::ok_or_api(resp).await?;
-                        let parsed: SendMessageResp = resp
-                            .json()
-                            .await
-                            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
-
-                        let id =
-                            parsed
-                                .id
-                                .or_else(|| parsed.key.map(|k| k.id))
-                                .ok_or_else(|| {
-                                    MessagingProviderError::Deserialization(
-                                        "ID da mensagem ausente na resposta".into(),
-                                    )
-                                })?;
+                        // 2xx = o WhatsApp já recebeu a mensagem. Sem o id na resposta, dar
+                        // erro aqui fazia quem chamou tentar de novo — e o cliente recebia a
+                        // mesma mensagem várias vezes. O id fica vazio e a mensagem, enviada.
+                        let id = Self::id_do_envio(resp).await;
 
                         return Ok(SendMessageResult { message_id: id });
                     }
@@ -578,20 +568,10 @@ impl MessageSender for EvolutionProvider {
                         }
                     } else {
                         let resp = Self::ok_or_api(resp).await?;
-                        let parsed: SendMessageResp = resp
-                            .json()
-                            .await
-                            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
-
-                        let id =
-                            parsed
-                                .id
-                                .or_else(|| parsed.key.map(|k| k.id))
-                                .ok_or_else(|| {
-                                    MessagingProviderError::Deserialization(
-                                        "ID da mensagem de mídia ausente na resposta".into(),
-                                    )
-                                })?;
+                        // 2xx = o WhatsApp já recebeu a mensagem. Sem o id na resposta, dar
+                        // erro aqui fazia quem chamou tentar de novo — e o cliente recebia a
+                        // mesma mensagem várias vezes. O id fica vazio e a mensagem, enviada.
+                        let id = Self::id_do_envio(resp).await;
 
                         return Ok(SendMessageResult { message_id: id });
                     }
@@ -708,14 +688,10 @@ impl Reactions for EvolutionProvider {
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
 
         let resp = Self::ok_or_api(resp).await?;
-        let parsed: SendMessageResp = resp
-            .json()
+        let id = Self::json_do_provedor(resp)
             .await
-            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
-
-        let id = parsed
-            .id
-            .or_else(|| parsed.key.map(|k| k.id))
+            .ok()
+            .and_then(|v| id_da_mensagem_enviada(&v))
             .unwrap_or_else(|| message_id.to_string());
 
         Ok(SendMessageResult { message_id: id })

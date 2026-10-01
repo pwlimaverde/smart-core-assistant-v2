@@ -471,6 +471,10 @@ class _SecaoDaAnalise extends StatelessWidget {
     'social': 'Conversa social',
     'sem_info': 'Sem informação',
     'barrada': 'Barrou a mensagem',
+    // Registros só de análise trazem a decisão, não o ato.
+    'respondida': 'Respondeu',
+    'transferida': 'Transferiu',
+    'a_revisar': 'Resposta a revisar',
   };
 
   @override

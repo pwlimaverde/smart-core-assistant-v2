@@ -674,9 +674,11 @@ impl MensagemRepository for PostgresMensagemRepository {
         mensagem_id: i32,
         message_id_whatsapp: &str,
     ) -> Result<(), DbError> {
+        // Id vazio = o provedor aceitou o envio sem devolver o id: a mensagem
+        // saiu, mas sem chave para casar os recibos de entrega depois.
         sqlx::query(
             r#"UPDATE oraculo_mensagem
-               SET status_envio = 'sent', message_id_whatsapp = $3
+               SET status_envio = 'sent', message_id_whatsapp = NULLIF($3, '')
                WHERE tenant_id = $1 AND id = $2 AND status_envio = 'pending'"#,
         )
         .bind(ctx.tenant_id)
