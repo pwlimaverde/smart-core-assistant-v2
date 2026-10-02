@@ -9,6 +9,17 @@ use infrastructure_messaging::{
 use secrecy::{ExposeSecret, SecretString};
 use std::time::Duration;
 
+/// Rótulo do tipo de mídia no vocabulário do `POST /send/media` da evolution-go.
+/// Serve também de campo do span (nunca a URL nem o número).
+fn rotulo_media_type(media_type: &MediaType) -> &'static str {
+    match media_type {
+        MediaType::Image => "image",
+        MediaType::Video => "video",
+        MediaType::Audio => "audio",
+        MediaType::Document => "document",
+    }
+}
+
 fn map_state(s: &str) -> ConnectionState {
     match s {
         "open" | "connected" => ConnectionState::Connected,
@@ -442,7 +453,12 @@ impl InstanceManager for EvolutionProvider {
 
 #[async_trait]
 impl MessageSender for EvolutionProvider {
-    #[tracing::instrument(err, skip(self, instance_token, text), fields(provider = "evolution", instance_name = %instance_name))]
+    // C9: `skip_all` — telefone do contato e texto nunca entram no span.
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(provider = "evolution", instance_name = %instance_name)
+    )]
     async fn send_text(
         &self,
         instance_name: &str,
@@ -510,7 +526,17 @@ impl MessageSender for EvolutionProvider {
         }))
     }
 
-    #[tracing::instrument(err, skip(self, instance_token, caption), fields(provider = "evolution", instance_name = %instance_name))]
+    // C9: `skip_all` — telefone do contato e URL assinada (credencial) nunca
+    // entram no span; só o rótulo do tipo de mídia.
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(
+            provider = "evolution",
+            instance_name = %instance_name,
+            media_type = %rotulo_media_type(&media_type)
+        )
+    )]
     async fn send_media(
         &self,
         instance_name: &str,
@@ -519,13 +545,9 @@ impl MessageSender for EvolutionProvider {
         media_type: MediaType,
         media_url: &str,
         caption: Option<&str>,
+        file_name: Option<&str>,
     ) -> Result<SendMessageResult, MessagingProviderError> {
-        let media_type_str = match media_type {
-            MediaType::Image => "image",
-            MediaType::Video => "video",
-            MediaType::Audio => "audio",
-            MediaType::Document => "document",
-        };
+        let media_type_str = rotulo_media_type(&media_type);
 
         let mut body = serde_json::json!({
             "number": to_number,
@@ -533,8 +555,16 @@ impl MessageSender for EvolutionProvider {
             "url": media_url,
         });
 
-        if let Some(c) = caption {
+        if let Some(c) = caption.filter(|c| !c.trim().is_empty()) {
             body["caption"] = serde_json::Value::String(c.to_string());
+        }
+        // P2b: `filename` (nome usado em `doc_dev/planejamento/13` para a
+        // evolution-go; não conferido no código-fonte da tag) só em documento —
+        // em imagem/áudio/vídeo o WhatsApp não exibe nome de arquivo.
+        let nome_do_documento =
+            file_name.filter(|n| matches!(media_type, MediaType::Document) && !n.trim().is_empty());
+        if let Some(n) = nome_do_documento {
+            body["filename"] = serde_json::Value::String(n.to_string());
         }
 
         let mut attempts = 0;
@@ -737,7 +767,12 @@ impl MediaDownloader for EvolutionProvider {
 
 #[async_trait]
 impl ProfileQuery for EvolutionProvider {
-    #[tracing::instrument(err, skip(self, token), fields(provider = "evolution", instance_name = %instance_name))]
+    // C9: `skip_all` — o número do contato nunca entra no span.
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(provider = "evolution", instance_name = %instance_name)
+    )]
     async fn get_profile_picture(
         &self,
         instance_name: &str,

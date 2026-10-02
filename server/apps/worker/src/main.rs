@@ -4525,41 +4525,49 @@ async fn processar_mensagem_persistida(
         .unwrap_or_default()
         .to_string();
 
-    let send_payload = serde_json::json!({
-        "id": instance_id,
-        "to_number": to_number,
-        "text": conteudo,
-    });
-
-    // Retry com backoff (1s/2s/4s) para falhas transitórias do provedor.
-    let backoffs_secs = [0u64, 1, 2, 4];
-    let mut ultimo_erro: Option<anyhow::Error> = None;
-    let mut stanza_id: Option<String> = None;
-    for espera_secs in backoffs_secs {
-        if espera_secs > 0 {
-            tokio::time::sleep(Duration::from_secs(espera_secs)).await;
+    // P2b: anexo do atendente sai como MÍDIA (`SendWhatsappMedia`); só texto
+    // puro vai por `SendWhatsappMessage`. Antes, o anexo saía como o texto do
+    // `conteudo` — que, sem legenda, é o nome do arquivo ("audio.m4a").
+    let midia = envelope
+        .payload
+        .get("midia")
+        .filter(|m| m.is_object())
+        .cloned();
+    let EnvioOutbound {
+        stanza_id,
+        ultimo_erro,
+        ..
+    } = match midia {
+        Some(midia) => {
+            enviar_midia_outbound(
+                state,
+                &tenant_id,
+                mensagem_id,
+                instance_id,
+                &to_number,
+                &midia,
+                &causation_id,
+                &envelope.traceparent,
+            )
+            .await
         }
-        match chamar_rpc(
-            &state.whatsapp_client,
-            &tenant_id,
-            "SendWhatsappMessage",
-            send_payload.clone(),
-            &causation_id,
-            &envelope.traceparent,
-        )
-        .await
-        {
-            Ok(resp) => {
-                stanza_id = resp
-                    .get("message_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                ultimo_erro = None;
-                break;
-            }
-            Err(e) => ultimo_erro = Some(e),
+        None => {
+            let send_payload = serde_json::json!({
+                "id": instance_id,
+                "to_number": to_number,
+                "text": conteudo,
+            });
+            enviar_com_retry(
+                state,
+                &tenant_id,
+                "SendWhatsappMessage",
+                send_payload,
+                &causation_id,
+                &envelope.traceparent,
+            )
+            .await
         }
-    }
+    };
 
     if let Some(stanza_id) = stanza_id {
         chamar_rpc(
@@ -4628,6 +4636,236 @@ async fn processar_mensagem_persistida(
         mensagem_id,
         ultimo_erro
     );
+}
+
+/// Resultado do envio outbound ao `data_whatsapp`: o stanzaId quando o provedor
+/// aceitou, ou o último erro depois de esgotar as tentativas.
+struct EnvioOutbound {
+    stanza_id: Option<String>,
+    ultimo_erro: Option<anyhow::Error>,
+    /// Quantas chamadas ao `data_whatsapp` foram feitas (0 = nem chegou a tentar).
+    tentativas: u32,
+}
+
+/// Chama `metodo` no `data_whatsapp` com retry/backoff (1s/2s/4s) para falhas
+/// transitórias do provedor. Comum ao texto e à mídia.
+async fn enviar_com_retry(
+    state: &AppState,
+    tenant_id: &str,
+    metodo: &str,
+    payload: serde_json::Value,
+    causation_id: &str,
+    traceparent: &str,
+) -> EnvioOutbound {
+    let backoffs_secs = [0u64, 1, 2, 4];
+    let mut ultimo_erro: Option<anyhow::Error> = None;
+    let mut stanza_id: Option<String> = None;
+    let mut tentativas = 0u32;
+    for espera_secs in backoffs_secs {
+        if espera_secs > 0 {
+            tokio::time::sleep(Duration::from_secs(espera_secs)).await;
+        }
+        tentativas += 1;
+        match chamar_rpc(
+            &state.whatsapp_client,
+            tenant_id,
+            metodo,
+            payload.clone(),
+            causation_id,
+            traceparent,
+        )
+        .await
+        {
+            Ok(resp) => {
+                stanza_id = resp
+                    .get("message_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                ultimo_erro = None;
+                break;
+            }
+            Err(e) => ultimo_erro = Some(e),
+        }
+    }
+    EnvioOutbound {
+        stanza_id,
+        ultimo_erro,
+        tentativas,
+    }
+}
+
+/// P2b — categoria do anexo no vocabulário do `SendWhatsappMedia`. O
+/// `data_postgres` grava `image|audio|video` e trata o resto como documento;
+/// aqui vale a mesma regra, para o `data_whatsapp` nunca recusar o tipo.
+fn categoria_de_envio(categoria: &str) -> &'static str {
+    match categoria {
+        "image" => "image",
+        "audio" => "audio",
+        "video" => "video",
+        _ => "document",
+    }
+}
+
+/// P2b — legenda real do anexo, se houver. Nunca cai para o nome do arquivo nem
+/// para o `content` do evento (que, sem legenda, É o nome do arquivo).
+fn legenda_do_anexo(midia: &serde_json::Value) -> Option<&str> {
+    midia
+        .get("legenda")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+}
+
+/// P2b — corpo do `SendWhatsappMedia`. A URL assinada é credencial: vai só aqui,
+/// no corpo do RPC, nunca em span ou log.
+fn corpo_envio_midia(
+    instance_id: i64,
+    to_number: &str,
+    midia: &serde_json::Value,
+    media_url: &str,
+) -> serde_json::Value {
+    let categoria = midia
+        .get("categoria")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let nome_arquivo = midia
+        .get("nome_arquivo")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty());
+    serde_json::json!({
+        "id": instance_id,
+        "to_number": to_number,
+        "media_type": categoria_de_envio(categoria),
+        "media_url": media_url,
+        "caption": legenda_do_anexo(midia),
+        "file_name": nome_arquivo,
+    })
+}
+
+/// Extrai o status HTTP do provedor da mensagem de erro do RPC
+/// (`"HTTP status 500"` / `"erro HTTP (status 400)"`), para o span.
+fn http_status_do_erro(mensagem: &str) -> Option<u16> {
+    let resto = &mensagem[mensagem.find("status ")? + "status ".len()..];
+    let digitos: String = resto.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digitos.len() == 3 {
+        digitos.parse().ok()
+    } else {
+        None
+    }
+}
+
+/// P2b — envia o anexo do atendente como mídia: assina uma URL de leitura curta
+/// (a evolution-go baixa o arquivo por ela) e chama `SendWhatsappMedia` com o
+/// mesmo retry do texto. `skip_all`: telefone, URL e legenda ficam fora do span.
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(
+    name = "outbound.midia",
+    skip_all,
+    fields(
+        tenant_id = %tenant_id,
+        mensagem_id = mensagem_id,
+        categoria = tracing::field::Empty,
+        tentativas = tracing::field::Empty,
+        http_status = tracing::field::Empty,
+        error_code = tracing::field::Empty
+    )
+)]
+async fn enviar_midia_outbound(
+    state: &AppState,
+    tenant_id: &str,
+    mensagem_id: i32,
+    instance_id: i64,
+    to_number: &str,
+    midia: &serde_json::Value,
+    causation_id: &str,
+    traceparent: &str,
+) -> EnvioOutbound {
+    let span = tracing::Span::current();
+    let categoria = categoria_de_envio(
+        midia
+            .get("categoria")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+    );
+    span.record("categoria", categoria);
+
+    let chave = midia
+        .get("chave")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let mimetype = midia
+        .get("mimetype")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    // Validade curta, mas maior que o download da evolution-go (15 min).
+    let presign = chamar_rpc(
+        &state.storage_client,
+        tenant_id,
+        "PresignFile",
+        serde_json::json!({
+            "file_name": chave,
+            "expires_in": 900,
+            "content_type": mimetype,
+        }),
+        causation_id,
+        traceparent,
+    )
+    .await;
+    let media_url = match presign {
+        Ok(resp) => resp
+            .get("url")
+            .and_then(|u| u.as_str())
+            .filter(|u| !u.is_empty())
+            .map(str::to_string),
+        Err(e) => {
+            tracing::warn!(erro = %e, "falha ao assinar a URL do anexo outbound");
+            None
+        }
+    };
+    let Some(media_url) = media_url else {
+        span.record("error_code", "presign_falhou");
+        span.record("tentativas", 0u32);
+        return EnvioOutbound {
+            stanza_id: None,
+            ultimo_erro: Some(anyhow::anyhow!(
+                "não foi possível assinar a URL do anexo (mensagem_id={mensagem_id})"
+            )),
+            tentativas: 0,
+        };
+    };
+
+    let corpo = corpo_envio_midia(instance_id, to_number, midia, &media_url);
+    let envio = enviar_com_retry(
+        state,
+        tenant_id,
+        "SendWhatsappMedia",
+        corpo,
+        causation_id,
+        traceparent,
+    )
+    .await;
+
+    span.record("tentativas", envio.tentativas);
+    if envio.stanza_id.is_none() {
+        let mensagem_erro = envio
+            .ultimo_erro
+            .as_ref()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        let http_status = http_status_do_erro(&mensagem_erro);
+        if let Some(status) = http_status {
+            span.record("http_status", status);
+        }
+        // 4xx = o provedor recusou o envio (tentar de novo não resolve);
+        // o resto é falha transitória que esgotou o retry.
+        let error_code = match http_status {
+            Some(s) if (400..500).contains(&s) && s != 429 => "provedor_recusou",
+            _ => "esgotou_retries",
+        };
+        span.record("error_code", error_code);
+        tracing::warn!("envio do anexo outbound falhou");
+    }
+    envio
 }
 
 #[cfg(test)]
@@ -5459,6 +5697,235 @@ mod tests {
         );
 
         pg_handle.abort();
+    }
+
+    /// `message.persisted` de um anexo do atendente, como o `data_postgres`
+    /// publica em `enviar_midia` (P2b: com `legenda`).
+    fn evento_message_persistida_com_midia(mensagem_id: i64, legenda: &str) -> EventoBruto {
+        let payload = serde_json::json!({
+            "message_id": mensagem_id.to_string(),
+            "sender_id": "atendente",
+            // Sem legenda, o `content` é o nome do arquivo.
+            "content": "audio.m4a",
+            "timestamp": chrono::Utc::now().timestamp_millis(),
+            "midia": {
+                "chave": "outbound/42/0190-abc",
+                "mimetype": "audio/mp4",
+                "categoria": "audio",
+                "nome_arquivo": "audio.m4a",
+                "legenda": legenda,
+                "is_ptt": false,
+            },
+        });
+        EventoBruto {
+            stream_id: "9999-1".to_string(),
+            tenant_id: Uuid::new_v4().to_string(),
+            event_id: Uuid::now_v7().to_string(),
+            event_type: "message.persisted".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            traceparent: "00-trace-worker-p2b-01".to_string(),
+            payload: serde_json::to_string(&payload).unwrap(),
+        }
+    }
+
+    /// P2b — anexo do atendente sai por `SendWhatsappMedia` (nunca por
+    /// `SendWhatsappMessage`), com URL assinada de 900 s e `content_type` do
+    /// anexo; legenda vazia NÃO vira o nome do arquivo.
+    #[tokio::test]
+    async fn test_processar_mensagem_persistida_midia_envia_como_midia() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29440";
+        let wa_addr = "tcp://127.0.0.1:29441";
+        let st_addr = "tcp://127.0.0.1:29442";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_WHATSAPP_ENDPOINT", wa_addr);
+        std::env::set_var("SMARTCORE_DATA_STORAGE_ENDPOINT", st_addr);
+
+        let marcou = Arc::new(AtomicUsize::new(0));
+        let marcou_c = marcou.clone();
+        let envios_texto = Arc::new(AtomicUsize::new(0));
+        let envios_texto_c = envios_texto.clone();
+        let corpo_midia: Arc<std::sync::Mutex<Option<serde_json::Value>>> =
+            Arc::new(std::sync::Mutex::new(None));
+        let corpo_midia_c = corpo_midia.clone();
+        let corpo_presign: Arc<std::sync::Mutex<Option<serde_json::Value>>> =
+            Arc::new(std::sync::Mutex::new(None));
+        let corpo_presign_c = corpo_presign.clone();
+
+        let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers")
+            .route("ResolverDestinoEnvioOutbound", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "atendimento_id": 42,
+                        "instance_id": 7,
+                        "to_number": "5511999998888",
+                        "status_envio": "pending",
+                        "conteudo": "audio.m4a",
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ResolverDestinoEnvioOutboundReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("MarcarMensagemEnviada", move |env| {
+                let marcou = marcou_c.clone();
+                Box::pin(async move {
+                    marcou.fetch_add(1, Ordering::SeqCst);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "MarcarMensagemEnviadaReply".to_string(),
+                        payload: serde_json::to_vec(&serde_json::json!({ "status": "ok" }))
+                            .unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let wa_server = Server::new(Endpoint::parse(wa_addr).unwrap(), "flatbuffers")
+            .route("SendWhatsappMedia", move |env| {
+                let corpo = corpo_midia_c.clone();
+                Box::pin(async move {
+                    *corpo.lock().unwrap() = serde_json::from_slice(&env.payload).ok();
+                    let reply =
+                        serde_json::json!({ "status": "success", "message_id": "WA-MIDIA-1" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "SendWhatsappMediaReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("SendWhatsappMessage", move |env| {
+                let contador = envios_texto_c.clone();
+                Box::pin(async move {
+                    contador.fetch_add(1, Ordering::SeqCst);
+                    let reply = serde_json::json!({ "status": "success", "message_id": "X" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "SendWhatsappMessageReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let st_server = Server::new(Endpoint::parse(st_addr).unwrap(), "flatbuffers").route(
+            "PresignFile",
+            move |env| {
+                let corpo = corpo_presign_c.clone();
+                Box::pin(async move {
+                    *corpo.lock().unwrap() = serde_json::from_slice(&env.payload).ok();
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(
+                            &serde_json::json!({ "url": "https://r2/assinada" }),
+                        )
+                        .unwrap(),
+                        ..env
+                    }
+                })
+            },
+        );
+        let pg_handle = tokio::spawn(async move { pg_server.run().await.unwrap() });
+        let wa_handle = tokio::spawn(async move { wa_server.run().await.unwrap() });
+        let st_handle = tokio::spawn(async move { st_server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await.unwrap());
+        let storage_client = Arc::new(transport::conectar_cliente("data_storage").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            bus_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            storage_client,
+            fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
+            pg_client,
+            whatsapp_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
+        };
+
+        let evt = evento_message_persistida_com_midia(200, "");
+        let resultado = processar_mensagem_persistida(&state, evt).await;
+        assert!(resultado.is_ok(), "obteve: {:?}", resultado);
+
+        assert_eq!(
+            envios_texto.load(Ordering::SeqCst),
+            0,
+            "anexo não pode sair como texto"
+        );
+        assert_eq!(marcou.load(Ordering::SeqCst), 1, "marca como enviada");
+
+        let presign = corpo_presign.lock().unwrap().clone().expect("PresignFile");
+        assert_eq!(presign["file_name"].as_str(), Some("outbound/42/0190-abc"));
+        assert_eq!(presign["expires_in"].as_u64(), Some(900));
+        assert_eq!(presign["content_type"].as_str(), Some("audio/mp4"));
+
+        let corpo = corpo_midia
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("SendWhatsappMedia");
+        assert_eq!(corpo["id"].as_i64(), Some(7));
+        assert_eq!(corpo["media_type"].as_str(), Some("audio"));
+        assert_eq!(corpo["media_url"].as_str(), Some("https://r2/assinada"));
+        assert_eq!(corpo["file_name"].as_str(), Some("audio.m4a"));
+        assert!(
+            corpo["caption"].is_null(),
+            "legenda vazia não pode virar o nome do arquivo: {corpo:?}"
+        );
+
+        pg_handle.abort();
+        wa_handle.abort();
+        st_handle.abort();
+    }
+
+    /// P2b — a legenda real vai como `caption`; vazia ou só espaços, nenhuma.
+    /// Categoria fora do vocabulário vira documento.
+    #[test]
+    fn corpo_envio_midia_usa_so_a_legenda_real() {
+        let com_legenda = serde_json::json!({
+            "categoria": "image",
+            "nome_arquivo": "foto.jpg",
+            "legenda": "Veja o orçamento",
+        });
+        let corpo = corpo_envio_midia(7, "5511", &com_legenda, "https://r2/x");
+        assert_eq!(corpo["caption"].as_str(), Some("Veja o orçamento"));
+        assert_eq!(corpo["media_type"].as_str(), Some("image"));
+
+        let sem_legenda = serde_json::json!({
+            "categoria": "document",
+            "nome_arquivo": "contrato.pdf",
+            "legenda": "   ",
+        });
+        let corpo = corpo_envio_midia(7, "5511", &sem_legenda, "https://r2/x");
+        assert!(corpo["caption"].is_null());
+        assert_eq!(corpo["file_name"].as_str(), Some("contrato.pdf"));
+
+        // Evento antigo, sem o campo `legenda`: também sem caption.
+        let antigo = serde_json::json!({ "categoria": "outra", "nome_arquivo": "x.bin" });
+        let corpo = corpo_envio_midia(7, "5511", &antigo, "https://r2/x");
+        assert!(corpo["caption"].is_null());
+        assert_eq!(corpo["media_type"].as_str(), Some("document"));
+    }
+
+    #[test]
+    fn http_status_do_erro_le_os_dois_formatos_do_provedor() {
+        assert_eq!(
+            http_status_do_erro("Erro de conexão/rede no provedor: HTTP status 503 Service"),
+            Some(503)
+        );
+        assert_eq!(
+            http_status_do_erro("O provedor retornou erro HTTP (status 400): corpo"),
+            Some(400)
+        );
+        assert_eq!(http_status_do_erro("timeout"), None);
     }
 
     #[test]

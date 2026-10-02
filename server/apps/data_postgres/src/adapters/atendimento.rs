@@ -990,6 +990,10 @@ impl AtendimentoStore for PgAtendimentoStore {
                     "mimetype": midia.mimetype,
                     "categoria": midia.categoria,
                     "nome_arquivo": midia.nome_arquivo,
+                    // P2b: legenda própria, separada do `content`. Sem ela o
+                    // `content` é o nome do arquivo, e o worker mandaria
+                    // "audio.m4a" como legenda ao contato.
+                    "legenda": midia.legenda,
                     "is_ptt": midia.is_ptt,
                 },
             });

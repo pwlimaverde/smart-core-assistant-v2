@@ -1608,6 +1608,11 @@ async fn handler_send_whatsapp_media(state: AppState, env: Envelope) -> Envelope
     };
 
     let caption = payload.get("caption").and_then(|v| v.as_str());
+    // P2b: nome do arquivo exibido ao contato (o provedor só usa em documento).
+    let file_name = payload
+        .get("file_name")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty());
 
     let media_type = match media_type_str.to_lowercase().as_str() {
         "image" => MediaType::Image,
@@ -1673,6 +1678,7 @@ async fn handler_send_whatsapp_media(state: AppState, env: Envelope) -> Envelope
             media_type,
             media_url,
             caption,
+            file_name,
         )
         .await
     {
@@ -2589,8 +2595,9 @@ mod tests {
             media: MediaType,
             url: &str,
             caption: Option<&str>,
+            file_name: Option<&str>,
         ) -> Result<SendMessageResult, MessagingProviderError> {
-            let _ = (name, token, to, media, url, caption);
+            let _ = (name, token, to, media, url, caption, file_name);
             Ok(SendMessageResult {
                 message_id: "fake-media-id".to_string(),
             })

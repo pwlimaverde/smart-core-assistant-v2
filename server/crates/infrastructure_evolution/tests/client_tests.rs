@@ -490,6 +490,9 @@ async fn test_send_media() {
             MediaType::Image,
             "http://media.url/image.png",
             Some("Minha imagem"),
+            // P2b: nome do arquivo só vai no corpo para documento; o
+            // `body_json` exato acima prova que imagem não o leva.
+            Some("image.png"),
         )
         .await
         .unwrap();
@@ -1022,10 +1025,80 @@ async fn test_send_media_id_na_raiz() {
             MediaType::Document,
             "http://u/doc.pdf",
             None,
+            None,
         )
         .await
         .unwrap();
     assert_eq!(res.message_id, "media-raiz");
+}
+
+/// P2b — documento leva `filename` no corpo; sem legenda, nada de `caption`.
+#[tokio::test]
+async fn test_send_media_documento_leva_filename() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("t".to_string());
+    Mock::given(method("POST"))
+        .and(path("/send/media"))
+        .and(body_json(serde_json::json!({
+            "number": "5511",
+            "type": "document",
+            "url": "http://u/doc.pdf",
+            "filename": "contrato.pdf"
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({ "id": "doc-1" })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let res = provider
+        .send_media(
+            "i",
+            &token,
+            "5511",
+            MediaType::Document,
+            "http://u/doc.pdf",
+            None,
+            Some("contrato.pdf"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.message_id, "doc-1");
+}
+
+/// P2b — áudio não leva `filename` nem `caption` quando não há legenda.
+#[tokio::test]
+async fn test_send_media_audio_sem_filename() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("t".to_string());
+    Mock::given(method("POST"))
+        .and(path("/send/media"))
+        .and(body_json(serde_json::json!({
+            "number": "5511",
+            "type": "audio",
+            "url": "http://u/a.m4a"
+        })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({ "id": "aud-1" })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let res = provider
+        .send_media(
+            "i",
+            &token,
+            "5511",
+            MediaType::Audio,
+            "http://u/a.m4a",
+            None,
+            Some("audio.m4a"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.message_id, "aud-1");
 }
 
 #[tokio::test]
@@ -1045,6 +1118,7 @@ async fn test_send_media_esgota_retries_retorna_erro() {
             "5511",
             MediaType::Video,
             "http://u/v.mp4",
+            None,
             None,
         )
         .await
@@ -1233,6 +1307,7 @@ async fn test_send_media_formato_da_evolution_go() {
             "5511",
             MediaType::Image,
             "https://exemplo/x.png",
+            None,
             None,
         )
         .await

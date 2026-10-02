@@ -136,6 +136,8 @@ pub trait MessageSender: Send + Sync {
         media: MediaType,
         url: &str,
         caption: Option<&str>,
+        // P2b: nome exibido ao destinatário; o provedor só o usa em documento.
+        file_name: Option<&str>,
     ) -> Result<SendMessageResult, MessagingProviderError>;
 }
 
