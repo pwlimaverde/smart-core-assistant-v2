@@ -9417,7 +9417,7 @@ impl AdminService for AdminFacade {
                             perdidos = perdidos,
                             "stream realtime defasado"
                         );
-                        let aviso = super::AtendimentoEvent {
+                        let aviso = contracts::grpc::queries::AtendimentoEvent {
                             event_type: "stream.defasado".into(),
                             tenant_id: tenant_uuid.to_string(),
                             payload: serde_json::json!({ "perdidos": perdidos }).to_string(),

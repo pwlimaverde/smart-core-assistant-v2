@@ -479,12 +479,13 @@ pub trait AtendimentoStore: Send + Sync {
     ) -> Result<(i32, Atendimento, bool), DbError>;
 
     /// Atualiza o status de leitura/entrega de uma mensagem pelo ID do WhatsApp.
+    /// Devolve `(mensagem_id, atendimento_id)` da linha atualizada (P1.1-B).
     async fn atualizar_status_mensagem(
         &self,
         ctx: &RequestContext,
         message_id_whatsapp: &str,
         status: &str,
-    ) -> Result<Option<i32>, DbError>;
+    ) -> Result<Option<(i32, i32)>, DbError>;
 
     /// Aplica a política de ticket/Kanban: para um atendimento ainda não posicionado,
     /// resolve o fluxo padrão, coloca-o na etapa inicial ('fila'), registra o
