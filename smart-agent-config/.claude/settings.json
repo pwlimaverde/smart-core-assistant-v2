@@ -170,20 +170,6 @@
       "c:\\c\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config\\.context\\plans"
     ]
   },
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "py",
-            "args": ["-3", "${CLAUDE_PROJECT_DIR}/.claude/hooks/roteador.py"],
-            "timeout": 8
-          }
-        ]
-      }
-    ]
-  },
   "statusLine": {
     "type": "command",
     "command": "cat \"${CLAUDE_PROJECT_DIR:-.}/.claude/roteador/status.txt\" 2>/dev/null || echo 'roteador: sem status'",
