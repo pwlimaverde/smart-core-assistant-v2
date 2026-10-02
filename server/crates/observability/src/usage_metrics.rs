@@ -123,6 +123,27 @@ pub fn registrar_realtime_publicado(evento_tipo: &str, resultado: &'static str) 
     );
 }
 
+/// P1.1-B — contador das drenagens da janela de agregação do bot
+/// (`buffer_mensagens`), por motivo do flush.
+fn contador_buffer_flush() -> &'static Counter<u64> {
+    static C: OnceLock<Counter<u64>> = OnceLock::new();
+    C.get_or_init(|| {
+        global::meter("smartcore_usage")
+            .u64_counter("smartcore_buffer_flush_total")
+            .with_description("Drenagens da janela de agregação de mensagens do bot, por motivo")
+            .init()
+    })
+}
+
+/// Incrementa o contador de drenagens do buffer de agregação.
+///
+/// `motivo` é literal de baixa cardinalidade (`"timer"`: a janela venceu com
+/// mensagens; `"vazio"`: nada a drenar ou Redis indisponível). O `tenant_id`
+/// fica de fora de propósito: o recorte por tenant está no span `buffer.janela`.
+pub fn registrar_buffer_flush(motivo: &'static str) {
+    contador_buffer_flush().add(1, &[KeyValue::new("motivo", motivo)]);
+}
+
 /// P6 (correcoes-app-windows-flutter) — contador das sincronizações da foto do
 /// contato no R2, por desfecho.
 fn contador_contato_foto() -> &'static Counter<u64> {

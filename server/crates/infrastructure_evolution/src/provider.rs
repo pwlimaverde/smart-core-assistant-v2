@@ -625,7 +625,8 @@ impl MessageSender for EvolutionProvider {
 
 #[async_trait]
 impl PresenceControl for EvolutionProvider {
-    #[tracing::instrument(err, skip(self, token), fields(provider = "evolution", instance_name = %instance_name))]
+    // `skip_all`: o JID do contato (`chat`, telefone) nunca entra no span (08 §4.1).
+    #[tracing::instrument(err, skip_all, fields(provider = "evolution", instance_name = %instance_name))]
     async fn set_presence(
         &self,
         instance_name: &str,
@@ -662,7 +663,8 @@ impl PresenceControl for EvolutionProvider {
 
 #[async_trait]
 impl ReadReceipts for EvolutionProvider {
-    #[tracing::instrument(err, skip(self, token), fields(provider = "evolution", instance_name = %instance_name))]
+    // `skip_all`: o JID do contato (`chat`, telefone) nunca entra no span (08 §4.1).
+    #[tracing::instrument(err, skip_all, fields(provider = "evolution", instance_name = %instance_name))]
     async fn mark_read(
         &self,
         instance_name: &str,
@@ -691,7 +693,8 @@ impl ReadReceipts for EvolutionProvider {
 
 #[async_trait]
 impl Reactions for EvolutionProvider {
-    #[tracing::instrument(err, skip(self, token), fields(provider = "evolution", instance_name = %instance_name))]
+    // `skip_all`: o JID do contato (`chat`, telefone) nunca entra no span (08 §4.1).
+    #[tracing::instrument(err, skip_all, fields(provider = "evolution", instance_name = %instance_name))]
     async fn send_reaction(
         &self,
         instance_name: &str,

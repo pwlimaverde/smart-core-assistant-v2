@@ -2227,18 +2227,25 @@ fn chave_dedupe_realtime(tenant_id: Uuid, tipo: &str, discriminador: &str) -> St
     format!("tenant:{tenant_id}:rt:{tipo}:{discriminador}")
 }
 
-/// Publica um evento no canal de realtime do tenant (`tenant:<id>:events`), que o
-/// `RealtimeManager` do runtime_api assina.
-///
-/// Best-effort: uma falha do Redis não pode derrubar o processamento do evento que
-/// já teve efeito no banco.
 /// P1.1-B — Publica no realtime só a primeira ocorrência de (evento, discriminador) na janela.
 /// Chave sem PII: só ids. Redis fora = publica assim mesmo (o evento vale mais que o dedupe).
+///
+/// Span `realtime.publicar` com `resultado = publicado|duplicado|redis_fora` e o
+/// contador `smartcore_realtime_publicado_total{evento,resultado}` (plano P1.1-B §a).
 ///
 /// # Argumentos
 /// - `tipo`: tipo de evento (ex.: "mensagem.recebida")
 /// - `discriminador`: chave única para dedupe (ex.: "{mensagem_id}" ou "{mensagem_id}:delivered")
-#[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, evento = tipo, discriminador = %discriminador, resultado))]
+#[tracing::instrument(
+    skip_all,
+    name = "realtime.publicar",
+    fields(
+        tenant_id = %tenant_id,
+        evento = tipo,
+        discriminador = %discriminador,
+        resultado = tracing::field::Empty,
+    )
+)]
 async fn publicar_realtime_unico(
     state: &AppState,
     tenant_id: Uuid,
@@ -2249,6 +2256,7 @@ async fn publicar_realtime_unico(
     let span = tracing::Span::current();
     let Some(ref bus_conn) = state.bus_conn else {
         span.record("resultado", "redis_fora");
+        observability::usage_metrics::registrar_realtime_publicado(tipo, "redis_fora");
         publicar_realtime(state, tenant_id, tipo, payload).await;
         return;
     };
@@ -2279,7 +2287,7 @@ async fn publicar_realtime_unico(
             );
         }
         Err(e) => {
-            span.record("resultado", "redis_falhou");
+            span.record("resultado", "redis_fora");
             observability::usage_metrics::registrar_realtime_publicado(tipo, "redis_fora");
             tracing::warn!(erro = ?e, "falha ao dedupe realtime; publicando assim mesmo");
             publicar_realtime(state, tenant_id, tipo, payload).await;
@@ -2287,6 +2295,11 @@ async fn publicar_realtime_unico(
     }
 }
 
+/// Publica um evento no canal de realtime do tenant (`tenant:<id>:events`), que o
+/// `RealtimeManager` do runtime_api assina.
+///
+/// Best-effort: uma falha do Redis não pode derrubar o processamento do evento que
+/// já teve efeito no banco.
 async fn publicar_realtime(
     state: &AppState,
     tenant_id: Uuid,
@@ -2584,33 +2597,28 @@ async fn processar_mensagem_recebida(
         "Mensagem persistida com sucesso via RPC síncrono do data_postgres."
     );
 
-    // P1.1-B — Dedupe: eco `fromMe` já persistido não publica `mensagem.recebida`.
-    // O cliente já tem a mensagem (ele a enviou); duplicata é silenciosa.
-    if !de_mim {
-        if let Some(ref bus_conn) = state.bus_conn {
-            let channel = format!("tenant:{}:events", tenant_uuid);
-            let event_payload = serde_json::json!({
-                "event_type": "mensagem.recebida",
-                "tenant_id": tenant_uuid.to_string(),
-                "payload": {
-                    "atendimento_id": atendimento_id,
-                    "message": msg_normalized.clone(),
-                }
-            });
-
-            let mut conn = bus_conn.clone();
-            let payload_str = event_payload.to_string();
-            let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
-                .arg(&channel)
-                .arg(&payload_str)
-                .query_async(&mut conn)
-                .await;
-
-            if let Err(e) = publish_res {
-                tracing::error!("Erro ao publicar mensagem no Redis Pub/Sub: {:?}", e);
-            }
-        }
-    }
+    // P1.1-B — `mensagem.recebida` com dedupe por mensagem persistida: a
+    // reentrega da PEL e o eco `fromMe` de uma mensagem que já existia (mesmo
+    // stanzaId → mesmo `mensagem_id`) caem na mesma chave e não repetem o
+    // evento na janela. O `fromMe` NOVO (o atendente escreveu pelo celular)
+    // continua publicando: sem isso ele só aparecia na conversa aberta ao
+    // reabrir. Sem `mensagem_id` na resposta, o stanzaId do provedor serve de
+    // discriminador (só id; nunca telefone).
+    let discriminador = mensagem_id
+        .map(|id| id.to_string())
+        .unwrap_or_else(|| msg_normalized.message_id.clone());
+    publicar_realtime_unico(
+        state,
+        tenant_uuid,
+        "mensagem.recebida",
+        &discriminador,
+        serde_json::json!({
+            "atendimento_id": atendimento_id,
+            "mensagem_id": mensagem_id,
+            "message": msg_normalized.clone(),
+        }),
+    )
+    .await;
 
     // 2c. Pipeline de mídia (N6.1): quando a mensagem carrega mídia, dispara o
     // download+análise em background (fire-and-forget controlado). A mensagem já
@@ -3844,12 +3852,13 @@ async fn processar_pipeline_midia(
 
     // 6. Segunda chamada: só análise/resumo (e o ponteiro, se a primeira falhou).
     // A IA "completa" quando não registrou falha (documento não passa pela IA).
-    let ia_ok = !matches!(
+    let ia_ok = !(matches!(
         media_type,
         domain_whatsapp::MediaType::Audio
             | domain_whatsapp::MediaType::Image
             | domain_whatsapp::MediaType::Video
-    ) || !(analise.is_empty() && resumo.is_empty());
+    ) && analise.is_empty()
+        && resumo.is_empty());
     anexar_analise_midia(state, &span, anexo, &analise, &resumo, ia_ok).await;
 
     // 6b. Sentimento (N6.5): áudio transcrito também avalia o tom da conversa,

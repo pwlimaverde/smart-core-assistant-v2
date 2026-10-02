@@ -260,12 +260,27 @@ return itens
 ///
 /// Devolve lista vazia quando não há Redis ou o drain falha — o chamador trata
 /// isso como "nada a agregar" e segue com o que tiver em mãos.
+///
+/// P1.1-B — span `buffer.janela` (`qtd_eventos`, `motivo_flush = timer|vazio`)
+/// e contador `smartcore_buffer_flush_total{motivo}`. `skip_all`: o `sender` é
+/// telefone e nunca entra no span; o conteúdo drenado também não.
+#[tracing::instrument(
+    skip_all,
+    name = "buffer.janela",
+    fields(
+        tenant_id = %tenant,
+        qtd_eventos = tracing::field::Empty,
+        motivo_flush = tracing::field::Empty,
+    )
+)]
 pub(crate) async fn drenar(
     conn: Option<&ConnectionManager>,
     tenant: Uuid,
     sender: &str,
 ) -> Vec<MensagemBufferizada> {
+    let span = tracing::Span::current();
     let Some(conn) = conn else {
+        registrar_flush(&span, 0);
         return Vec::new();
     };
     let mut conn = conn.clone();
@@ -279,14 +294,25 @@ pub(crate) async fn drenar(
         Ok(v) => v,
         Err(e) => {
             tracing::warn!("falha ao drenar buffer de agregação: {e}");
+            registrar_flush(&span, 0);
             return Vec::new();
         }
     };
 
-    brutos
+    let rajada: Vec<MensagemBufferizada> = brutos
         .iter()
         .filter_map(|b| serde_json::from_str::<MensagemBufferizada>(b).ok())
-        .collect()
+        .collect();
+    registrar_flush(&span, rajada.len());
+    rajada
+}
+
+/// P1.1-B — registra o desfecho da drenagem no span e na métrica.
+fn registrar_flush(span: &tracing::Span, qtd: usize) {
+    let motivo = if qtd == 0 { "vazio" } else { "timer" };
+    span.record("qtd_eventos", qtd);
+    span.record("motivo_flush", motivo);
+    observability::usage_metrics::registrar_buffer_flush(motivo);
 }
 
 #[cfg(test)]

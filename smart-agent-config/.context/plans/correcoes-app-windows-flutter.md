@@ -104,7 +104,7 @@ C14 central de libs atualizada. Detalhe no plano completo §2.
 
 | Fase | Commits | Situação | Observações |
 |---|---|---|---|
-| P1.1-B | `60c0472`, `d6655ba`, `0f0981b`, `0845158`, `3098ae64` | CI verde | 4 commits de correção após a CI (assinatura do port, aridade, testes que não exercitavam o código). Eco `fromMe` já persistido não publica `mensagem.recebida` |
+| P1.1-B | `60c0472`, `d6655ba`, `0f0981b`, `0845158`, `3098ae64` | CI verde | 4 commits de correção após a CI (assinatura do port, aridade, testes que não exercitavam o código). `mensagem.recebida` sai por `publicar_realtime_unico` (discriminador = `mensagem_id`): reentrega e eco `fromMe` de mensagem já existente não repetem o evento; `fromMe` novo (digitado no celular) continua publicando (correção da revisão) |
 | P1.1-A | `5bfe076` | CI verde | `connectivity_plus` sem uso no código: item 7 sem ação. Nova dev_dependency `fake_async` |
 | P1 | `d599d84` | CI verde | `ordenarParaExibir` no domínio; `ValueKey(id)` + `findChildIndexCallback` |
 | P1.1-D | `4c338b8` | CI verde | Ticks somem no meio do bloco, exceto `falhou` |
