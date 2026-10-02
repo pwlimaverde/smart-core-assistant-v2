@@ -10,6 +10,7 @@ import '../../domain/errors/atendimento_errors.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/mensagem_thread.dart';
 import '../../domain/model/midia_mensagem.dart';
+import '../../domain/model/ordem_das_mensagens.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
 import '../../domain/parameters/presenca_parameters.dart';
@@ -135,7 +136,9 @@ final class ChatController extends BaseController<ChatViewModel> {
         Success(:final value) => Success<ChatViewModel, GetThreadError>(
           ChatViewModel(
             atendimentoId: atendimentoId,
-            mensagens: value,
+            // P1 — o usecase ordena por horário; a tela usa a ordem de
+            // exibição (pendente local sempre no fim).
+            mensagens: ordenarParaExibir(value),
             connectionStatus: ChatConnectionStatus.conectando,
           ),
         ),
@@ -251,7 +254,10 @@ final class ChatController extends BaseController<ChatViewModel> {
     final atual = state;
     if (atendimentoId == null || atual is! SuccessState<ChatViewModel>) return;
     final vm = atual.data;
-    if (vm.carregandoAntigas || vm.fimDoHistorico || vm.mensagens.isEmpty) {
+    // P1 — o cursor é a confirmada mais antiga: uma pendente local (id
+    // negativo) não existe no servidor e não serve de cursor.
+    final maisAntiga = vm.mensagens.where((m) => m.id > 0).firstOrNull;
+    if (vm.carregandoAntigas || vm.fimDoHistorico || maisAntiga == null) {
       return;
     }
     emit(SuccessState(vm.copyWith(carregandoAntigas: true)));
@@ -259,7 +265,7 @@ final class ChatController extends BaseController<ChatViewModel> {
     final res = await _getThreadUsecase(
       GetThreadParameters(
         atendimentoId: atendimentoId,
-        beforeId: vm.mensagens.first.id,
+        beforeId: maisAntiga.id,
       ),
     );
     if (isClosed) return;
@@ -270,7 +276,12 @@ final class ChatController extends BaseController<ChatViewModel> {
         emit(
           SuccessState(
             depois.data.copyWith(
-              mensagens: [...value, ...depois.data.mensagens],
+              // A versão que está na tela vem por último: em id repetido,
+              // é ela que fica.
+              mensagens: ordenarParaExibir([
+                ...value,
+                ...depois.data.mensagens,
+              ]),
               carregandoAntigas: false,
               // Página vazia = chegou ao começo da conversa.
               fimDoHistorico: value.isEmpty,
@@ -552,8 +563,9 @@ final class ChatController extends BaseController<ChatViewModel> {
         final recarregadas = [
           for (final m in value) _comMidiaEstavel(naTela[m.id], m),
         ];
-        final unidas = [...antigas, ...recarregadas]
-          ..sort((a, b) => a.id.compareTo(b.id));
+        // P1 — confirmadas por id, pendentes locais no fim: ordenar tudo por
+        // id desenhava a pendente (id negativo) no topo da conversa.
+        final unidas = ordenarParaExibir([...antigas, ...recarregadas]);
         emit(SuccessState(atual.data.copyWith(mensagens: unidas)));
       case Failure(:final error):
         // A conversa na tela continua valendo; o próximo evento tenta de

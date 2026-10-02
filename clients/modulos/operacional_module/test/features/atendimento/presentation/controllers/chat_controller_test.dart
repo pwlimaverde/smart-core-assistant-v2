@@ -818,4 +818,87 @@ void main() {
       });
     });
   });
+  // ─── P1: pendente local no lugar certo ───────────────────────────────────
+  group('pendente no lugar certo (P1)', () {
+    List<int> idsDe(ChatController c) =>
+        (c.state as SuccessState<ChatViewModel>).data.mensagens
+            .map((m) => m.id)
+            .toList();
+
+    test(
+      'abrir desenha a pendente no fim mesmo com relógio atrasado',
+      () async {
+        // O usecase ordena por horário: com o relógio local atrás do servidor,
+        // a pendente ficaria antes das confirmadas.
+        final gateway = FakeAtendimentoGateway(
+          thread: [
+            mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2)),
+            mensagemDeTeste(id: 11, timestamp: DateTime(2026, 1, 2, 1)),
+            mensagemDeTeste(id: -1, timestamp: DateTime(2026, 1, 1)),
+          ],
+        );
+        final controller = _controller(gateway);
+        await controller.abrir(5);
+
+        expect(idsDe(controller), [10, 11, -1]);
+        await controller.close();
+      },
+    );
+
+    test('a recarga mantém a pendente embaixo e a promove no lugar', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2))],
+        );
+        final controller = _controller(gateway);
+        controller.abrir(5);
+        async.flushMicrotasks();
+
+        // Enviou: a recarga traz a cópia local (id negativo) junto.
+        gateway.thread = [
+          mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2)),
+          mensagemDeTeste(id: -1, timestamp: DateTime(2026, 1, 1)),
+        ];
+        controller.recarregar(motivo: 'envio');
+        async.elapse(const Duration(seconds: 1));
+        expect(idsDe(controller), [10, -1]);
+
+        // O sync promoveu a pendente ao id do servidor: continua embaixo.
+        gateway.thread = [
+          mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2)),
+          mensagemDeTeste(id: 12, timestamp: DateTime(2026, 1, 2, 1)),
+        ];
+        controller.recarregar();
+        async.elapse(const Duration(seconds: 1));
+        expect(idsDe(controller), [10, 12]);
+
+        controller.close();
+        async.flushMicrotasks();
+      });
+    });
+
+    test(
+      'histórico antigo usa a confirmada como cursor e não sobe a pendente',
+      () async {
+        final gateway =
+            FakeAtendimentoGateway(
+                thread: [
+                  mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2)),
+                  mensagemDeTeste(id: -1, timestamp: DateTime(2026, 1, 3)),
+                ],
+              )
+              ..anteriores = [
+                mensagemDeTeste(id: 9, timestamp: DateTime(2026, 1, 1)),
+              ];
+        final controller = _controller(gateway);
+        await controller.abrir(5);
+
+        await controller.carregarAntigas();
+
+        expect(gateway.ultimoBeforeId, 10);
+        expect(idsDe(controller), [9, 10, -1]);
+        await controller.close();
+      },
+    );
+  });
 }

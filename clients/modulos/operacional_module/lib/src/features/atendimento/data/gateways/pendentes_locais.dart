@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import '../../domain/model/mensagem_thread.dart';
 
 /// Tira das pendentes locais as que o servidor já devolveu.
@@ -29,6 +31,16 @@ List<MensagemThread> semAsJaEnviadas(
     } else {
       livres.removeAt(i);
     }
+  }
+  // P1 — só a contagem: o texto comparado é conteúdo de mensagem (PII).
+  final descartadas = pendentes.length - saida.length;
+  if (descartadas > 0) {
+    developer.log(
+      'pendentes locais já confirmadas pelo servidor',
+      name: 'operacional_module.chat',
+      level: 500,
+      error: 'descartadas=$descartadas',
+    );
   }
   return saida;
 }

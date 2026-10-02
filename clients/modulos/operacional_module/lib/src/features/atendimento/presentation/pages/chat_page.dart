@@ -906,6 +906,12 @@ class _ChatBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final escuro = Theme.of(context).brightness == Brightness.dark;
+    // P1 — índice de cada bolha pelo id, para o `findChildIndexCallback`
+    // não varrer a lista a cada item.
+    final posicaoPorId = <int, int>{
+      for (var i = 0; i < viewModel.mensagens.length; i++)
+        viewModel.mensagens[i].id: i,
+    };
     return Column(
       children: [
         ChatConnectionBadge(status: viewModel.connectionStatus),
@@ -935,6 +941,18 @@ class _ChatBody extends StatelessWidget {
                       // O item extra é o topo da rolagem: spinner enquanto o
                       // histórico antigo vem, ou nada quando acabou.
                       itemCount: viewModel.mensagens.length + 1,
+                      // P1 — com a `key` por id, a bolha acompanha a mensagem
+                      // quando a lista muda (chega uma nova embaixo, entra o
+                      // histórico em cima) em vez de herdar o estado da
+                      // vizinha. Sem este callback o `ListView` ignora as
+                      // chaves e casa os itens só pela posição.
+                      findChildIndexCallback: (key) {
+                        if (key is! ValueKey<int>) return null;
+                        final posicao = posicaoPorId[key.value];
+                        return posicao == null
+                            ? null
+                            : viewModel.mensagens.length - 1 - posicao;
+                      },
                       itemBuilder: (context, index) {
                         if (index == viewModel.mensagens.length) {
                           return viewModel.carregandoAntigas
@@ -958,6 +976,13 @@ class _ChatBody extends StatelessWidget {
                             ? null
                             : viewModel.mensagens[posicao - 1];
                         return Column(
+                          // P1 — o id é a identidade que existe no cliente: a
+                          // pendente local não carrega o `action_id` da fila, e
+                          // a remota não o devolve. Na promoção (id negativo →
+                          // id do servidor) a chave muda e a bolha é refeita,
+                          // mas na mesma posição — a pendente já está no fim
+                          // (`ordenarParaExibir`), então não há salto.
+                          key: ValueKey<int>(mensagem.id),
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (mudouODia(anterior, mensagem))
