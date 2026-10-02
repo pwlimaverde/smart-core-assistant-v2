@@ -98,4 +98,23 @@ C14 central de libs atualizada. Detalhe no plano completo §2.
 
 ## Execution History
 
-> Last updated: 2026-10-01 | Progress: 0%
+> Last updated: 2026-10-02 | Progress: E concluída (aguardando review e validação na dev)
+> Branch única de implementação: `feature/correcoes-app-windows-flutter-impl` (fases integradas por cherry-pick;
+> não foram criadas as `feature/*` por fase).
+
+| Fase | Commits | Situação | Observações |
+|---|---|---|---|
+| P1.1-B | `60c0472`, `d6655ba`, `0f0981b`, `0845158`, `3098ae64` | CI verde | 4 commits de correção após a CI (assinatura do port, aridade, testes que não exercitavam o código). Eco `fromMe` já persistido não publica `mensagem.recebida` |
+| P1.1-A | `5bfe076` | CI verde | `connectivity_plus` sem uso no código: item 7 sem ação. Nova dev_dependency `fake_async` |
+| P1 | `d599d84` | CI verde | `ordenarParaExibir` no domínio; `ValueKey(id)` + `findChildIndexCallback` |
+| P1.1-D | `4c338b8` | CI verde | Ticks somem no meio do bloco, exceto `falhou` |
+| P5 | `0fe605b` | CI verde | Shift+roda move o quadro (registrar no changelog) |
+| P2a | `35dc95ca` (servidor), `04d91846` (cliente), `66db8167` (sqlx), `395c6ad0` (fix) | CI verde | `media_kit` ^1.2.6, `media_kit_video` ^2.0.1, `media_kit_libs_windows_video` ^1.0.11, `url_launcher`. `is_ptt` em `metadados.ptt`. Backfill de `mimetype_midia` no corpo do commit (não executado) |
+| P2b | `f11866b3` (servidor), `88e57dbb` (cliente), `395c6ad0` (fix) | CI verde (etapa 1) | Etapa 2 (PTT) **pendente**: confirmar flag de voz/rota de áudio e conversão ogg/opus na tag da evolution-go. Campo `filename` (minúsculo) não confirmado no código-fonte da tag |
+| P6 | `a4af1299` (servidor), `5ae99e57` (cliente) | aguardando CI | Rota nova `DestinoDaFotoDoContato`; kanban agenda até 20 sincronizações por listagem. SQL de limpeza de `foto_perfil_url_origem` no corpo do commit (não executado) |
+| P3 | `8459b3e8` | aguardando CI | Plano B `pasteboard` ^0.5.0 (`super_native_extensions` não é compatível com `--wasm`); BMP do Windows convertido para PNG |
+| P4 | `643ce1f` | CI verde | Diagnóstico na dev: tenant no motor `jev`, 3 regras ativas, nenhuma decisão de transferir em `oraculo_decisao_ia` → a falha é do motor Jev (J3 do `ia-engine-jev`), não do worker. H1 improvável no Jev; H2/H3 a confirmar pelo span `ia.transferencia` após o deploy |
+
+Pendências fora do código: a CI não tem build Windows — `media_kit_libs_windows_video` (download do libmpv no
+CMake) e `pasteboard` só se validam no build do app Windows; executar na dev os SQLs de backfill (P2a) e limpeza (P6);
+registrar no `ia-engine-jev` (J3) o achado da P4; avaliar `bot.silenciado` em sequência no audit_log da dev.
