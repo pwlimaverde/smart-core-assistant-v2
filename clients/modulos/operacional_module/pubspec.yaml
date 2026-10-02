@@ -59,6 +59,10 @@ dependencies:
   media_kit_video: ^2.0.1
   # P2a — documento da bolha abre no visualizador do sistema.
   url_launcher: ^6.3.1
+  # P3 — imagem da área de transferência no Ctrl+V. Escolhido no lugar do
+  # `super_clipboard` porque é WASM-ready (o painel admin compila com
+  # `flutter build web --wasm`) e não traz Rust nativo para o build.
+  pasteboard: ^0.5.0
 
 dev_dependencies:
   # Registro do controller nos testes de widget.

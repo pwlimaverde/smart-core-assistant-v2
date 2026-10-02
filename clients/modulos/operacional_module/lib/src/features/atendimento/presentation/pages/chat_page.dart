@@ -4,7 +4,9 @@ import 'dart:developer' as developer;
 import 'package:dependencies_module/dependencies_module.dart' show GetIt;
 import 'package:design_system_module/design_system_module.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:get_it_module/get_it_module.dart';
@@ -19,6 +21,7 @@ import '../../domain/parameters/presenca_parameters.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/chat_state.dart';
+import '../colagem/leitor_de_imagem_colada.dart';
 import '../controllers/ficha_controller.dart';
 import '../gravacao/gravador_de_audio.dart';
 import '../widgets/atendimento_no_quadro.dart';
@@ -81,6 +84,11 @@ class PainelDeConversa extends StatefulWidget {
   @visibleForTesting
   final GravadorDeAudio Function()? criarGravador;
 
+  /// P3 — de onde vem a imagem colada com Ctrl+V. Nulo no app (lê a área de
+  /// transferência de verdade); os testes passam um leitor falso.
+  @visibleForTesting
+  final LeitorDeImagemColada? leitorDeImagem;
+
   const PainelDeConversa({
     super.key,
     required this.atendimentoId,
@@ -90,6 +98,7 @@ class PainelDeConversa extends StatefulWidget {
     this.aoExpandir,
     this.noQuadro,
     this.criarGravador,
+    this.leitorDeImagem,
   });
 
   @override
@@ -258,6 +267,8 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                 aoDigitar: _controller.avisarQueEstaDigitando,
                 aoAnexar: _anexar,
                 aoGravar: _alternarGravacao,
+                aoColarComAtalho: _colarImagemDoAtalho,
+                aoColarImagem: _colarImagem,
                 gravando: _gravando,
                 modoNota: _modoNota,
                 aoTrocarModo: (nota) => setState(() => _modoNota = nota),
@@ -484,6 +495,95 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   void _avisar(String texto) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
+  }
+
+  /// P3 — de onde vem a imagem colada; o plugin só é tocado no primeiro Ctrl+V.
+  late final LeitorDeImagemColada _leitorDeImagem =
+      widget.leitorDeImagem ?? LeitorDeImagemPasteboard();
+
+  /// Um Ctrl+V de cada vez: segurar a tecla repete o evento, e cada repetição
+  /// abriria outra prévia.
+  bool _colandoImagem = false;
+
+  /// P3 — Ctrl+V no campo. Roda em paralelo à colagem de texto do campo, que
+  /// segue normalmente: aqui só se oferece a imagem quando a área de
+  /// transferência não tem texto.
+  ///
+  /// Fora da Web: lá a leitura de imagem passa pelo `navigator.clipboard`,
+  /// que pede permissão ao navegador — a cada Ctrl+V de texto, em alguns
+  /// deles. Na Web a imagem entra pelo anexo.
+  Future<void> _colarImagemDoAtalho() async {
+    if (kIsWeb) return;
+    await _colarImagem(doAtalho: true);
+  }
+
+  /// P3 — lê a imagem da área de transferência, mostra a prévia e envia pelo
+  /// mesmo caminho do anexo. [doAtalho] distingue o Ctrl+V (silencioso quando
+  /// não há imagem) do "Colar imagem" do menu (que avisa).
+  Future<void> _colarImagem({bool doAtalho = false}) async {
+    // Nota interna nunca vai ao contato: imagem não se oferece ali.
+    if (_modoNota || _colandoImagem) return;
+    if (!GetIt.instance.isRegistered<EnviarMidiaUsecase>()) return;
+    _colandoImagem = true;
+    try {
+      if (doAtalho && await _leitorDeImagem.temTexto()) return;
+      final imagem = await _leitorDeImagem.lerImagem();
+      if (!mounted || _modoNota) return;
+      if (imagem == null) {
+        if (!doAtalho) _avisar('Não há imagem na área de transferência.');
+        return;
+      }
+      final bytes = imagem.bytesPng;
+      if (bytes.length > tetoDeImagemEmBytes) {
+        final mb = (bytes.length / (1024 * 1024)).toStringAsFixed(1);
+        _avisar(
+          'Imagem grande demais para enviar ($mb MB). O limite é 5 MB — '
+          'recorte a imagem ou envie como anexo compactado.',
+        );
+        return;
+      }
+      if (!await _confirmarEnvioDeImagem(bytes) || !mounted) return;
+      await _enviarMidia(
+        nomeArquivo: nomeDaImagemColada(DateTime.now()),
+        mimetype: mimetypeDaImagemColada,
+        bytes: bytes,
+      );
+    } finally {
+      _colandoImagem = false;
+    }
+  }
+
+  Future<bool> _confirmarEnvioDeImagem(Uint8List bytes) async {
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (dialogo) => AlertDialog(
+        title: const Text('Enviar imagem?'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 320),
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.contain,
+            // Prévia que não decodifica não impede o envio: o servidor confere
+            // o conteúdo de novo.
+            errorBuilder: (_, _, _) => const Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: Text('Prévia indisponível.'),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogo).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogo).pop(true),
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
+    return confirmou == true;
   }
 
   Future<void> _enviarMidia({
@@ -967,6 +1067,10 @@ class _ChatBody extends StatelessWidget {
   final VoidCallback aoDigitar;
   final VoidCallback aoAnexar;
   final VoidCallback aoGravar;
+
+  /// P3 — Ctrl+V no campo e "Colar imagem" do menu de contexto.
+  final VoidCallback aoColarComAtalho;
+  final VoidCallback aoColarImagem;
   final bool gravando;
   final bool modoNota;
   final ValueChanged<bool> aoTrocarModo;
@@ -983,6 +1087,8 @@ class _ChatBody extends StatelessWidget {
     required this.aoDigitar,
     required this.aoAnexar,
     required this.aoGravar,
+    required this.aoColarComAtalho,
+    required this.aoColarImagem,
     required this.gravando,
     required this.modoNota,
     required this.aoTrocarModo,
@@ -1117,6 +1223,8 @@ class _ChatBody extends StatelessWidget {
             aoDigitar: aoDigitar,
             aoAnexar: aoAnexar,
             aoGravar: aoGravar,
+            aoColarComAtalho: aoColarComAtalho,
+            aoColarImagem: aoColarImagem,
             gravando: gravando,
             modoNota: modoNota,
             aoTrocarModo: aoTrocarModo,
@@ -1137,6 +1245,8 @@ class _Compositor extends StatelessWidget {
   final VoidCallback aoDigitar;
   final VoidCallback aoAnexar;
   final VoidCallback aoGravar;
+  final VoidCallback aoColarComAtalho;
+  final VoidCallback aoColarImagem;
   final bool gravando;
   final bool modoNota;
   final ValueChanged<bool> aoTrocarModo;
@@ -1147,10 +1257,45 @@ class _Compositor extends StatelessWidget {
     required this.aoDigitar,
     required this.aoAnexar,
     required this.aoGravar,
+    required this.aoColarComAtalho,
+    required this.aoColarImagem,
     required this.gravando,
     required this.modoNota,
     required this.aoTrocarModo,
   });
+
+  /// P3 — Ctrl+V (Cmd+V no macOS) no campo. NÃO consome o atalho: o evento
+  /// segue para o `Shortcuts` do app e a colagem de texto do `EditableText`
+  /// acontece como sempre; em paralelo, a tela oferece a imagem se houver.
+  /// Sobrescrever o `PasteTextIntent` num ancestral não funcionaria — o
+  /// `EditableText` registra as próprias `Actions`.
+  KeyEventResult _aoTecla(FocusNode _, KeyEvent evento) {
+    final teclado = HardwareKeyboard.instance;
+    final colar =
+        evento is KeyDownEvent &&
+        evento.logicalKey == LogicalKeyboardKey.keyV &&
+        (teclado.isControlPressed || teclado.isMetaPressed);
+    if (colar && !modoNota) aoColarComAtalho();
+    return KeyEventResult.ignored;
+  }
+
+  /// P3 — o menu de contexto do campo ganha "Colar imagem" (fora da nota).
+  Widget _menuDeContexto(BuildContext context, EditableTextState campo) {
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: campo.contextMenuAnchors,
+      buttonItems: [
+        ...campo.contextMenuButtonItems,
+        if (!modoNota)
+          ContextMenuButtonItem(
+            label: 'Colar imagem',
+            onPressed: () {
+              campo.hideToolbar();
+              aoColarImagem();
+            },
+          ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1201,42 +1346,49 @@ class _Compositor extends StatelessWidget {
                 const SizedBox(width: 4),
               ],
               Expanded(
-                child: TextField(
-                  controller: inputController,
-                  minLines: 1,
-                  maxLines: 5,
-                  textInputAction: TextInputAction.send,
-                  onChanged: (_) {
-                    if (!modoNota) aoDigitar();
-                  },
-                  onSubmitted: (_) => onEnviar(),
-                  style: TextStyle(fontSize: 13, color: colors.fgStrong),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: modoNota
-                        ? 'Nota interna — só a equipe vê'
-                        : 'Digite uma mensagem…',
-                    filled: true,
-                    fillColor: modoNota ? colors.warningSoft : colors.inputBg,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(22),
-                      borderSide: BorderSide(color: colors.border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(22),
-                      borderSide: BorderSide(
-                        color: modoNota ? colors.warning : colors.border,
+                child: Focus(
+                  // Só escuta: o foco continua no campo de texto.
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                  onKeyEvent: _aoTecla,
+                  child: TextField(
+                    controller: inputController,
+                    contextMenuBuilder: _menuDeContexto,
+                    minLines: 1,
+                    maxLines: 5,
+                    textInputAction: TextInputAction.send,
+                    onChanged: (_) {
+                      if (!modoNota) aoDigitar();
+                    },
+                    onSubmitted: (_) => onEnviar(),
+                    style: TextStyle(fontSize: 13, color: colors.fgStrong),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: modoNota
+                          ? 'Nota interna — só a equipe vê'
+                          : 'Digite uma mensagem…',
+                      filled: true,
+                      fillColor: modoNota ? colors.warningSoft : colors.inputBg,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
                       ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(22),
-                      borderSide: BorderSide(
-                        color: modoNota ? colors.warning : colors.accent,
-                        width: 1.5,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: BorderSide(color: colors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: BorderSide(
+                          color: modoNota ? colors.warning : colors.border,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: BorderSide(
+                          color: modoNota ? colors.warning : colors.accent,
+                          width: 1.5,
+                        ),
                       ),
                     ),
                   ),

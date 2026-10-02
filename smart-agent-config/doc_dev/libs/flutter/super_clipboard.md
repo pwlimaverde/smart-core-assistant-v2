@@ -1,11 +1,17 @@
 # Super Clipboard
 
 - **Versão Recomendada:** 0.9.1
-- **Status de Atualização:** 🔍 EM_HOMOLOGACAO
-- **Última Verificação:** 2026-10-01
+- **Status de Atualização:** 🔍 EM_HOMOLOGACAO — **não adotada na P3** (ver nota abaixo); sem build Windows a aguardar
+- **Última Verificação:** 2026-10-02
 - **Propósito no Projeto:** Leitura de imagens do clipboard (Ctrl+V) no Windows desktop; suporte multiplataforma completo (macOS, iOS, Android, Windows, Linux, Web); alternativa mais robusta que `pasteboard` para desktops.
 - **Documentação Oficial:** [https://pub.dev/packages/super_clipboard](https://pub.dev/packages/super_clipboard)
 - **Dependência Base:** `super_native_extensions` (native bindings multiplataforma)
+
+> **Decisão P3 (2026-10-02, plano `correcoes-app-windows-flutter`):** o Ctrl+V de imagem usa
+> [`pasteboard`](./pasteboard.md). O pub.dev marca o `super_native_extensions` 0.9.1 como **não
+> compatível com WASM** (cadeia `raw_drag_drop` → `pixel_snap` → `dart:io`), e o painel admin, que
+> depende do `operacional_module`, é compilado na CI com `flutter build web --wasm`. Reavaliar se
+> uma versão nova (0.10.x) ficar WASM-ready e a conversão BMP → PNG do `pasteboard` der problema.
 
 ---
 
@@ -260,6 +266,7 @@ Future<Uint8List?> safeClipboardRead() async {
 | Versão | Data | Motivo |
 |--------|------|--------|
 | 0.9.1 | 2026-10-01 | EM_HOMOLOGACAO para Windows desktop image paste; conversão automática DIB→PNG; multiplataforma estável |
+| 0.9.1 | 2026-10-02 | Não adotada na P3: não compatível com WASM (`flutter build web --wasm` do painel admin); plano B `pasteboard` |
 
 ---
 
