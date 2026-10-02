@@ -3962,10 +3962,19 @@ async fn handler_update_message_status(
         .atualizar_status_mensagem(&ctx, message_id_whatsapp, status)
         .await
     {
-        Ok(atendimento_id) => ok_reply(
+        Ok(Some((mensagem_id, atendimento_id))) => ok_reply(
             &env,
             "UpdateMessageStatusReply",
-            serde_json::json!({ "status": "success", "atendimento_id": atendimento_id }),
+            serde_json::json!({
+                "status": "success",
+                "mensagem_id": mensagem_id,
+                "atendimento_id": atendimento_id
+            }),
+        ),
+        Ok(None) => ok_reply(
+            &env,
+            "UpdateMessageStatusReply",
+            serde_json::json!({ "status": "not_found" }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }

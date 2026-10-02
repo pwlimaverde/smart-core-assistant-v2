@@ -87,6 +87,29 @@ pub fn registrar_evento_descartado(tenant_id: &str, motivo: &'static str) {
     );
 }
 
+/// P1.1-B — Contador de eventos realtime publicados, por tipo e resultado (dedupe).
+fn contador_realtime_publicado() -> &'static Counter<u64> {
+    static C: OnceLock<Counter<u64>> = OnceLock::new();
+    C.get_or_init(|| {
+        global::meter("smartcore_realtime")
+            .u64_counter("smartcore_realtime_publicado_total")
+            .with_description("Total de eventos realtime publicados no bus, por tipo e resultado (publicado/duplicado)")
+            .init()
+    })
+}
+
+/// Registra publicação de evento realtime com dedupe: `resultado` é `"publicado"`,
+/// `"duplicado"` ou `"redis_fora"`.
+pub fn registrar_realtime_publicado(evento_tipo: &str, resultado: &'static str) {
+    contador_realtime_publicado().add(
+        1,
+        &[
+            KeyValue::new("evento", evento_tipo.to_string()),
+            KeyValue::new("resultado", resultado),
+        ],
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

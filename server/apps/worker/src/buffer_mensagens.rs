@@ -32,6 +32,7 @@
 use std::time::Duration;
 
 use redis::aio::ConnectionManager;
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 /// Janela de agregação padrão, em milissegundos. 5 s para bater com o `TIME_CACHE`
@@ -84,12 +85,23 @@ pub(crate) fn janela() -> Duration {
     Duration::from_millis(ms)
 }
 
+/// P1.1-B — Hash do sender para dedupe sem PII: sha256 truncado a 16 hex.
+/// Telefone no nome de chave aparece em SLOWLOG/MONITOR do Redis.
+fn hash_sender(sender: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(sender.as_bytes());
+    let resultado = hasher.finalize();
+    format!("{:x}", resultado)[..16].to_string()
+}
+
 fn chave_buffer(tenant: Uuid, sender: &str) -> String {
-    format!("tenant:{tenant}:buf:{sender}")
+    let hash = hash_sender(sender);
+    format!("tenant:{tenant}:buf:{hash}")
 }
 
 fn chave_timer(tenant: Uuid, sender: &str) -> String {
-    format!("tenant:{tenant}:buf:{sender}:timer")
+    let hash = hash_sender(sender);
+    format!("tenant:{tenant}:buf:{hash}:timer")
 }
 
 /// TTL de segurança do buffer: janela × 10, limitado a `TTL_MAXIMO_SEGUNDOS`, com
@@ -370,5 +382,20 @@ mod tests {
         std::env::set_var("SMARTCORE_BUFFER_JANELA_MS", "1200");
         assert_eq!(janela(), Duration::from_millis(1200));
         std::env::remove_var("SMARTCORE_BUFFER_JANELA_MS");
+    }
+
+    /// P1.1-B — Chave sem PII: hash sha256 do sender truncado a 16 hex.
+    /// Dois telefones diferentes produzem hashes diferentes; o hash é determinístico.
+    #[test]
+    fn hash_sender_e_determinista_e_sem_pia() {
+        let h1 = hash_sender("5511999998888");
+        let h2 = hash_sender("5511999998888");
+        let h3 = hash_sender("5511999998889");
+
+        assert_eq!(h1, h2, "hash deve ser determinístico");
+        assert_ne!(h1, h3, "telefones diferentes devem dar hashes diferentes");
+        assert_eq!(h1.len(), 16, "hash truncado deve ter 16 caracteres hex");
+        assert!(h1.chars().all(|c| c.is_ascii_hexdigit()), "hash deve conter só dígitos hex");
+        assert!(!h1.contains("5511"), "hash não deve conter telefone");
     }
 }

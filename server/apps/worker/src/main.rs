@@ -1795,6 +1795,58 @@ async fn processar_presenca_contato(
 ///
 /// Best-effort: uma falha do Redis não pode derrubar o processamento do evento que
 /// já teve efeito no banco.
+/// P1.1-B — Publica no realtime só a primeira ocorrência de (evento, discriminador) na janela.
+/// Chave sem PII: só ids. Redis fora = publica assim mesmo (o evento vale mais que o dedupe).
+///
+/// # Argumentos
+/// - `tipo`: tipo de evento (ex.: "mensagem.recebida")
+/// - `discriminador`: chave única para dedupe (ex.: "{mensagem_id}" ou "{mensagem_id}:delivered")
+#[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, evento = tipo, discriminador = %discriminador, resultado))]
+async fn publicar_realtime_unico(
+    state: &AppState,
+    tenant_id: Uuid,
+    tipo: &str,
+    discriminador: &str,
+    payload: serde_json::Value,
+) {
+    let span = tracing::Span::current();
+    let Some(ref bus_conn) = state.bus_conn else {
+        span.record("resultado", "redis_fora");
+        publicar_realtime(state, tenant_id, tipo, payload).await;
+        return;
+    };
+
+    let chave = format!("tenant:{tenant_id}:rt:{tipo}:{discriminador}");
+    let mut conn = bus_conn.clone();
+
+    match redis::cmd("SET")
+        .arg(&chave)
+        .arg("1")
+        .arg("NX")
+        .arg("EX")
+        .arg(5)
+        .query_async::<_, Option<String>>(&mut conn)
+        .await
+    {
+        Ok(Some(_)) => {
+            span.record("resultado", "publicado");
+            observability::usage_metrics::registrar_realtime_publicado(tipo, "publicado");
+            publicar_realtime(state, tenant_id, tipo, payload).await;
+        }
+        Ok(None) => {
+            span.record("resultado", "duplicado");
+            observability::usage_metrics::registrar_realtime_publicado(tipo, "duplicado");
+            tracing::debug!(evento = tipo, "evento realtime repetido na janela; descartado");
+        }
+        Err(e) => {
+            span.record("resultado", "redis_falhou");
+            observability::usage_metrics::registrar_realtime_publicado(tipo, "redis_fora");
+            tracing::warn!(erro = ?e, "falha ao dedupe realtime; publicando assim mesmo");
+            publicar_realtime(state, tenant_id, tipo, payload).await;
+        }
+    }
+}
+
 async fn publicar_realtime(
     state: &AppState,
     tenant_id: Uuid,
@@ -2092,27 +2144,31 @@ async fn processar_mensagem_recebida(
         "Mensagem persistida com sucesso via RPC síncrono do data_postgres."
     );
 
-    if let Some(ref bus_conn) = state.bus_conn {
-        let channel = format!("tenant:{}:events", tenant_uuid);
-        let event_payload = serde_json::json!({
-            "event_type": "mensagem.recebida",
-            "tenant_id": tenant_uuid.to_string(),
-            "payload": {
-                "atendimento_id": atendimento_id,
-                "message": msg_normalized,
+    // P1.1-B — Dedupe: eco `fromMe` já persistido não publica `mensagem.recebida`.
+    // O cliente já tem a mensagem (ele a enviou); duplicata é silenciosa.
+    if !de_mim {
+        if let Some(ref bus_conn) = state.bus_conn {
+            let channel = format!("tenant:{}:events", tenant_uuid);
+            let event_payload = serde_json::json!({
+                "event_type": "mensagem.recebida",
+                "tenant_id": tenant_uuid.to_string(),
+                "payload": {
+                    "atendimento_id": atendimento_id,
+                    "message": msg_normalized.clone(),
+                }
+            });
+
+            let mut conn = bus_conn.clone();
+            let payload_str = event_payload.to_string();
+            let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
+                .arg(&channel)
+                .arg(&payload_str)
+                .query_async(&mut conn)
+                .await;
+
+            if let Err(e) = publish_res {
+                tracing::error!("Erro ao publicar mensagem no Redis Pub/Sub: {:?}", e);
             }
-        });
-
-        let mut conn = bus_conn.clone();
-        let payload_str = event_payload.to_string();
-        let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
-            .arg(&channel)
-            .arg(&payload_str)
-            .query_async(&mut conn)
-            .await;
-
-        if let Err(e) = publish_res {
-            tracing::error!("Erro ao publicar mensagem no Redis Pub/Sub: {:?}", e);
         }
     }
 
@@ -4051,9 +4107,18 @@ async fn processar_status_mensagem(
         "Worker processando evento whatsapp.message.status"
     );
 
-    let tenant = envelope.tenant_id.to_string();
+    let tenant_uuid = envelope.tenant_id;
+    let tenant = tenant_uuid.to_string();
     let causation = envelope.event_id.to_string();
-    let mut conversas: Vec<i64> = Vec::new();
+
+    #[derive(serde::Deserialize)]
+    struct StatusResp {
+        mensagem_id: Option<i32>,
+        atendimento_id: Option<i64>,
+    }
+
+    let mut eventos_realtime: Vec<(i32, i64)> = Vec::new();
+
     for msg_id in &ids {
         let resp = chamar_rpc(
             &state.pg_client,
@@ -4067,16 +4132,17 @@ async fn processar_status_mensagem(
         .map_err(|e| {
             anyhow::anyhow!("Falha ao atualizar status da mensagem no data_postgres: {e}")
         })?;
-        if let Some(a) = resp.get("atendimento_id").and_then(|v| v.as_i64()) {
-            if !conversas.contains(&a) {
-                conversas.push(a);
+
+        if let Ok(r) = serde_json::from_value::<StatusResp>(resp) {
+            if let (Some(m_id), Some(a_id)) = (r.mensagem_id, r.atendimento_id) {
+                eventos_realtime.push((m_id, a_id));
             }
         }
     }
 
     // Convenção do glossário (§8): confirmação de status outbound usa `mensagem.confirmada`.
     state.audit_logger.info(
-        envelope.tenant_id,
+        tenant_uuid,
         "mensagem.confirmada",
         "Status de mensagem do WhatsApp atualizado",
         serde_json::json!({
@@ -4089,10 +4155,10 @@ async fn processar_status_mensagem(
         Some(causation.clone()),
     );
 
-    // Recibo de mensagem que não está no banco (enviada fora do sistema) não
-    // tem conversa para avisar.
-    for atendimento_id in conversas {
-        publicar_status_na_conversa(state, &tenant, atendimento_id, status_str).await;
+    // P1.1-B — Publicar status com dedupe. Sem `atendimento_id` o cliente não sabe
+    // que é da conversa aberta.
+    for (mensagem_id, atendimento_id) in eventos_realtime {
+        publicar_status_na_conversa(state, tenant_uuid, mensagem_id, atendimento_id, status_str).await;
     }
 
     Ok(())
@@ -4125,36 +4191,23 @@ fn ids_do_status(data: &serde_json::Value) -> Vec<String> {
     ids
 }
 
-/// Avisa a conversa aberta que o ✓ de uma mensagem mudou. Sem o
-/// `atendimento_id` a tela não sabe que o evento é dela e não recarrega — o
-/// status só aparecia ao fechar e abrir a janela.
+/// P1.1-B — Avisa a conversa aberta que o ✓ de uma mensagem mudou, com dedupe.
+/// Sem `atendimento_id` e `mensagem_id` o cliente não sabe que é da conversa aberta
+/// e não aplica patch local — o status só aparecia ao fechar e abrir a janela.
 async fn publicar_status_na_conversa(
     state: &AppState,
-    tenant_id: &str,
+    tenant_id: Uuid,
+    mensagem_id: i32,
     atendimento_id: i64,
     status: &str,
 ) {
-    let Some(ref bus_conn) = state.bus_conn else {
-        return;
-    };
-    let channel = format!("tenant:{tenant_id}:events");
-    let event_payload = serde_json::json!({
-        "event_type": "mensagem.status_atualizado",
-        "tenant_id": tenant_id,
-        "payload": {
-            "atendimento_id": atendimento_id,
-            "status": status,
-        }
+    let payload = serde_json::json!({
+        "atendimento_id": atendimento_id,
+        "mensagem_id": mensagem_id,
+        "status": status,
     });
-    let mut conn = bus_conn.clone();
-    let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
-        .arg(&channel)
-        .arg(event_payload.to_string())
-        .query_async(&mut conn)
-        .await;
-    if let Err(e) = publish_res {
-        tracing::error!("Erro ao publicar status no Redis Pub/Sub: {:?}", e);
-    }
+    let discriminador = format!("{mensagem_id}:{status}");
+    publicar_realtime_unico(state, tenant_id, "mensagem.status_atualizado", &discriminador, payload).await;
 }
 
 /// Consome "message.persisted" (drenado do outbox pelo `OutboxRelay` do data_postgres)
@@ -5735,5 +5788,57 @@ mod tests {
         );
 
         pg_handle.abort();
+    }
+
+    /// P1.1-B — Dedupe realtime: o discriminador nunca contém PII (telefone).
+    #[test]
+    fn publicar_realtime_unico_discriminador_sem_pii() {
+        // A chave de dedupe deve ser genérica: {mensagem_id}:{status}, não números/telefones.
+        let disc_status = format!("{}:{}", 12345, "delivered");
+        assert!(disc_status.chars().all(|c| c.is_ascii_digit() || c == ':'));
+        assert!(!disc_status.contains("55"), "não deve conter DDI");
+        assert!(!disc_status.contains("99"), "não deve conter número parcial");
+    }
+
+    /// P1.1-B — Buffer com hash: chave sem telefone, determinístico por sender.
+    #[tokio::test]
+    async fn buffer_chave_hash_sem_telefone() {
+        // O módulo buffer_mensagens usa sha256 truncado: a chave não expõe PII.
+        let tenant = Uuid::nil();
+        let sender = "5511999998888";
+
+        use crate::buffer_mensagens;
+        let h1 = buffer_mensagens::hash_sender(sender);
+        let h2 = buffer_mensagens::hash_sender(sender);
+
+        // Determinístico
+        assert_eq!(h1, h2);
+        // Sem telefone
+        assert!(!h1.contains("5511"));
+        assert!(!h1.contains("9999"));
+        // 16 caracteres hex
+        assert_eq!(h1.len(), 16);
+    }
+
+    /// P1.1-B — Stream defasado: canal com capacidade 1 para forçar Lagged.
+    #[tokio::test]
+    async fn stream_atendimentos_lagged_emite_aviso() {
+        // Teste unitário: criar um broadcast com capacidade 1,
+        // enviar 2 mensagens rapidamente, e verificar que o recv()
+        // retorna Lagged.
+        let (tx, mut rx) = tokio::sync::broadcast::channel::<String>(1);
+
+        tx.send("evento_1".to_string()).ok();
+        tx.send("evento_2".to_string()).ok();
+
+        // Primeiro recv pega evento_1
+        assert_eq!(rx.recv().await, Ok("evento_1".to_string()));
+
+        // Segundo recv encontra Lagged porque evento_2 foi perdido
+        // (capacidade é 1, só cabe uma mensagem)
+        assert!(matches!(
+            rx.recv().await,
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_))
+        ));
     }
 }

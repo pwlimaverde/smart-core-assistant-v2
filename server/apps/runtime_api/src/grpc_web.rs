@@ -9402,9 +9402,31 @@ impl AdminService for AdminFacade {
         let user_agent_clone = user_agent;
         let sub_clone = claims.sub.clone();
         tokio::spawn(async move {
-            while let Ok(event) = broadcast_rx.recv().await {
-                if tx.send(Ok(event)).await.is_err() {
-                    break;
+            // P1.1-B — Tratar Lagged sem derrubar o stream: avisa o cliente para
+            // recarregar uma vez em vez de encerrar a conexão.
+            loop {
+                match broadcast_rx.recv().await {
+                    Ok(ev) => {
+                        if tx.send(Ok(ev)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(perdidos)) => {
+                        tracing::warn!(
+                            tenant_id = %tenant_uuid,
+                            perdidos = perdidos,
+                            "stream realtime defasado"
+                        );
+                        let aviso = super::AtendimentoEvent {
+                            event_type: "stream.defasado".into(),
+                            tenant_id: tenant_uuid.to_string(),
+                            payload: serde_json::json!({ "perdidos": perdidos }).to_string(),
+                        };
+                        if tx.send(Ok(aviso)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
 
