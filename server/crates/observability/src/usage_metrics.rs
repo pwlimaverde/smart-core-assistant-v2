@@ -40,6 +40,19 @@ fn contador_eventos_descartados() -> &'static Counter<u64> {
     })
 }
 
+/// P4 (correcoes-app-windows-flutter) — contador das decisões de transferência
+/// da IA que chegaram ao worker, por desfecho e motor. Torna visível, sem
+/// depender de log, a transferência que a IA decidiu e não aconteceu.
+fn contador_transferencia_ia() -> &'static Counter<u64> {
+    static C: OnceLock<Counter<u64>> = OnceLock::new();
+    C.get_or_init(|| {
+        global::meter("smartcore_usage")
+            .u64_counter("smartcore_transferencia_ia_total")
+            .with_description("Transferências decididas pela IA, por resultado e motor")
+            .init()
+    })
+}
+
 /// Direção da mensagem para o contador de uso (rótulo de baixa cardinalidade).
 #[derive(Clone, Copy)]
 pub enum DirecaoMensagem {
@@ -110,6 +123,22 @@ pub fn registrar_realtime_publicado(evento_tipo: &str, resultado: &'static str) 
     );
 }
 
+/// Incrementa o contador de transferências decididas pela IA.
+///
+/// `resultado` e `motor` precisam ser literais de baixa cardinalidade
+/// (`"aplicada"`, `"fluxo_desconhecido"`, …; `"llm"`, `"jev"`). O `tenant_id`
+/// fica de fora de propósito: o recorte por tenant está no span
+/// `ia.transferencia`, não no rótulo da métrica.
+pub fn registrar_transferencia_ia(resultado: &'static str, motor: &'static str) {
+    contador_transferencia_ia().add(
+        1,
+        &[
+            KeyValue::new("resultado", resultado),
+            KeyValue::new("motor", motor),
+        ],
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,5 +178,11 @@ mod tests {
         registrar_evento_descartado("tenant-a", "grupo");
         registrar_evento_descartado("tenant-a", "remetente_ignorado");
         registrar_evento_descartado("tenant-b", "grupo");
+    }
+
+    #[test]
+    fn registrar_transferencia_ia_nao_entra_em_panico() {
+        registrar_transferencia_ia("aplicada", "jev");
+        registrar_transferencia_ia("fluxo_desconhecido", "llm");
     }
 }

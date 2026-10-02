@@ -115,6 +115,7 @@ use ia_client as ia_engine;
 mod buffer_mensagens;
 mod config_tenant;
 mod scheduler;
+mod transferencia_ia;
 
 /// Escopos de um ator de SISTEMA (worker). O worker é um serviço interno confiável
 /// que reage a eventos do barramento (não a um usuário final); as operações de
@@ -530,7 +531,26 @@ async fn carregar_fluxos_disponiveis(
 /// `fluxo_transferencia` de volta ao `fluxo_id` e chama `TransferirAtendimentoParaFluxo`
 /// no data_postgres. Best-effort: qualquer falha só significa "sem transferência", nunca
 /// trava o atendimento. Audita `atendimento.transferido_por_ia` quando efetiva.
+///
+/// P4 (correcoes-app-windows-flutter): o casamento ignora caixa, espaços e acentos
+/// (`transferencia_ia::buscar_fluxo`); chave que não casa invalida o cache de fluxos
+/// do tenant e tenta UMA vez com a lista recarregada. Todo desfecho fica no span
+/// `ia.transferencia` e em `smartcore_transferencia_ia_total{resultado,motor}`. A
+/// chave crua da IA nunca vai para o log: pode ecoar texto do contato.
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(
+    skip_all,
+    name = "ia.transferencia",
+    fields(
+        tenant_id = %tenant_uuid,
+        atendimento_id = atendimento_id,
+        trace_id = %trace_id_de(traceparent),
+        motor = tracing::field::Empty,
+        resultado = tracing::field::Empty,
+        motivo = tracing::field::Empty,
+        fluxos_disponiveis = fluxos.len(),
+    )
+)]
 async fn aplicar_transferencia_ia(
     state: &AppState,
     tenant_uuid: Uuid,
@@ -541,11 +561,49 @@ async fn aplicar_transferencia_ia(
     causation_id: &str,
     traceparent: &str,
 ) {
-    let Some(item) = fluxos.iter().find(|f| f.chave == fluxo_transferencia) else {
-        tracing::warn!(
-            "IA indicou transferência para fluxo desconhecido; ignorando (sem transferência)"
-        );
-        return;
+    use transferencia_ia::{buscar_fluxo, registrar_resultado, ResultadoTransferencia};
+
+    let span = tracing::Span::current();
+    let motor = transferencia_ia::motor_rotulo(
+        detalhes
+            .get("motor")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+    );
+    span.record("motor", motor);
+    // `motivo` é nome de regra ou de sinal (motor Jev); no motor atual vem vazio.
+    if let Some(motivo) = detalhes
+        .get("motivo")
+        .and_then(|v| v.as_str())
+        .filter(|m| !m.is_empty())
+    {
+        span.record("motivo", motivo);
+    }
+
+    // Casa com a lista usada na resposta; se não casar, o cache pode estar velho
+    // (fluxo criado/renomeado há pouco): descarta e tenta uma vez com a lista nova.
+    let recarregados;
+    let item = match buscar_fluxo(fluxos, fluxo_transferencia) {
+        Some(item) => item,
+        None => {
+            state.fluxos_cache.invalidar(tenant_uuid).await;
+            recarregados =
+                carregar_fluxos_disponiveis(state, tenant_uuid, causation_id, traceparent).await;
+            span.record("fluxos_disponiveis", recarregados.len());
+            match buscar_fluxo(&recarregados, fluxo_transferencia) {
+                Some(item) => item,
+                None => {
+                    registrar_resultado(ResultadoTransferencia::FluxoDesconhecido, motor);
+                    tracing::warn!(
+                        atendimento_id,
+                        resultado = ResultadoTransferencia::FluxoDesconhecido.as_str(),
+                        fluxos_disponiveis = recarregados.len(),
+                        "IA indicou transferência para fluxo desconhecido ou ambíguo; sem transferência"
+                    );
+                    return;
+                }
+            }
+        }
     };
 
     let resp = match chamar_rpc(
@@ -560,7 +618,14 @@ async fn aplicar_transferencia_ia(
     {
         Ok(v) => v,
         Err(e) => {
-            tracing::warn!(erro = %e, "TransferirAtendimentoParaFluxo falhou; atendimento segue no fluxo atual");
+            registrar_resultado(ResultadoTransferencia::RpcFalhou, motor);
+            tracing::warn!(
+                atendimento_id,
+                resultado = ResultadoTransferencia::RpcFalhou.as_str(),
+                fluxo_id = item.fluxo_id,
+                erro = %e,
+                "TransferirAtendimentoParaFluxo falhou; atendimento segue no fluxo atual"
+            );
             return;
         }
     };
@@ -570,8 +635,12 @@ async fn aplicar_transferencia_ia(
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
     {
+        registrar_resultado(ResultadoTransferencia::NaoEfetivada, motor);
         tracing::warn!(
-            motivo = resp
+            atendimento_id,
+            resultado = ResultadoTransferencia::NaoEfetivada.as_str(),
+            fluxo_id = item.fluxo_id,
+            recusa = resp
                 .get("reason")
                 .and_then(|v| v.as_str())
                 .unwrap_or("desconhecido"),
@@ -579,6 +648,7 @@ async fn aplicar_transferencia_ia(
         );
         return;
     }
+    registrar_resultado(ResultadoTransferencia::Aplicada, motor);
 
     // Auditoria: SEM conteúdo da conversa — só ids/fluxo destino.
     //
@@ -1070,10 +1140,9 @@ async fn responder_via_ia(
         tokio::spawn(async move {
             match sombra.responder(entrada_sombra, &tp).await {
                 Ok(r) => {
-                    let fluxo_id = fluxos_sombra
-                        .iter()
-                        .find(|f| f.chave == r.fluxo_transferencia)
-                        .map(|f| f.fluxo_id);
+                    let fluxo_id =
+                        transferencia_ia::buscar_fluxo(&fluxos_sombra, &r.fluxo_transferencia)
+                            .map(|f| f.fluxo_id);
                     let registro = registro_da_resposta(atendimento_id, "jev", false, &r, fluxo_id);
                     registrar_decisao_ia(&st, &tenant, registro, &causa, &tp).await;
                 }
@@ -1088,10 +1157,8 @@ async fn responder_via_ia(
         .await
         .map_err(|e| anyhow::anyhow!("ia_engine.Responder falhou: {e}"))?;
 
-    let fluxo_destino = fluxos
-        .iter()
-        .find(|f| f.chave == resposta.fluxo_transferencia)
-        .map(|f| f.fluxo_id);
+    let fluxo_destino =
+        transferencia_ia::buscar_fluxo(&fluxos, &resposta.fluxo_transferencia).map(|f| f.fluxo_id);
     if motores.motor != config_tenant::Motor::Llm {
         let registro = registro_da_resposta(
             atendimento_id,
@@ -1105,7 +1172,9 @@ async fn responder_via_ia(
 
     // N6.3: quando a IA decide transferir e devolve um fluxo válido, move o atendimento
     // para o fluxo/etapa certos. Best-effort — nunca falha a resposta ao usuário.
-    if resposta.transferir_atendimento && !resposta.fluxo_transferencia.is_empty() {
+    // P4: a decisão de transferir sem fluxo (lista de fluxos vazia) também entra, para
+    // sair como `fluxo_desconhecido` no span/métrica em vez de sumir sem rastro.
+    if resposta.transferir_atendimento {
         let detalhes = serde_json::json!({
             "motivo": resposta.motivo_transferencia,
             "regra_id": (resposta.regra_id > 0).then_some(resposta.regra_id),
@@ -3622,7 +3691,10 @@ async fn analisar_mensagem_best_effort(
     )
     .await;
     span.record("assunto_definido", assunto);
-    span.record("smartcore_worker_analyse_duration_ms", inicio.elapsed().as_millis() as u64);
+    span.record(
+        "smartcore_worker_analyse_duration_ms",
+        inicio.elapsed().as_millis() as u64,
+    );
 }
 
 /// Grava a análise de uma mensagem: o registro da decisão (motores novos), as
@@ -5699,6 +5771,218 @@ mod tests {
         assert!(
             transferiu.load(Ordering::SeqCst),
             "chave conhecida transfere"
+        );
+
+        pg_handle.abort();
+    }
+
+    /// P4 — a chave da IA com caixa, espaços e acentos diferentes da do fluxo ainda
+    /// casa, e a RPC recebe o `fluxo_id` certo, sem precisar recarregar a lista.
+    #[tokio::test]
+    async fn aplicar_transferencia_ia_casa_chave_com_caixa_e_acento_diferentes() {
+        use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29433";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+
+        let fluxo_recebido = Arc::new(AtomicI64::new(0));
+        let fluxo_recebido_c = fluxo_recebido.clone();
+        let recarregou = Arc::new(AtomicBool::new(false));
+        let recarregou_c = recarregou.clone();
+        let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers")
+            .route("TransferirAtendimentoParaFluxo", move |env| {
+                let fluxo = fluxo_recebido_c.clone();
+                Box::pin(async move {
+                    let body: serde_json::Value = serde_json::from_slice(&env.payload).unwrap();
+                    fluxo.store(body["fluxo_id"].as_i64().unwrap_or(-1), Ordering::SeqCst);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(
+                            &serde_json::json!({ "transferido": true, "etapa_id": 11 }),
+                        )
+                        .unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("ListarFluxosDoTenant", move |env| {
+                let flag = recarregou_c.clone();
+                Box::pin(async move {
+                    flag.store(true, Ordering::SeqCst);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "fluxos": [] })).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let pg_handle = tokio::spawn(async move { pg_server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            bus_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            whatsapp_client: pg_client.clone(),
+            storage_client: pg_client.clone(),
+            pg_client,
+            ia_client: Arc::new(ia_engine::MockIaEngineClient::new()),
+            fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
+        };
+
+        let fluxos = vec![
+            FluxoItem {
+                chave: "Atendimento - Triagem inicial".to_string(),
+                fluxo_id: 300,
+            },
+            FluxoItem {
+                chave: "Comercial - Cotações e Pedidos".to_string(),
+                fluxo_id: 301,
+            },
+        ];
+
+        aplicar_transferencia_ia(
+            &state,
+            Uuid::new_v4(),
+            42,
+            &fluxos,
+            "  COMERCIAL -  cotacoes e pedidos ",
+            serde_json::json!({ "motor": "jev", "motivo": "pede_humano" }),
+            "c",
+            "tp",
+        )
+        .await;
+
+        assert_eq!(
+            fluxo_recebido.load(Ordering::SeqCst),
+            301,
+            "a chave normalizada casa o fluxo Comercial"
+        );
+        assert!(
+            !recarregou.load(Ordering::SeqCst),
+            "chave que casa não recarrega os fluxos"
+        );
+
+        pg_handle.abort();
+    }
+
+    /// P4 — chave que não casa a lista em mãos (cache velho) invalida o cache, recarrega
+    /// os fluxos UMA vez e transfere se o fluxo aparecer na lista nova.
+    #[tokio::test]
+    async fn aplicar_transferencia_ia_recarrega_fluxos_quando_chave_nao_casa() {
+        use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29434";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+
+        let fluxo_recebido = Arc::new(AtomicI64::new(0));
+        let fluxo_recebido_c = fluxo_recebido.clone();
+        let recargas = Arc::new(AtomicUsize::new(0));
+        let recargas_c = recargas.clone();
+        let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers")
+            .route("TransferirAtendimentoParaFluxo", move |env| {
+                let fluxo = fluxo_recebido_c.clone();
+                Box::pin(async move {
+                    let body: serde_json::Value = serde_json::from_slice(&env.payload).unwrap();
+                    fluxo.store(body["fluxo_id"].as_i64().unwrap_or(-1), Ordering::SeqCst);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "transferido": true }))
+                            .unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("ListarFluxosDoTenant", move |env| {
+                let contador = recargas_c.clone();
+                Box::pin(async move {
+                    contador.fetch_add(1, Ordering::SeqCst);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({
+                            "fluxos": [
+                                { "id": 302, "setor": "Financeiro", "descricao": "Boletos" }
+                            ]
+                        }))
+                        .unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let pg_handle = tokio::spawn(async move { pg_server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            bus_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            whatsapp_client: pg_client.clone(),
+            storage_client: pg_client.clone(),
+            pg_client,
+            ia_client: Arc::new(ia_engine::MockIaEngineClient::new()),
+            fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
+        };
+
+        // Lista velha: o fluxo Financeiro ainda não existia nela.
+        let fluxos_velhos = vec![FluxoItem {
+            chave: "Comercial - vendas".to_string(),
+            fluxo_id: 301,
+        }];
+
+        aplicar_transferencia_ia(
+            &state,
+            Uuid::new_v4(),
+            42,
+            &fluxos_velhos,
+            "financeiro - BOLETOS",
+            serde_json::json!({ "motor": "llm" }),
+            "c",
+            "tp",
+        )
+        .await;
+
+        assert_eq!(
+            recargas.load(Ordering::SeqCst),
+            1,
+            "uma recarga por tentativa"
+        );
+        assert_eq!(
+            fluxo_recebido.load(Ordering::SeqCst),
+            302,
+            "transfere para o fluxo achado na lista recarregada"
+        );
+
+        // Chave que nem a lista nova conhece: recarrega uma vez e não transfere.
+        fluxo_recebido.store(0, Ordering::SeqCst);
+        aplicar_transferencia_ia(
+            &state,
+            Uuid::new_v4(),
+            43,
+            &fluxos_velhos,
+            "Jurídico - contratos",
+            serde_json::json!({ "motor": "llm" }),
+            "c",
+            "tp",
+        )
+        .await;
+
+        assert_eq!(
+            recargas.load(Ordering::SeqCst),
+            2,
+            "uma recarga por tentativa"
+        );
+        assert_eq!(
+            fluxo_recebido.load(Ordering::SeqCst),
+            0,
+            "chave desconhecida não transfere"
         );
 
         pg_handle.abort();
