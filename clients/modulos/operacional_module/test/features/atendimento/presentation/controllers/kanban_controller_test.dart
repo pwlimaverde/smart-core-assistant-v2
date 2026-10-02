@@ -20,6 +20,7 @@ KanbanController _controller(
   FakeAtendimentoGateway gateway, {
   bool comStream = false,
   int? usuarioAtual,
+  DateTime Function()? agora,
 }) {
   // Todo controller de teste comeca com um quadro montado: e o estado normal
   // de quem opera, e sem colunas o arrasto nao teria destino.
@@ -40,6 +41,7 @@ KanbanController _controller(
     prioridadeUsecase: u.prioridade,
     transferirUsecase: u.transferir,
     exportarUsecase: u.exportar,
+    agora: agora,
     revisadoUsecase: MarcarRevisadoUsecase(
       repository: MarcarRevisadoRepository(
         datasource: MarcarRevisadoDatasource(gateway: gateway),
@@ -713,6 +715,111 @@ void main() {
 
       expect(erro, isNull);
       expect(gateway.revisados, [7]);
+      await c.close();
+    });
+  });
+
+  // ─── P6: foto do contato no R2 ─────────────────────────────────────────────
+  group('foto do contato (P6)', () {
+    AtendimentoResumo comFoto(String url) => AtendimentoResumo(
+      id: 1,
+      contatoId: 4,
+      status: 'fila',
+      etapaAtualId: 10,
+      assunto: 'Assunto 1',
+      prioridade: 'normal',
+      dataInicio: DateTime(2026, 1, 1),
+      contatoFotoUrl: url,
+    );
+
+    String fotoNaTela(KanbanController c) {
+      final vm = (c.state as SuccessState<KanbanViewModel>).data;
+      return vm.porEtapa[10]!.single.contatoFotoUrl;
+    }
+
+    const assinadaA =
+        'https://r2.exemplo/contatos/4/avatar-aaaa1111.jpg?X-Amz-Signature=1';
+    const assinadaB =
+        'https://r2.exemplo/contatos/4/avatar-aaaa1111.jpg?X-Amz-Signature=2';
+    const outraFoto =
+        'https://r2.exemplo/contatos/4/avatar-bbbb2222.jpg?X-Amz-Signature=3';
+
+    test(
+      'contato.foto_atualizada recarrega o quadro pelo debounce e traz a foto nova',
+      () async {
+        final gateway = FakeAtendimentoGateway(fila: [comFoto(assinadaA)]);
+        final c = _controller(gateway, comStream: true);
+        await c.carregar();
+        final antes = gateway.chamadasList;
+
+        gateway.fila = [comFoto(outraFoto)];
+        gateway.eventos.add(
+          const AtendimentoEvento(
+            tipo: 'contato.foto_atualizada',
+            tenantId: 'tenant-1',
+            payload: {'contato_id': 4},
+          ),
+        );
+        // Antes do debounce, nada de ida ao servidor.
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(gateway.chamadasList, antes);
+
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        expect(gateway.chamadasList, antes + 1);
+        // Outro objeto no storage: a regra do C17 não segura a URL antiga.
+        expect(fotoNaTela(c), outraFoto);
+        await c.close();
+      },
+    );
+
+    test(
+      'recarga com nova assinatura do mesmo objeto mantém a URL da tela',
+      () async {
+        var agora = DateTime(2026, 10, 2, 12);
+        final gateway = FakeAtendimentoGateway(fila: [comFoto(assinadaA)]);
+        final c = _controller(gateway, agora: () => agora);
+        await c.carregar();
+        expect(fotoNaTela(c), assinadaA);
+
+        gateway.fila = [comFoto(assinadaB)];
+        agora = agora.add(const Duration(minutes: 30));
+        await c.carregar();
+
+        expect(fotoNaTela(c), assinadaA, reason: 'fresca: < 80% de 3600 s');
+        await c.close();
+      },
+    );
+
+    test('URL perto de vencer é trocada pela nova assinatura', () async {
+      var agora = DateTime(2026, 10, 2, 12);
+      final gateway = FakeAtendimentoGateway(fila: [comFoto(assinadaA)]);
+      final c = _controller(gateway, agora: () => agora);
+      await c.carregar();
+
+      gateway.fila = [comFoto(assinadaB)];
+      agora = agora.add(
+        KanbanController.frescorDaFoto + const Duration(seconds: 1),
+      );
+      await c.carregar();
+      expect(fotoNaTela(c), assinadaB);
+
+      // A nova passa a ser a referência: a próxima recarga a mantém.
+      gateway.fila = [comFoto(assinadaA)];
+      agora = agora.add(const Duration(minutes: 1));
+      await c.carregar();
+      expect(fotoNaTela(c), assinadaB);
+      await c.close();
+    });
+
+    test('contato sem foto volta às iniciais (URL vazia)', () async {
+      final gateway = FakeAtendimentoGateway(fila: [comFoto(assinadaA)]);
+      final c = _controller(gateway);
+      await c.carregar();
+
+      gateway.fila = [comFoto('')];
+      await c.carregar();
+
+      expect(fotoNaTela(c), isEmpty);
       await c.close();
     });
   });

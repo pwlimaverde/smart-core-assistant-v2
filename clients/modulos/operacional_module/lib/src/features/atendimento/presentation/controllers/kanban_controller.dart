@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
@@ -58,6 +59,19 @@ final class KanbanController extends BaseController<KanbanViewModel> {
 
   final _atribuicoes = StreamController<AtribuicaoRecebida>.broadcast();
 
+  /// P6 — o relógio que marca quando cada URL de foto foi obtida. Entra por
+  /// função para o teste envelhecer a URL sem esperar 48 minutos.
+  final DateTime Function() _agora;
+
+  /// P6 (C17) — a URL assinada da foto vale 3600 s; acima de 80% disso a URL
+  /// antiga é trocada pela nova mesmo sendo o mesmo objeto.
+  static const frescorDaFoto = Duration(seconds: 2880);
+
+  /// P6 (C17) — por cartão, a URL da foto que está na tela e quando ela foi
+  /// obtida. Cada recarga do quadro traz uma assinatura nova; trocar a URL
+  /// é baixar a imagem de novo e o avatar piscar.
+  final _fotosNaTela = <int, ({String url, DateTime obtidaEm})>{};
+
   /// P1 — o recorte da lista, como na v1: texto livre, "minhas" e "não lidas".
   String _busca = '';
   bool _somenteMeus = false;
@@ -96,7 +110,9 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     TransferirParaFluxoUsecase? transferirUsecase,
     ExportarQuadroUsecase? exportarUsecase,
     MarcarRevisadoUsecase? revisadoUsecase,
-  }) : _revisadoUsecase = revisadoUsecase,
+    DateTime Function()? agora,
+  }) : _agora = agora ?? DateTime.now,
+       _revisadoUsecase = revisadoUsecase,
        _atribuirUsecase = atribuirUsecase,
        _prioridadeUsecase = prioridadeUsecase,
        _transferirUsecase = transferirUsecase,
@@ -120,6 +136,16 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     _streamSubscription = eventos.abrir().listen(
       (evento) {
         _avisarSeForMinha(evento);
+        // P6 — `contato.foto_atualizada` não traz atendimento: o quadro
+        // recarrega pelo mesmo debounce e o cartão do contato recebe a URL do
+        // objeto novo (outro caminho no storage, então a regra do C17 troca).
+        if (evento.tipo == 'contato.foto_atualizada') {
+          developer.log(
+            'foto de contato atualizada; recarregando o quadro',
+            name: 'operacional_module.contatos',
+            level: 500,
+          );
+        }
         // Debounce curto: agrupa eventos que chegam em rajada (ex.: várias
         // mensagens seguidas) num único recarregamento da fila.
         _debounce?.cancel();
@@ -337,6 +363,7 @@ final class KanbanController extends BaseController<KanbanViewModel> {
         somenteNaoLidos: _somenteNaoLidas,
       ),
     );
+    final agora = _agora();
     return switch (res) {
       Success(:final value) => Success(
         KanbanViewModel(
@@ -347,12 +374,40 @@ final class KanbanController extends BaseController<KanbanViewModel> {
             for (final a in value)
               if (_doQuadro(a, fluxoId) &&
                   (!_somenteRevisar || a.revisaoPendente))
-                a,
+                _comFotoEstavel(a, agora),
           ]),
         ),
       ),
       Failure(:final error) => Failure(error),
     };
+  }
+
+  /// P6 (C17) — mantém a URL da foto que já está na tela enquanto ela serve:
+  /// mesmo objeto (mesmo caminho no storage; a assinatura muda só na query
+  /// string) e obtida há menos de [frescorDaFoto]. Fora disso, a URL nova
+  /// entra e passa a ser a referência, com o instante de agora.
+  AtendimentoResumo _comFotoEstavel(AtendimentoResumo a, DateTime agora) {
+    final nova = a.contatoFotoUrl;
+    if (nova.isEmpty) {
+      _fotosNaTela.remove(a.id);
+      return a;
+    }
+    final antiga = _fotosNaTela[a.id];
+    if (antiga != null &&
+        _mesmoObjeto(antiga.url, nova) &&
+        agora.difference(antiga.obtidaEm) < frescorDaFoto) {
+      return antiga.url == nova ? a : a.copyWith(contatoFotoUrl: antiga.url);
+    }
+    _fotosNaTela[a.id] = (url: nova, obtidaEm: agora);
+    return a;
+  }
+
+  static bool _mesmoObjeto(String antiga, String nova) {
+    final caminhoAntigo = Uri.tryParse(antiga)?.path;
+    final caminhoNovo = Uri.tryParse(nova)?.path;
+    return caminhoAntigo != null &&
+        caminhoAntigo.isNotEmpty &&
+        caminhoAntigo == caminhoNovo;
   }
 
   /// Se a conversa pertence ao quadro aberto.

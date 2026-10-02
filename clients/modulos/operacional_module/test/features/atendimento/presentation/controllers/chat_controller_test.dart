@@ -512,6 +512,35 @@ void main() {
       expect(gateway.chamadasThread, recargas);
       await controller.close();
     });
+
+    test(
+      'P6: foto do contato atualizada avisa o id e não recarrega a conversa',
+      () async {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = _controller(gateway);
+        await controller.abrir(5);
+        final recargas = gateway.chamadasThread;
+        final avisos = <int>[];
+        final sub = controller.fotoDoContatoAtualizada.listen(avisos.add);
+
+        gateway.eventos.add(
+          const AtendimentoEvento(
+            tipo: 'contato.foto_atualizada',
+            tenantId: 't',
+            payload: {'contato_id': 42},
+          ),
+        );
+        // Passa da janela de recarga: se o evento agendasse uma, já teria ido.
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+
+        expect(avisos, [42]);
+        expect(gateway.chamadasThread, recargas);
+        await sub.cancel();
+        await controller.close();
+      },
+    );
   });
   // ─── P1.1-A: coalescência das recargas ────────────────────────────────────
   group('coalescência das recargas (P1.1-A)', () {

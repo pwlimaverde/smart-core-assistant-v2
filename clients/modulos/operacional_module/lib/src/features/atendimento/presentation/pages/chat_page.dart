@@ -124,9 +124,14 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   /// P13 — com quem é a conversa (nome, telefone e foto atualizados).
   ContatoDaConversa? _contato;
 
-  /// Uma foto nova por abertura, no máximo: a URL do CDN expira, e pedir de
-  /// novo a cada redesenho martelaria o provedor.
+  /// P6 — uma recarga do contato por foto quebrada, no máximo. A recarga não
+  /// força o provedor (a foto vem do R2; o servidor agenda a sincronização
+  /// sozinho): só traz uma URL assinada nova. Se ela também falhar, ficam as
+  /// iniciais — o [AvatarDoContato] não pede de novo pelo mesmo objeto.
   bool _jaPediuFotoNova = false;
+
+  /// P6 — `contato.foto_atualizada` vindo do stream do chat.
+  StreamSubscription<int>? _fotoAtualizada;
 
   /// P2a — (mensagem, URL) cuja mídia já pediu recarga por estar vencida.
   /// Uma recarga por mensagem: se a URL que voltar ainda falhar, a bolha fica
@@ -197,32 +202,46 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
     // P10 — a IA preencheu campo: a ficha aberta mostra sem precisar reabrir.
     _controller.camposAtualizados.addListener(_recarregarFicha);
     unawaited(_carregarContato());
+    _fotoAtualizada = _controller.fotoDoContatoAtualizada.listen(
+      _aoAtualizarFoto,
+    );
   }
 
   void _recarregarFicha() => _ficha.abrir(widget.atendimentoId);
 
-  Future<void> _carregarContato({bool forcar = false}) async {
+  /// P6 — nunca com `forcar`: a foto quebrada se resolve com uma URL assinada
+  /// nova, e a sincronização com o provedor é decisão do servidor.
+  Future<void> _carregarContato() async {
     if (!GetIt.instance.isRegistered<ObterContatoUsecase>()) return;
     final res = await inject<ObterContatoUsecase>()(
-      ObterContatoParameters(
-        atendimentoId: widget.atendimentoId,
-        forcar: forcar,
-      ),
+      ObterContatoParameters(atendimentoId: widget.atendimentoId),
     );
     if (!mounted) return;
     if (res case Success(:final value)) setState(() => _contato = value);
   }
 
+  /// O [AvatarDoContato] já avisa depois do quadro e uma vez por foto; aqui
+  /// só se garante uma recarga por foto conhecida.
   void _fotoQuebrou() {
     if (_jaPediuFotoNova) return;
     _jaPediuFotoNova = true;
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => unawaited(_carregarContato(forcar: true)),
-    );
+    unawaited(_carregarContato());
+  }
+
+  /// P6 — a foto do contato desta conversa mudou no storage: busca o contato
+  /// de novo para pegar a URL do objeto novo. Foto de outro contato não custa
+  /// nada.
+  void _aoAtualizarFoto(int contatoId) {
+    final daConversa = _contato?.contatoId ?? widget.noQuadro?.resumo.contatoId;
+    if (daConversa == null || daConversa != contatoId) return;
+    // Foto nova pode falhar de novo e merece o seu pedido de recarga.
+    _jaPediuFotoNova = false;
+    unawaited(_carregarContato());
   }
 
   @override
   void dispose() {
+    unawaited(_fotoAtualizada?.cancel());
     _controller.close();
     _ficha.close();
     _detalhesProprios.dispose();

@@ -81,10 +81,14 @@ final class AtendimentoResumo {
   /// Cópia com a etapa (e opcionalmente o status) alterados — usada para
   /// aplicar otimisticamente o resultado de um drag-and-drop no Kanban antes
   /// da confirmação do servidor (revertida no erro).
+  ///
+  /// P6 — [contatoFotoUrl] permite ao quadro manter a URL assinada que já
+  /// estava na tela enquanto ela ainda vale (C17).
   AtendimentoResumo copyWith({
     int? etapaAtualId,
     String? status,
     int? naoLidas,
+    String? contatoFotoUrl,
   }) => AtendimentoResumo(
     id: id,
     contatoId: contatoId,
@@ -102,7 +106,7 @@ final class AtendimentoResumo {
     naoLidas: naoLidas ?? this.naoLidas,
     contatoNome: contatoNome,
     contatoTelefone: contatoTelefone,
-    contatoFotoUrl: contatoFotoUrl,
+    contatoFotoUrl: contatoFotoUrl ?? this.contatoFotoUrl,
     revisaoPendente: revisaoPendente,
     ultimaMensagem: ultimaMensagem,
     ultimaMensagemTipo: ultimaMensagemTipo,

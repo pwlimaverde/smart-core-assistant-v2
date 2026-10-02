@@ -76,6 +76,13 @@ final class ChatController extends BaseController<ChatViewModel> {
   /// próprio, e quem a desenha decide recarregar.
   final camposAtualizados = ValueNotifier<int>(0);
 
+  /// P6 — `contato.foto_atualizada`: o id do contato cuja foto mudou no R2.
+  ///
+  /// O evento não traz `atendimento_id` e o controller não sabe quem é o
+  /// contato da conversa; quem desenha o cabeçalho compara e recarrega.
+  Stream<int> get fotoDoContatoAtualizada => _fotosAtualizadas.stream;
+  final _fotosAtualizadas = StreamController<int>.broadcast();
+
   /// O provedor mantém "digitando" por poucos segundos; renovar a cada tecla
   /// seria uma chamada por caractere, e renovar de menos faz o aviso piscar.
   static const _intervaloDePresenca = Duration(seconds: 4);
@@ -364,6 +371,18 @@ final class ChatController extends BaseController<ChatViewModel> {
       if (evento.atendimentoId == _atendimentoId) camposAtualizados.value++;
       return;
     }
+    // P6 — foto nova muda o avatar, não a conversa: sem recarga do thread.
+    if (evento.tipo == 'contato.foto_atualizada') {
+      final contatoId = switch (evento.payload['contato_id']) {
+        final num n => n.toInt(),
+        final String s => int.tryParse(s),
+        _ => null,
+      };
+      if (contatoId != null && !_fotosAtualizadas.isClosed) {
+        _fotosAtualizadas.add(contatoId);
+      }
+      return;
+    }
     // Só recarrega o thread quando o evento é do atendimento aberto — evita
     // I/O desnecessário para eventos de outros atendimentos da fila.
     if (evento.atendimentoId != _atendimentoId) return;
@@ -627,6 +646,7 @@ final class ChatController extends BaseController<ChatViewModel> {
     _reconnectTimer?.cancel();
     _subscription?.cancel();
     camposAtualizados.dispose();
+    _fotosAtualizadas.close();
     return super.close();
   }
 }
