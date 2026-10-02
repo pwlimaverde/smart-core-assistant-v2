@@ -398,7 +398,7 @@ impl ContatoRepository for PostgresContatoRepository {
     }
 }
 
-/// P8 — nome de perfil e foto vindos do evento `CONTACTS` do provedor.
+/// P8 — nome de perfil vindo do evento `CONTACTS` do provedor.
 ///
 /// **Só atualiza quem já existe.** O evento pode trazer a agenda inteira do
 /// aparelho, e criar contato a partir dele encheria a base de gente que nunca
@@ -407,7 +407,11 @@ impl ContatoRepository for PostgresContatoRepository {
 /// Campo vazio não apaga o que está gravado: o provedor manda o que tem, e uma
 /// atualização parcial não pode zerar o nome que alguém digitou à mão.
 ///
-/// `false` no retorno = ninguém com esse telefone no tenant, que é o caso comum
+/// P6 — a foto não passa mais por aqui: a URL do CDN do WhatsApp expira em
+/// horas e carrega token. Quem chama usa o `contato_id` devolvido para pedir a
+/// sincronização da foto no R2 (`contato.foto.sincronizar`).
+///
+/// `None` no retorno = ninguém com esse telefone no tenant, que é o caso comum
 /// e não é erro.
 #[tracing::instrument(skip_all)]
 pub async fn atualizar_perfil_whatsapp(
@@ -415,21 +419,19 @@ pub async fn atualizar_perfil_whatsapp(
     ctx: &RequestContext,
     telefone: &str,
     nome_perfil: Option<&str>,
-    foto_url: Option<&str>,
-) -> Result<bool, DbError> {
-    let r = sqlx::query(
+) -> Result<Option<i32>, DbError> {
+    let row = sqlx::query_as::<_, (i32,)>(
         r#"UPDATE oraculo_contato
-              SET nome_perfil_whatsapp = COALESCE(NULLIF($3, ''), nome_perfil_whatsapp),
-                  foto_perfil_url_origem = COALESCE(NULLIF($4, ''), foto_perfil_url_origem)
-            WHERE tenant_id = $1 AND telefone = $2 AND excluido_em IS NULL"#,
+              SET nome_perfil_whatsapp = COALESCE(NULLIF($3, ''), nome_perfil_whatsapp)
+            WHERE tenant_id = $1 AND telefone = $2 AND excluido_em IS NULL
+        RETURNING id"#,
     )
     .bind(ctx.tenant_id)
     .bind(telefone)
     .bind(nome_perfil.unwrap_or_default())
-    .bind(foto_url.unwrap_or_default())
-    .execute(&mut **tx)
+    .fetch_optional(&mut **tx)
     .await?;
-    Ok(r.rows_affected() > 0)
+    Ok(row.map(|(id,)| id))
 }
 
 /// P15 — o que a análise encontrou e pode ir para o cadastro do contato.

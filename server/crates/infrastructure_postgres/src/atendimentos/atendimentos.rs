@@ -1634,7 +1634,12 @@ pub struct ContatoDoQuadro {
     pub atendimento_id: i32,
     pub nome: String,
     pub telefone: String,
-    pub foto_url: String,
+    /// P6 — chave do avatar no R2 (`contatos/{id}/avatar-{sha8}.jpg`), vazia
+    /// quando não há foto. A URL assinada é montada pelo `runtime_api`.
+    pub foto_chave: String,
+    /// P6 — última verificação da foto; o `runtime_api` pede a sincronização
+    /// ao worker quando venceu (ou nunca houve).
+    pub foto_verificada_em: Option<DateTime<Utc>>,
     /// P16 — a IA respondeu abaixo da confiança automática e ninguém conferiu.
     /// Vem por aqui, e não no `Atendimento`, porque aquele struct é lido por
     /// consultas com macro, e o cache `.sqlx` não conhece a coluna nova.
@@ -1662,7 +1667,8 @@ pub async fn contatos_do_quadro(
                   COALESCE(NULLIF(TRIM(c.nome_contato), ''),
                            NULLIF(TRIM(c.nome_perfil_whatsapp), ''), '') AS nome,
                   COALESCE(c.telefone, '') AS telefone,
-                  COALESCE(c.foto_perfil_url_origem, '') AS foto_url,
+                  COALESCE(c.foto_perfil, '') AS foto_chave,
+                  c.foto_verificada_em,
                   a.revisao_pendente,
                   COALESCE(LEFT(TRIM(REGEXP_REPLACE(m.conteudo, '\s+', ' ', 'g')), 160), '')
                       AS ultima_mensagem,
@@ -1693,12 +1699,15 @@ pub async fn contatos_do_quadro(
 }
 
 /// P13 — o contato de um atendimento, com a data da última consulta da foto.
+///
+/// P6 — `foto_chave` é a chave do avatar no R2 (vazia = sem foto). A URL do
+/// CDN do WhatsApp não é mais lida nem devolvida: ela expira em horas.
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct ContatoComFoto {
     pub contato_id: i32,
     pub nome: String,
     pub telefone: String,
-    pub foto_url: String,
+    pub foto_chave: String,
     pub foto_verificada_em: Option<DateTime<Utc>>,
 }
 
@@ -1714,7 +1723,7 @@ pub async fn contato_do_atendimento(
                   COALESCE(NULLIF(TRIM(c.nome_contato), ''),
                            NULLIF(TRIM(c.nome_perfil_whatsapp), ''), '') AS nome,
                   COALESCE(c.telefone, '') AS telefone,
-                  COALESCE(c.foto_perfil_url_origem, '') AS foto_url,
+                  COALESCE(c.foto_perfil, '') AS foto_chave,
                   c.foto_verificada_em
              FROM oraculo_atendimento a
              JOIN oraculo_contato c
@@ -1728,31 +1737,97 @@ pub async fn contato_do_atendimento(
     Ok(row)
 }
 
-/// P13 — grava o resultado da consulta da foto.
+/// P6 — o que a sincronização da foto concluiu sobre o contato.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FotoDoContato {
+    /// O binário foi gravado no R2 com esta chave.
+    Chave(String),
+    /// O provedor respondeu que não há foto (ou a privacidade a esconde): a
+    /// chave anterior é apagada.
+    SemFoto,
+    /// A consulta aconteceu, mas a foto não serviu (host recusado, grande
+    /// demais, tipo recusado): a chave anterior fica, só a data anda.
+    SoVerificada,
+}
+
+/// P6 — grava o resultado da sincronização da foto.
 ///
-/// `None` NÃO apaga a foto guardada: o cliente do provedor devolve `None`
-/// também quando a chamada falha, e apagar por causa de uma queda de rede
-/// tiraria a foto de quem tem. Só a data da consulta anda.
+/// A chave do R2 vai para `foto_perfil` (VARCHAR(255)); `foto_perfil_url_origem`
+/// é sempre zerada — a URL do CDN do WhatsApp expira em horas e carrega token,
+/// não pode ficar no banco. `foto_verificada_em` anda em todos os casos (é o
+/// freio da sincronização).
+///
+/// Devolve `true` quando a chave mudou (é o que decide publicar
+/// `contato.foto_atualizada`); `false` quando ficou igual ou o contato não é
+/// deste tenant.
 #[tracing::instrument(skip_all, fields(contato_id = contato_id))]
 pub async fn registrar_foto_do_contato(
     tx: &mut Transaction<'_, Postgres>,
     ctx: &RequestContext,
     contato_id: i32,
-    foto_url: Option<&str>,
-) -> Result<(), DbError> {
+    foto: &FotoDoContato,
+) -> Result<bool, DbError> {
     ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
-    sqlx::query(
-        r#"UPDATE oraculo_contato
-              SET foto_perfil_url_origem = COALESCE(NULLIF($3, ''), foto_perfil_url_origem),
+    let (chave, apagar) = match foto {
+        FotoDoContato::Chave(c) => (c.as_str(), false),
+        FotoDoContato::SemFoto => ("", true),
+        FotoDoContato::SoVerificada => ("", false),
+    };
+    // A CTE lê a chave de antes na mesma linha travada: o RETURNING enxerga o
+    // valor novo em `c` e o antigo em `antes`.
+    let row = sqlx::query_as::<_, (bool,)>(
+        r#"WITH antes AS (
+               SELECT id, foto_perfil
+                 FROM oraculo_contato
+                WHERE tenant_id = $1 AND id = $2
+                FOR UPDATE
+           )
+           UPDATE oraculo_contato c
+              SET foto_perfil = CASE WHEN $4 THEN NULL
+                                     ELSE COALESCE(NULLIF($3, ''), c.foto_perfil) END,
+                  foto_perfil_url_origem = NULL,
                   foto_verificada_em = NOW()
-            WHERE tenant_id = $1 AND id = $2"#,
+             FROM antes
+            WHERE c.tenant_id = $1 AND c.id = antes.id
+        RETURNING (antes.foto_perfil IS DISTINCT FROM c.foto_perfil)"#,
     )
     .bind(ctx.tenant_id)
     .bind(contato_id)
-    .bind(foto_url.unwrap_or_default())
-    .execute(&mut **tx)
+    .bind(chave)
+    .bind(apagar)
+    .fetch_optional(&mut **tx)
     .await?;
-    Ok(())
+    Ok(row.is_some_and(|(alterada,)| alterada))
+}
+
+/// P6 — por onde e com que número buscar a foto do contato.
+///
+/// A conexão é a mesma regra do envio (`conexao_do_contato`, migração 0050).
+/// `None` = contato de outro tenant, sem telefone ou sem conexão ativa.
+#[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+pub async fn destino_da_foto_do_contato(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    contato_id: i32,
+) -> Result<Option<(i64, String)>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let row = sqlx::query_as::<_, (i64, String)>(
+        r#"SELECT wc.instance_id::bigint, oc.telefone
+             FROM oraculo_contato oc
+             CROSS JOIN LATERAL (
+                 SELECT conexao_do_contato(oc.tenant_id, oc.id) AS instance_id
+             ) wc
+            WHERE oc.tenant_id = $1 AND oc.id = $2
+              AND oc.excluido_em IS NULL
+              AND oc.telefone IS NOT NULL AND oc.telefone <> ''
+              AND wc.instance_id IS NOT NULL
+            LIMIT 1"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(contato_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row)
 }
 
 /// P16 — liga ou desliga a marca "revisar" do cartão.

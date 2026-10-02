@@ -18,6 +18,9 @@ use uuid::Uuid;
 struct AppState {
     registry: ProviderRegistry,
     redis_conn: redis::aio::ConnectionManager,
+    /// P6 — cliente HTTP do download do avatar no CDN do WhatsApp, com a
+    /// política de redirect anti-SSRF (ver `cliente_http_foto`).
+    http_foto: reqwest::Client,
 }
 
 #[tokio::main]
@@ -49,6 +52,7 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState {
         registry,
         redis_conn,
+        http_foto: cliente_http_foto()?,
     };
 
     let s_create = state.clone();
@@ -66,6 +70,7 @@ async fn main() -> anyhow::Result<()> {
     let s_react = state.clone();
     let s_presence = state.clone();
     let s_profile = state.clone();
+    let s_foto = state.clone();
     let s_download = state;
 
     let server = Server::from_env("DATA_WHATSAPP")
@@ -120,6 +125,10 @@ async fn main() -> anyhow::Result<()> {
         .route("GetWhatsappProfilePicture", move |env| {
             let s = s_profile.clone();
             Box::pin(async move { handler_get_whatsapp_profile_picture(s, env).await })
+        })
+        .route("BaixarFotoDoContato", move |env| {
+            let s = s_foto.clone();
+            Box::pin(async move { handler_baixar_foto_do_contato(s, env).await })
         })
         .route("DownloadWhatsappMedia", move |env| {
             let s = s_download.clone();
@@ -2375,6 +2384,267 @@ async fn handler_download_whatsapp_media(state: AppState, env: Envelope) -> Enve
     }
 }
 
+/// P6 — teto do avatar baixado do CDN do WhatsApp (1 MiB). As fotos de perfil
+/// reais ficam na casa das dezenas de KB; acima disso é anomalia.
+const TETO_FOTO_CONTATO_BYTES: usize = 1024 * 1024;
+
+/// P6 — só segue URL do CDN do WhatsApp: a URL vem do provedor, mas é dado
+/// externo (anti-SSRF). Exige https e host `*.whatsapp.net`.
+fn host_permitido(url: &reqwest::Url) -> bool {
+    url.scheme() == "https"
+        && url
+            .host_str()
+            .is_some_and(|h| h == "pps.whatsapp.net" || h.ends_with(".whatsapp.net"))
+}
+
+/// P6 — cliente HTTP do download do avatar. Redirect só é seguido se o destino
+/// também passa em [`host_permitido`] (no máximo 3 saltos); fora disso a
+/// resposta 3xx volta para quem chamou, que a trata como host recusado.
+fn cliente_http_foto() -> anyhow::Result<reqwest::Client> {
+    let politica = reqwest::redirect::Policy::custom(|tentativa| {
+        if tentativa.previous().len() >= 3 || !host_permitido(tentativa.url()) {
+            tentativa.stop()
+        } else {
+            tentativa.follow()
+        }
+    });
+    Ok(reqwest::Client::builder()
+        .redirect(politica)
+        // Abaixo do prazo de 15 s do worker para o RPC inteiro (provedor + CDN).
+        .connect_timeout(Duration::from_secs(3))
+        .timeout(Duration::from_secs(8))
+        .build()?)
+}
+
+/// P6 — por que a foto baixada não serviu. Vira o `resultado` do span no worker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FotoRecusada {
+    HostRecusado,
+    GrandeDemais,
+    TipoRecusado,
+}
+
+impl FotoRecusada {
+    fn como_str(self) -> &'static str {
+        match self {
+            FotoRecusada::HostRecusado => "host_recusado",
+            FotoRecusada::GrandeDemais => "grande_demais",
+            FotoRecusada::TipoRecusado => "tipo_recusado",
+        }
+    }
+}
+
+/// P6 — o que o download da foto concluiu.
+#[derive(Debug)]
+enum DownloadDaFoto {
+    Baixada { bytes: Vec<u8>, mime: String },
+    Recusada(FotoRecusada),
+}
+
+/// P6 — `image/*` sem parâmetros (`image/jpeg; charset=…` → `image/jpeg`).
+fn mime_de_imagem(content_type: Option<&str>) -> Option<String> {
+    let base = content_type?.split(';').next()?.trim().to_ascii_lowercase();
+    let subtipo = base.strip_prefix("image/")?;
+    let valido = !subtipo.is_empty()
+        && subtipo
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c));
+    valido.then_some(base)
+}
+
+/// P6 — confere a resposta do CDN e lê o corpo com teto, sem nunca acumular
+/// mais que `teto` bytes (o `Content-Length` pode mentir ou faltar).
+async fn ler_imagem_limitada(
+    mut resp: reqwest::Response,
+    teto: usize,
+) -> Result<DownloadDaFoto, reqwest::Error> {
+    // Redirect parado pela política = destino fora do CDN do WhatsApp.
+    if resp.status().is_redirection() {
+        return Ok(DownloadDaFoto::Recusada(FotoRecusada::HostRecusado));
+    }
+    resp.error_for_status_ref()?;
+    let Some(mime) = mime_de_imagem(
+        resp.headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok()),
+    ) else {
+        return Ok(DownloadDaFoto::Recusada(FotoRecusada::TipoRecusado));
+    };
+    if resp.content_length().is_some_and(|n| n > teto as u64) {
+        return Ok(DownloadDaFoto::Recusada(FotoRecusada::GrandeDemais));
+    }
+    let mut bytes = Vec::new();
+    while let Some(pedaco) = resp.chunk().await? {
+        if bytes.len() + pedaco.len() > teto {
+            return Ok(DownloadDaFoto::Recusada(FotoRecusada::GrandeDemais));
+        }
+        bytes.extend_from_slice(&pedaco);
+    }
+    Ok(DownloadDaFoto::Baixada { bytes, mime })
+}
+
+/// P6 — baixa o avatar da URL que o provedor devolveu. A URL nunca vai para
+/// log nem span: carrega token e identifica o contato.
+async fn baixar_foto_do_cdn(
+    http: &reqwest::Client,
+    url: &str,
+    teto: usize,
+) -> Result<DownloadDaFoto, String> {
+    let Ok(url) = reqwest::Url::parse(url) else {
+        return Ok(DownloadDaFoto::Recusada(FotoRecusada::HostRecusado));
+    };
+    if !host_permitido(&url) {
+        return Ok(DownloadDaFoto::Recusada(FotoRecusada::HostRecusado));
+    }
+    // `without_url`: o erro do reqwest embute a URL, e ela não pode vazar.
+    let resp = http
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| e.without_url().to_string())?;
+    ler_imagem_limitada(resp, teto)
+        .await
+        .map_err(|e| e.without_url().to_string())
+}
+
+/// P6 — `BaixarFotoDoContato { id, number }`: pede o avatar ao provedor
+/// (`/user/avatar`) e baixa o binário do CDN do WhatsApp.
+///
+/// Resposta:
+/// - `{ base64, mime }` — foto baixada (até 1 MiB, `image/*`);
+/// - `{ sem_foto: true }` — o provedor não tem foto (ou a privacidade esconde);
+/// - `{ recusada: "host_recusado" | "grande_demais" | "tipo_recusado" }`.
+///
+/// Erro de envelope só para falha transitória (instância, rede, CDN fora).
+/// Nem a URL do CDN nem o número entram em span ou log.
+#[tracing::instrument(
+    skip_all,
+    fields(
+        rpc = "BaixarFotoDoContato",
+        tenant_id = %env.tenant_id,
+        resultado = tracing::field::Empty,
+    )
+)]
+async fn handler_baixar_foto_do_contato(state: AppState, env: Envelope) -> Envelope {
+    let span = tracing::Span::current();
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(db_id) = payload.get("id").and_then(|v| v.as_i64()) else {
+        return erro(error_core::AppError::Validation("id ausente".into()), &env);
+    };
+    let Some(number) = payload
+        .get("number")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    else {
+        return erro(
+            error_core::AppError::Validation("number ausente".into()),
+            &env,
+        );
+    };
+
+    let instance = match chamar_data_postgres(
+        "GetWhatsappInstance",
+        &env.tenant_id,
+        serde_json::json!({ "id": db_id }),
+        &env,
+    )
+    .await
+    {
+        Ok(inst) => inst,
+        Err(e) => return erro(e, &env),
+    };
+    let Some(name) = instance.get("name").and_then(|v| v.as_str()) else {
+        return erro(
+            error_core::AppError::Database("não encontrado: Instância não encontrada".into()),
+            &env,
+        );
+    };
+    let Some(api_key) = instance.get("api_key").and_then(|v| v.as_str()) else {
+        return erro(
+            error_core::AppError::Validation("Chave da instância ausente".into()),
+            &env,
+        );
+    };
+    let provider_name = instance
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("evolution");
+    let p = match state.registry.resolve(provider_name) {
+        Ok(prov) => prov,
+        Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
+    };
+    let Some(profiles) = p.profiles() else {
+        return erro(
+            error_core::AppError::Internal(
+                MessagingProviderError::Unsupported("profile").to_string(),
+            ),
+            &env,
+        );
+    };
+
+    let api_key_sec = SecretString::from(api_key.to_string());
+    let url = match profiles
+        .get_profile_picture(name, &api_key_sec, number)
+        .await
+    {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            span.record("resultado", "sem_foto");
+            return ok_reply(
+                &env,
+                "BaixarFotoDoContatoReply",
+                serde_json::json!({ "sem_foto": true }),
+            );
+        }
+        Err(e) => {
+            span.record("resultado", "erro");
+            return erro(
+                error_core::AppError::Internal(format!(
+                    "Falha ao consultar foto de perfil no provedor: {e}"
+                )),
+                &env,
+            );
+        }
+    };
+
+    match baixar_foto_do_cdn(&state.http_foto, &url, TETO_FOTO_CONTATO_BYTES).await {
+        Ok(DownloadDaFoto::Baixada { bytes, mime }) => {
+            span.record("resultado", "ok");
+            ok_reply(
+                &env,
+                "BaixarFotoDoContatoReply",
+                serde_json::json!({
+                    "base64": base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &bytes,
+                    ),
+                    "mime": mime,
+                }),
+            )
+        }
+        Ok(DownloadDaFoto::Recusada(motivo)) => {
+            span.record("resultado", motivo.como_str());
+            tracing::warn!(motivo = motivo.como_str(), "foto do contato recusada");
+            ok_reply(
+                &env,
+                "BaixarFotoDoContatoReply",
+                serde_json::json!({ "recusada": motivo.como_str() }),
+            )
+        }
+        Err(e) => {
+            span.record("resultado", "erro");
+            erro(
+                error_core::AppError::Internal(format!("Falha ao baixar a foto do contato: {e}")),
+                &env,
+            )
+        }
+    }
+}
+
 /// Limite de tamanho de mídia baixada, em bytes. Configurável por
 /// `SMARTCORE_MEDIA_MAX_BYTES`; default 20 MiB.
 fn limite_midia_bytes() -> u64 {
@@ -2393,6 +2663,148 @@ fn bytes_estimados_base64(base64_len: usize) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- P6: foto do contato (anti-SSRF, teto e tipo) ---
+
+    fn url(s: &str) -> reqwest::Url {
+        reqwest::Url::parse(s).expect("url de teste")
+    }
+
+    #[test]
+    fn host_permitido_aceita_so_https_do_cdn_do_whatsapp() {
+        assert!(host_permitido(&url(
+            "https://pps.whatsapp.net/v/t61/abc.jpg"
+        )));
+        assert!(host_permitido(&url("https://mmg.whatsapp.net/d/f/x")));
+        // Esquema errado.
+        assert!(!host_permitido(&url(
+            "http://pps.whatsapp.net/v/t61/abc.jpg"
+        )));
+        // Sufixo sem o ponto não é subdomínio.
+        assert!(!host_permitido(&url("https://evilwhatsapp.net/x")));
+        // O host real é o último rótulo, não o que aparece no começo.
+        assert!(!host_permitido(&url("https://pps.whatsapp.net.evil.com/x")));
+        // Credencial embutida não muda o host verificado.
+        assert!(!host_permitido(&url(
+            "https://pps.whatsapp.net@169.254.169.254/x"
+        )));
+        // Rede interna e loopback.
+        assert!(!host_permitido(&url("https://127.0.0.1/x")));
+        assert!(!host_permitido(&url("https://evolution:8080/x")));
+    }
+
+    #[test]
+    fn mime_de_imagem_so_aceita_image() {
+        assert_eq!(
+            mime_de_imagem(Some("image/jpeg")),
+            Some("image/jpeg".into())
+        );
+        assert_eq!(
+            mime_de_imagem(Some("Image/WEBP; charset=binary")),
+            Some("image/webp".into())
+        );
+        assert_eq!(mime_de_imagem(Some("text/html")), None);
+        assert_eq!(mime_de_imagem(Some("image/")), None);
+        assert_eq!(mime_de_imagem(Some("image/svg+xml\r\nX: y")), None);
+        assert_eq!(mime_de_imagem(None), None);
+    }
+
+    #[tokio::test]
+    async fn baixar_foto_recusa_host_fora_do_cdn_sem_fazer_requisicao() {
+        // O wiremock não recebe nada: a recusa acontece antes do GET.
+        let servidor = MockServer::start().await;
+        let http = reqwest::Client::new();
+        let r = baixar_foto_do_cdn(&http, &format!("{}/foto.jpg", servidor.uri()), 1024)
+            .await
+            .expect("recusa não é erro");
+        assert!(matches!(
+            r,
+            DownloadDaFoto::Recusada(FotoRecusada::HostRecusado)
+        ));
+        assert!(servidor
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn ler_imagem_limitada_aplica_teto_tipo_e_redirect() {
+        let servidor = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/grande"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "image/jpeg")
+                    .set_body_bytes(vec![0u8; 2048]),
+            )
+            .mount(&servidor)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/html"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/html")
+                    .set_body_string("<html></html>"),
+            )
+            .mount(&servidor)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/ok"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "image/jpeg")
+                    .set_body_bytes(vec![7u8; 100]),
+            )
+            .mount(&servidor)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/desvio"))
+            .respond_with(
+                ResponseTemplate::new(302).insert_header("location", "http://169.254.169.254/"),
+            )
+            .mount(&servidor)
+            .await;
+
+        // A mesma política de produção: o redirect para fora do CDN não é seguido.
+        let http = cliente_http_foto().expect("cliente");
+        let get = |p: &str| http.get(format!("{}{p}", servidor.uri())).send();
+
+        let grande = ler_imagem_limitada(get("/grande").await.unwrap(), 1024)
+            .await
+            .unwrap();
+        assert!(matches!(
+            grande,
+            DownloadDaFoto::Recusada(FotoRecusada::GrandeDemais)
+        ));
+
+        let html = ler_imagem_limitada(get("/html").await.unwrap(), 1024)
+            .await
+            .unwrap();
+        assert!(matches!(
+            html,
+            DownloadDaFoto::Recusada(FotoRecusada::TipoRecusado)
+        ));
+
+        let desvio = ler_imagem_limitada(get("/desvio").await.unwrap(), 1024)
+            .await
+            .unwrap();
+        assert!(matches!(
+            desvio,
+            DownloadDaFoto::Recusada(FotoRecusada::HostRecusado)
+        ));
+
+        match ler_imagem_limitada(get("/ok").await.unwrap(), 1024)
+            .await
+            .unwrap()
+        {
+            DownloadDaFoto::Baixada { bytes, mime } => {
+                assert_eq!(bytes.len(), 100);
+                assert_eq!(mime, "image/jpeg");
+            }
+            outro => panic!("esperava a foto baixada, veio {outro:?}"),
+        }
+    }
 
     // --- O que a reconciliação conclui depois de tentar religar ---
     //
@@ -2756,6 +3168,7 @@ mod tests {
         let state = AppState {
             registry,
             redis_conn,
+            http_foto: reqwest::Client::new(),
         };
 
         (wiremock_server, state, pg_handle)
@@ -3211,6 +3624,7 @@ mod tests {
         let state_fake = AppState {
             registry,
             redis_conn,
+            http_foto: reqwest::Client::new(),
         };
 
         let payload = serde_json::json!({

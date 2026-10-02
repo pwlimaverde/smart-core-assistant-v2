@@ -310,18 +310,18 @@ pub trait AtendimentoStore: Send + Sync {
         de: &str,
     ) -> Result<bool, DbError>;
 
-    /// P8 — nome de perfil e foto vindos do evento `CONTACTS` do provedor.
+    /// P8 — nome de perfil vindo do evento `CONTACTS` do provedor.
     ///
     /// Só atualiza quem já existe: o evento pode trazer a agenda inteira do
     /// aparelho, e criar contato a partir dele encheria a base de gente que
-    /// nunca escreveu para o tenant.
+    /// nunca escreveu para o tenant. P6 — devolve o `contato_id` (para o
+    /// worker pedir a sincronização da foto); `None` = telefone desconhecido.
     async fn atualizar_perfil_do_contato(
         &self,
         ctx: &RequestContext,
         telefone: &str,
         nome_perfil: &str,
-        foto_url: &str,
-    ) -> Result<bool, DbError>;
+    ) -> Result<Option<i32>, DbError>;
 
     /// D3 — liga/desliga a resposta automática da IA nesta conversa.
     ///
@@ -385,13 +385,21 @@ pub trait AtendimentoStore: Send + Sync {
         atendimento_id: i32,
     ) -> Result<Option<infrastructure_postgres::atendimentos::atendimentos::ContatoComFoto>, DbError>;
 
-    /// P13 — grava o resultado da consulta da foto (`None` não apaga).
+    /// P6 — grava o resultado da sincronização da foto (chave do R2). `true`
+    /// = a chave mudou.
     async fn registrar_foto_do_contato(
         &self,
         ctx: &RequestContext,
         contato_id: i32,
-        foto_url: Option<String>,
-    ) -> Result<(), DbError>;
+        foto: infrastructure_postgres::atendimentos::atendimentos::FotoDoContato,
+    ) -> Result<bool, DbError>;
+
+    /// P6 — conexão e telefone para buscar a foto do contato.
+    async fn destino_da_foto_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<Option<(i64, String)>, DbError>;
 
     /// B6 (N9 E4) — mensagens do contato ainda não lidas, por atendimento.
     async fn contar_nao_lidas(

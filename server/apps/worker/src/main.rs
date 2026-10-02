@@ -149,6 +149,29 @@ pub(crate) async fn chamar_rpc(
     causation_id: &str,
     traceparent: &str,
 ) -> anyhow::Result<serde_json::Value> {
+    chamar_rpc_com_prazo(
+        client,
+        tenant_id,
+        method,
+        payload,
+        causation_id,
+        traceparent,
+        Duration::from_secs(5),
+    )
+    .await
+}
+
+/// [`chamar_rpc`] com prazo explícito — para RPC que faz I/O externo além do
+/// banco (ex.: P6, `BaixarFotoDoContato` consulta o provedor e baixa do CDN).
+pub(crate) async fn chamar_rpc_com_prazo(
+    client: &transport::MuxClient,
+    tenant_id: &str,
+    method: &str,
+    payload: serde_json::Value,
+    causation_id: &str,
+    traceparent: &str,
+    prazo: Duration,
+) -> anyhow::Result<serde_json::Value> {
     let envelope = Envelope {
         tenant_id: tenant_id.to_string(),
         schema_version: 1,
@@ -167,7 +190,7 @@ pub(crate) async fn chamar_rpc(
         user_agent: String::new(),
     };
 
-    let resp = client.call(envelope, Duration::from_secs(5)).await?;
+    let resp = client.call(envelope, prazo).await?;
     if resp.kind == MessageKind::Error as i32 {
         let err_msg = resp
             .error
@@ -1600,6 +1623,8 @@ async fn despachar_evento(
         // chegava e era descartado: a ficha mostrava o número cru de quem nunca
         // se apresentou pelo nome.
         "whatsapp.contact.updated" => processar_contato_atualizado(state, evt).await,
+        // P6 — foto do contato baixada do CDN do WhatsApp e guardada no R2.
+        EVENTO_FOTO_SINCRONIZAR => processar_foto_do_contato(state, evt).await,
         // Eventos de outros consumidores (ex.: `media.purge`, do data_storage)
         // compartilham o stream: ignorar é o comportamento correto, e o XACK do
         // Consumer evita que fiquem pendurados na PEL deste grupo.
@@ -1638,15 +1663,13 @@ async fn processar_contato_atualizado(
     };
 
     let tenant_uuid = Uuid::parse_str(&evt.tenant_id)?;
+    // P6 — a conexão por onde o evento chegou: é por ela que a foto é buscada.
+    let instance_id = payload.get("instance_id").and_then(|v| v.as_i64());
     for contato in contatos {
-        let jid = contato
-            .get("remoteJid")
-            .or_else(|| contato.get("id"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
         // Só a parte numérica, como na ingestão de mensagem: o telefone é a
-        // chave do contato, e o sufixo do JID não faz parte dele.
-        let telefone = jid.split('@').next().unwrap_or("").to_string();
+        // chave do contato, e o sufixo do JID não faz parte dele. Contato
+        // endereçado por LID usa o `remoteJidAlt` quando o provedor o manda.
+        let telefone = telefone_do_contato_do_evento(contato);
         if telefone.is_empty() {
             continue;
         }
@@ -1656,43 +1679,382 @@ async fn processar_contato_atualizado(
             .or_else(|| contato.get("notify"))
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        let foto = contato
+        // P6 — a URL do CDN do WhatsApp NÃO é mais gravada (expira em horas e
+        // carrega token). Ela só sinaliza que vale sincronizar a foto no R2.
+        let trouxe_foto = contato
             .get("profilePicUrl")
             .or_else(|| contato.get("profilePictureUrl"))
             .and_then(|v| v.as_str())
-            .unwrap_or("");
-        if nome.is_empty() && foto.is_empty() {
+            .is_some_and(|u| !u.trim().is_empty());
+        if nome.is_empty() && !trouxe_foto {
             continue;
         }
 
-        let req = Envelope {
-            tenant_id: tenant_uuid.to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            causation_id: evt.event_id.to_string(),
-            traceparent: evt.traceparent.clone(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "AtualizarPerfilDoContato".to_string(),
-            payload: serde_json::to_vec(&serde_json::json!({
+        let resposta = chamar_rpc(
+            &state.pg_client,
+            &tenant_uuid.to_string(),
+            "AtualizarPerfilDoContato",
+            serde_json::json!({
                 "telefone": telefone,
                 "nome_perfil": nome,
-                "foto_url": foto,
-            }))
-            .unwrap_or_default(),
-            error: None,
-            auth_user_id: 0,
-            auth_scopes: escopos_sistema(),
-            auth_is_superuser: false,
-            flow_permissions: vec![],
-            user_agent: String::new(),
+            }),
+            &evt.event_id,
+            &evt.traceparent,
+        )
+        .await;
+        let contato_id = match resposta {
+            Ok(r) => r.get("contato_id").and_then(|v| v.as_i64()),
+            Err(e) => {
+                tracing::warn!(erro = %e, "falha ao atualizar o perfil do contato");
+                continue;
+            }
         };
-        if let Err(e) = state.pg_client.call(req, Duration::from_secs(5)).await {
-            tracing::warn!("falha ao atualizar o perfil do contato: {:?}", e);
+        if let (true, Some(contato_id)) = (trouxe_foto, contato_id) {
+            pedir_sincronizacao_da_foto(
+                state,
+                tenant_uuid,
+                contato_id as i32,
+                instance_id,
+                &evt.traceparent,
+            )
+            .await;
         }
     }
 
     Ok(())
+}
+
+/// P6 — o telefone do contato num item do evento `CONTACTS`: o `remoteJidAlt`
+/// (`…@s.whatsapp.net`) quando o `remoteJid` é um LID, senão o próprio JID.
+/// Só a parte antes do `@`.
+fn telefone_do_contato_do_evento(contato: &serde_json::Value) -> String {
+    let jid = contato
+        .get("remoteJid")
+        .or_else(|| contato.get("id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let alternativo = contato
+        .get("remoteJidAlt")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let escolhido = if jid.ends_with("@lid") && alternativo.ends_with("@s.whatsapp.net") {
+        alternativo
+    } else {
+        jid
+    };
+    escolhido.split('@').next().unwrap_or("").to_string()
+}
+
+/// P6 — tipo do evento que pede a sincronização da foto do contato no R2.
+const EVENTO_FOTO_SINCRONIZAR: &str = "contato.foto.sincronizar";
+
+/// P6 — janela em que um mesmo contato não é sincronizado de novo (10 min, o
+/// mesmo piso do `forcar` do `runtime_api`). Segura a rajada de eventos da
+/// agenda e a reentrega do consumer group.
+const TRAVA_FOTO_S: u64 = 600;
+
+/// P6 — prazo do `BaixarFotoDoContato` (provedor + CDN).
+const PRAZO_BAIXAR_FOTO: Duration = Duration::from_secs(15);
+
+/// P6 — publica `contato.foto.sincronizar` no barramento. Best-effort: sem
+/// barramento, a próxima abertura do contato pede de novo.
+async fn pedir_sincronizacao_da_foto(
+    state: &AppState,
+    tenant_id: Uuid,
+    contato_id: i32,
+    instance_id: Option<i64>,
+    traceparent: &str,
+) {
+    let Some(ref bus) = state.bus_conn else {
+        return;
+    };
+    let mut conn = bus.clone();
+    let evento = contracts::TenantEnvelope::novo(
+        tenant_id,
+        EVENTO_FOTO_SINCRONIZAR,
+        serde_json::json!({ "contato_id": contato_id, "instance_id": instance_id }),
+    )
+    .com_traceparent(traceparent);
+    if let Err(e) = transport::bus::publicar_evento(&mut conn, &evento).await {
+        tracing::warn!(erro = %e, "falha ao pedir a sincronização da foto do contato");
+    }
+}
+
+/// P6 — chave Redis da trava de sincronização. Só ids: nome de chave aparece
+/// em `SLOWLOG`/`MONITOR`.
+fn chave_trava_foto(tenant_id: Uuid, contato_id: i32) -> String {
+    format!("tenant:{tenant_id}:foto:sync:{contato_id}")
+}
+
+/// P6 — chave do avatar no R2. O `sha8` (hash do conteúdo) muda quando a foto
+/// muda: a URL assinada nova não reaproveita cache do objeto antigo.
+fn chave_avatar(contato_id: i32, base64: &str) -> String {
+    let hash = Sha256::digest(base64.as_bytes());
+    let sha8: String = hash.iter().take(4).map(|b| format!("{b:02x}")).collect();
+    format!("contatos/{contato_id}/avatar-{sha8}.jpg")
+}
+
+/// P6 — desfecho da sincronização (rótulo do span e da métrica).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResultadoFoto {
+    Ok,
+    SemFoto,
+    HostRecusado,
+    GrandeDemais,
+    Erro,
+}
+
+impl ResultadoFoto {
+    fn como_str(self) -> &'static str {
+        match self {
+            ResultadoFoto::Ok => "ok",
+            ResultadoFoto::SemFoto => "sem_foto",
+            ResultadoFoto::HostRecusado => "host_recusado",
+            ResultadoFoto::GrandeDemais => "grande_demais",
+            ResultadoFoto::Erro => "erro",
+        }
+    }
+}
+
+/// P6 — consumidor de `contato.foto.sincronizar { contato_id, instance_id? }`.
+///
+/// `BaixarFotoDoContato` (data_whatsapp) → `PutFile` (data_storage, com
+/// `content_type`) → `RegistrarFotoDoContato` (data_postgres) →
+/// `contato.foto_atualizada` no realtime quando a chave mudou. Sem foto: a
+/// chave é apagada e a verificação registrada.
+///
+/// Idempotente: a trava `SET NX EX` por contato descarta a reentrega e a
+/// rajada; a chave do R2 é pelo conteúdo, então regravar é sobrescrever o
+/// mesmo objeto. Nunca devolve `Err` — o evento é derivado, e reentregar em
+/// laço um provedor fora do ar não ajuda ninguém.
+///
+/// Nem a URL do CDN nem o telefone entram em span ou log.
+#[tracing::instrument(
+    skip_all,
+    name = "contato.foto.sincronizar",
+    fields(
+        tenant_id = %evt.tenant_id,
+        contato_id = tracing::field::Empty,
+        resultado = tracing::field::Empty,
+        error_code = tracing::field::Empty,
+    )
+)]
+async fn processar_foto_do_contato(
+    state: &AppState,
+    evt: transport::bus::EventoBruto,
+) -> anyhow::Result<()> {
+    let span = tracing::Span::current();
+    let envelope = match evt.desserializar::<serde_json::Value>() {
+        Ok(e) => e,
+        Err(e) => {
+            tracing::warn!(erro = %e, "evento de foto malformado; descartado");
+            return Ok(());
+        }
+    };
+    let Some(contato_id) = envelope
+        .payload
+        .get("contato_id")
+        .and_then(|v| v.as_i64())
+        .filter(|v| *v > 0)
+        .map(|v| v as i32)
+    else {
+        tracing::warn!("evento de foto sem contato_id; descartado");
+        return Ok(());
+    };
+    span.record("contato_id", contato_id);
+
+    // Trava por contato. Redis de cache fora = segue sem trava (a foto vale
+    // mais que o dedupe; a chave pelo conteúdo já torna a regravação inócua).
+    if let Some(ref cache) = state.redis_conn {
+        let mut conn = cache.clone();
+        let novo: Result<Option<String>, _> = redis::cmd("SET")
+            .arg(chave_trava_foto(envelope.tenant_id, contato_id))
+            .arg("1")
+            .arg("NX")
+            .arg("EX")
+            .arg(TRAVA_FOTO_S)
+            .query_async(&mut conn)
+            .await;
+        if let Ok(None) = novo {
+            tracing::debug!("sincronização da foto já feita há pouco; descartada");
+            return Ok(());
+        }
+    }
+
+    let (resultado, error_code) = match sincronizar_foto_do_contato(
+        state,
+        &envelope.tenant_id.to_string(),
+        contato_id,
+        envelope.payload.get("instance_id").and_then(|v| v.as_i64()),
+        &envelope.event_id.to_string(),
+        &envelope.traceparent,
+    )
+    .await
+    {
+        Ok((resultado, alterada)) => {
+            if alterada {
+                publicar_realtime(
+                    state,
+                    envelope.tenant_id,
+                    "contato.foto_atualizada",
+                    serde_json::json!({ "contato_id": contato_id }),
+                )
+                .await;
+            }
+            (resultado, None)
+        }
+        Err(codigo) => (ResultadoFoto::Erro, Some(codigo)),
+    };
+
+    span.record("resultado", resultado.como_str());
+    if let Some(codigo) = error_code {
+        span.record("error_code", codigo);
+        tracing::warn!(
+            error_code = codigo,
+            "sincronização da foto do contato falhou"
+        );
+    } else {
+        tracing::info!(
+            resultado = resultado.como_str(),
+            "foto do contato sincronizada"
+        );
+    }
+    observability::usage_metrics::registrar_contato_foto(resultado.como_str());
+    Ok(())
+}
+
+/// P6 — os passos da sincronização. `Ok((resultado, alterada))`; `Err` traz o
+/// `error_code` (sem detalhe: a mensagem do serviço pode carregar a chave ou
+/// o número).
+async fn sincronizar_foto_do_contato(
+    state: &AppState,
+    tenant_str: &str,
+    contato_id: i32,
+    instance_do_evento: Option<i64>,
+    causation_id: &str,
+    traceparent: &str,
+) -> Result<(ResultadoFoto, bool), &'static str> {
+    // 1. Telefone (e conexão, quando o evento não trouxe) do contato.
+    let destino = chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "DestinoDaFotoDoContato",
+        serde_json::json!({ "contato_id": contato_id }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    .map_err(|_| "destino_falhou")?;
+    let telefone = destino
+        .get("telefone")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .ok_or("sem_destino")?
+        .to_string();
+    let instance_id = instance_do_evento
+        .or_else(|| destino.get("instance_id").and_then(|v| v.as_i64()))
+        .ok_or("sem_destino")?;
+
+    // 2. Avatar baixado do CDN pelo data_whatsapp (anti-SSRF e teto lá).
+    let foto = chamar_rpc_com_prazo(
+        &state.whatsapp_client,
+        tenant_str,
+        "BaixarFotoDoContato",
+        serde_json::json!({ "id": instance_id, "number": telefone }),
+        causation_id,
+        traceparent,
+        PRAZO_BAIXAR_FOTO,
+    )
+    .await
+    .map_err(|_| "download_falhou")?;
+
+    if foto.get("sem_foto").and_then(|v| v.as_bool()) == Some(true) {
+        let alterada = registrar_foto(
+            state,
+            tenant_str,
+            serde_json::json!({ "contato_id": contato_id, "sem_foto": true }),
+            causation_id,
+            traceparent,
+        )
+        .await?;
+        return Ok((ResultadoFoto::SemFoto, alterada));
+    }
+    if let Some(motivo) = foto.get("recusada").and_then(|v| v.as_str()) {
+        // A foto existe mas não serviu: a chave atual fica, só a data anda.
+        registrar_foto(
+            state,
+            tenant_str,
+            serde_json::json!({ "contato_id": contato_id }),
+            causation_id,
+            traceparent,
+        )
+        .await?;
+        return match motivo {
+            "host_recusado" => Ok((ResultadoFoto::HostRecusado, false)),
+            "grande_demais" => Ok((ResultadoFoto::GrandeDemais, false)),
+            _ => Err("tipo_recusado"),
+        };
+    }
+
+    let base64 = foto
+        .get("base64")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .ok_or("foto_vazia")?;
+    let mime = foto
+        .get("mime")
+        .and_then(|v| v.as_str())
+        .filter(|m| m.starts_with("image/"))
+        .unwrap_or("image/jpeg");
+
+    // 3. Binário no R2, com o `Content-Type` para o navegador exibir.
+    let chave = chave_avatar(contato_id, base64);
+    chamar_rpc(
+        &state.storage_client,
+        tenant_str,
+        "PutFile",
+        serde_json::json!({
+            "file_name": chave,
+            "content_base64": base64,
+            "content_type": mime,
+        }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    .map_err(|_| "storage_falhou")?;
+
+    // 4. Chave no contato (a URL do CDN nunca é gravada).
+    let alterada = registrar_foto(
+        state,
+        tenant_str,
+        serde_json::json!({ "contato_id": contato_id, "chave": chave }),
+        causation_id,
+        traceparent,
+    )
+    .await?;
+    Ok((ResultadoFoto::Ok, alterada))
+}
+
+/// P6 — `RegistrarFotoDoContato`; devolve se a chave do contato mudou.
+async fn registrar_foto(
+    state: &AppState,
+    tenant_str: &str,
+    corpo: serde_json::Value,
+    causation_id: &str,
+    traceparent: &str,
+) -> Result<bool, &'static str> {
+    chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "RegistrarFotoDoContato",
+        corpo,
+        causation_id,
+        traceparent,
+    )
+    .await
+    .map(|r| r.get("alterada").and_then(|v| v.as_bool()).unwrap_or(false))
+    .map_err(|_| "registro_falhou")
 }
 
 /// N8.5/E5 — reage à mudança de estado da conexão do WhatsApp comunicada pelo
@@ -6864,5 +7226,261 @@ mod tests {
         // ...e o canal continua utilizável: é por isso que o stream_atendimentos
         // avisa `stream.defasado` e segue no laço em vez de encerrar.
         assert_eq!(rx.recv().await, Ok("evento_2".to_string()));
+    }
+
+    // --- P6: foto do contato no R2 ---
+
+    #[test]
+    fn chave_avatar_e_pelo_conteudo_e_sem_pii() {
+        let a = chave_avatar(7, "QUJD");
+        assert!(a.starts_with("contatos/7/avatar-"), "{a}");
+        assert!(a.ends_with(".jpg"), "{a}");
+        // `avatar-` + 8 hex + `.jpg`.
+        let sha8 = &a["contatos/7/avatar-".len()..a.len() - ".jpg".len()];
+        assert_eq!(sha8.len(), 8);
+        assert!(sha8.chars().all(|c| c.is_ascii_hexdigit()));
+        // Mesma foto, mesma chave; foto nova, chave nova.
+        assert_eq!(a, chave_avatar(7, "QUJD"));
+        assert_ne!(a, chave_avatar(7, "REVG"));
+        // Cabe em `foto_perfil` (VARCHAR(255)).
+        assert!(chave_avatar(i32::MAX, "QUJD").len() <= 255);
+    }
+
+    #[test]
+    fn chave_trava_foto_so_tem_ids() {
+        let t = Uuid::nil();
+        assert_eq!(chave_trava_foto(t, 7), format!("tenant:{t}:foto:sync:7"));
+    }
+
+    #[test]
+    fn telefone_do_contato_do_evento_prefere_o_numero_real_ao_lid() {
+        let lid = serde_json::json!({
+            "remoteJid": "82506422431828@lid",
+            "remoteJidAlt": "558899990000@s.whatsapp.net",
+        });
+        assert_eq!(telefone_do_contato_do_evento(&lid), "558899990000");
+        // Sem alternativo, fica o que veio (comportamento anterior).
+        let so_lid = serde_json::json!({ "remoteJid": "82506422431828@lid" });
+        assert_eq!(telefone_do_contato_do_evento(&so_lid), "82506422431828");
+        let comum = serde_json::json!({ "id": "5511999998888@s.whatsapp.net" });
+        assert_eq!(telefone_do_contato_do_evento(&comum), "5511999998888");
+        assert_eq!(telefone_do_contato_do_evento(&serde_json::json!({})), "");
+    }
+
+    fn evento_foto(tenant_id: &str, contato_id: i32) -> EventoBruto {
+        EventoBruto {
+            stream_id: "1-0".to_string(),
+            tenant_id: tenant_id.to_string(),
+            event_id: Uuid::now_v7().to_string(),
+            event_type: EVENTO_FOTO_SINCRONIZAR.to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            traceparent: "00-trace-foto-01-01".to_string(),
+            payload: serde_json::json!({ "contato_id": contato_id, "instance_id": null })
+                .to_string(),
+        }
+    }
+
+    /// Sobe os três serviços de dados com rotas mock para a sincronização da
+    /// foto. `resposta_wa` é o que o `BaixarFotoDoContato` devolve. Registra os
+    /// payloads de `PutFile` e de `RegistrarFotoDoContato`, na ordem.
+    #[allow(clippy::type_complexity)]
+    async fn servicos_da_foto(
+        base: u16,
+        resposta_wa: serde_json::Value,
+    ) -> (
+        AppState,
+        Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+        Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+        Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+        Vec<tokio::task::JoinHandle<()>>,
+    ) {
+        let pg_addr = format!("tcp://127.0.0.1:{base}");
+        let wa_addr = format!("tcp://127.0.0.1:{}", base + 1);
+        let st_addr = format!("tcp://127.0.0.1:{}", base + 2);
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", &pg_addr);
+        std::env::set_var("SMARTCORE_DATA_WHATSAPP_ENDPOINT", &wa_addr);
+        std::env::set_var("SMARTCORE_DATA_STORAGE_ENDPOINT", &st_addr);
+
+        let registros: Arc<std::sync::Mutex<Vec<serde_json::Value>>> = Arc::default();
+        let puts: Arc<std::sync::Mutex<Vec<serde_json::Value>>> = Arc::default();
+        let pedidos_wa: Arc<std::sync::Mutex<Vec<serde_json::Value>>> = Arc::default();
+        let (registros_c, puts_c, pedidos_wa_c) =
+            (registros.clone(), puts.clone(), pedidos_wa.clone());
+
+        let pg_server = Server::new(Endpoint::parse(&pg_addr).unwrap(), "flatbuffers")
+            .route("DestinoDaFotoDoContato", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(
+                            &serde_json::json!({ "instance_id": 42, "telefone": "5511999998888" }),
+                        )
+                        .unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("RegistrarFotoDoContato", move |env| {
+                let registros = registros_c.clone();
+                Box::pin(async move {
+                    let p: serde_json::Value =
+                        serde_json::from_slice(&env.payload).unwrap_or_default();
+                    registros.lock().unwrap().push(p);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(
+                            &serde_json::json!({ "sucesso": true, "alterada": true }),
+                        )
+                        .unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let wa_server = Server::new(Endpoint::parse(&wa_addr).unwrap(), "flatbuffers").route(
+            "BaixarFotoDoContato",
+            move |env| {
+                let pedidos = pedidos_wa_c.clone();
+                let resposta = resposta_wa.clone();
+                Box::pin(async move {
+                    let p: serde_json::Value =
+                        serde_json::from_slice(&env.payload).unwrap_or_default();
+                    pedidos.lock().unwrap().push(p);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&resposta).unwrap(),
+                        ..env
+                    }
+                })
+            },
+        );
+        let st_server = Server::new(Endpoint::parse(&st_addr).unwrap(), "flatbuffers").route(
+            "PutFile",
+            move |env| {
+                let puts = puts_c.clone();
+                Box::pin(async move {
+                    let p: serde_json::Value =
+                        serde_json::from_slice(&env.payload).unwrap_or_default();
+                    puts.lock().unwrap().push(p);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "uri": "r2://k" }))
+                            .unwrap(),
+                        ..env
+                    }
+                })
+            },
+        );
+        let handles = vec![
+            tokio::spawn(async move { pg_server.run().await.unwrap() }),
+            tokio::spawn(async move { wa_server.run().await.unwrap() }),
+            tokio::spawn(async move { st_server.run().await.unwrap() }),
+        ];
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let state = AppState {
+            redis_conn: None,
+            bus_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            pg_client: Arc::new(transport::conectar_cliente("data_postgres").await.unwrap()),
+            whatsapp_client: Arc::new(transport::conectar_cliente("data_whatsapp").await.unwrap()),
+            storage_client: Arc::new(transport::conectar_cliente("data_storage").await.unwrap()),
+            ia_client: Arc::new(ia_engine::MockIaEngineClient::new()),
+            fluxos_cache: FluxosCache::novo(),
+            ia_client_jev: None,
+            intents_cache: IntentsCache::novo(),
+        };
+        (state, registros, puts, pedidos_wa, handles)
+    }
+
+    /// P6 — foto baixada: vai para o R2 com `content_type`, e a MESMA chave é
+    /// registrada no contato. O número vem do `data_postgres`, não do evento.
+    #[tokio::test]
+    async fn sincronizar_foto_grava_no_r2_e_registra_a_chave() {
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let (state, registros, puts, pedidos_wa, handles) = servicos_da_foto(
+            29460,
+            serde_json::json!({ "base64": "QUJD", "mime": "image/jpeg" }),
+        )
+        .await;
+
+        let tenant = Uuid::new_v4().to_string();
+        processar_foto_do_contato(&state, evento_foto(&tenant, 7))
+            .await
+            .unwrap();
+
+        let pedidos = pedidos_wa.lock().unwrap().clone();
+        assert_eq!(pedidos.len(), 1);
+        assert_eq!(pedidos[0]["id"], 42);
+        assert_eq!(pedidos[0]["number"], "5511999998888");
+
+        let puts = puts.lock().unwrap().clone();
+        assert_eq!(puts.len(), 1);
+        let chave = puts[0]["file_name"].as_str().unwrap().to_string();
+        assert_eq!(chave, chave_avatar(7, "QUJD"));
+        assert_eq!(puts[0]["content_type"], "image/jpeg");
+        assert_eq!(puts[0]["content_base64"], "QUJD");
+
+        let registros = registros.lock().unwrap().clone();
+        assert_eq!(registros.len(), 1);
+        assert_eq!(registros[0]["contato_id"], 7);
+        assert_eq!(registros[0]["chave"], chave.as_str());
+
+        for h in handles {
+            h.abort();
+        }
+    }
+
+    /// P6 — sem foto: nada vai para o R2, e o registro pede para apagar a chave.
+    #[tokio::test]
+    async fn sincronizar_foto_sem_foto_apaga_a_chave_sem_gravar_no_r2() {
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let (state, registros, puts, _pedidos_wa, handles) =
+            servicos_da_foto(29463, serde_json::json!({ "sem_foto": true })).await;
+
+        let tenant = Uuid::new_v4().to_string();
+        processar_foto_do_contato(&state, evento_foto(&tenant, 8))
+            .await
+            .unwrap();
+
+        assert!(puts.lock().unwrap().is_empty());
+        let registros = registros.lock().unwrap().clone();
+        assert_eq!(registros.len(), 1);
+        assert_eq!(registros[0]["contato_id"], 8);
+        assert_eq!(registros[0]["sem_foto"], true);
+        assert!(registros[0].get("chave").is_none());
+
+        for h in handles {
+            h.abort();
+        }
+    }
+
+    /// P6 — foto recusada (host fora do CDN): a chave atual fica, só a data
+    /// anda; nada vai para o R2.
+    #[tokio::test]
+    async fn sincronizar_foto_recusada_so_registra_a_verificacao() {
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let (state, registros, puts, _pedidos_wa, handles) =
+            servicos_da_foto(29466, serde_json::json!({ "recusada": "host_recusado" })).await;
+
+        let resultado = sincronizar_foto_do_contato(
+            &state,
+            &Uuid::new_v4().to_string(),
+            9,
+            None,
+            "causa",
+            "00-trace-foto-01-01",
+        )
+        .await;
+
+        assert_eq!(resultado, Ok((ResultadoFoto::HostRecusado, false)));
+        assert!(puts.lock().unwrap().is_empty());
+        let registros = registros.lock().unwrap().clone();
+        assert_eq!(registros.len(), 1);
+        assert!(registros[0].get("chave").is_none());
+        assert!(registros[0].get("sem_foto").is_none());
+
+        for h in handles {
+            h.abort();
+        }
     }
 }

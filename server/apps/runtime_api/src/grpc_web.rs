@@ -560,6 +560,38 @@ async fn assinar_midias_da_pagina(
         return false;
     };
 
+    let Some(urls) =
+        presign_em_lote(storage, tenant_uuid, traceparent, &itens, TTL_URL_MIDIA_S).await
+    else {
+        tracing::warn!("falha ao assinar as mídias da página");
+        return false;
+    };
+
+    for bloco in blocos.iter_mut() {
+        let url = bloco
+            .get("chave")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .and_then(|c| urls.get(c))
+            .cloned();
+        if let (Some(url), Some(obj)) = (url, bloco.as_object_mut()) {
+            obj.insert("url_assinada".to_string(), serde_json::Value::String(url));
+        }
+    }
+    true
+}
+
+/// P2a/P6 — `PresignFiles` em lotes de até [`TETO_PRESIGN_LOTE`] itens
+/// (`{ file_name, content_type? }`). Devolve `chave → URL`, ou `None` se algum
+/// lote falhou (sem detalhe do erro: a mensagem do storage pode carregar a
+/// chave). Nenhuma chave nem URL vai para log.
+async fn presign_em_lote(
+    storage: &transport::MuxClient,
+    tenant_uuid: Uuid,
+    traceparent: &str,
+    itens: &[serde_json::Value],
+    ttl_s: u64,
+) -> Option<std::collections::HashMap<String, String>> {
     let mut urls: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for lote in itens.chunks(TETO_PRESIGN_LOTE) {
         let env_presign = Envelope {
@@ -573,7 +605,7 @@ async fn assinar_midias_da_pagina(
             method: "PresignFiles".to_string(),
             payload: serde_json::to_vec(&serde_json::json!({
                 "itens": lote,
-                "expires_in": TTL_URL_MIDIA_S,
+                "expires_in": ttl_s,
             }))
             .unwrap_or_default(),
             ..Default::default()
@@ -583,11 +615,7 @@ async fn assinar_midias_da_pagina(
             .await
         {
             Ok(r) if r.kind != MessageKind::Error as i32 => r,
-            // Sem detalhe do erro: a mensagem do storage pode carregar a chave.
-            _ => {
-                tracing::warn!("falha ao assinar as mídias da página");
-                return false;
-            }
+            _ => return None,
         };
         let corpo: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
         for u in corpo
@@ -604,19 +632,91 @@ async fn assinar_midias_da_pagina(
             }
         }
     }
+    Some(urls)
+}
 
-    for bloco in blocos.iter_mut() {
-        let url = bloco
-            .get("chave")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .and_then(|c| urls.get(c))
-            .cloned();
-        if let (Some(url), Some(obj)) = (url, bloco.as_object_mut()) {
-            obj.insert("url_assinada".to_string(), serde_json::Value::String(url));
-        }
+/// P6 — validade (s) da URL assinada do avatar do contato. O cliente
+/// reaproveita a URL do mesmo objeto enquanto fresca (regra do C17).
+const TTL_URL_FOTO_S: u64 = 3600;
+
+/// P6 — sem nova sincronização da foto antes disto (a não ser com `forcar`).
+const PRAZO_FOTO_DIAS: i64 = 7;
+
+/// P6 — piso do `forcar`: uma tela em laço não pede sincronização a cada quadro.
+const PISO_FOTO_FORCADA_MIN: i64 = 10;
+
+/// P6 — no máximo tantos pedidos de sincronização por listagem do quadro: o
+/// quadro recarrega a cada evento, e o worker já trava por contato.
+const TETO_SYNC_FOTO_POR_LISTAGEM: usize = 20;
+
+/// P6 — chave do avatar no R2, ou `None` para o que não é uma (vazio ou
+/// legado anterior ao P6 — nunca uma URL).
+fn chave_de_foto(valor: &str) -> Option<&str> {
+    let v = valor.trim();
+    (v.starts_with("contatos/") && !v.contains("://")).then_some(v)
+}
+
+/// P6 — a foto do contato precisa ser sincronizada de novo? Nunca verificada,
+/// mais de 7 dias, ou `forcar` com mais de 10 minutos da última verificação.
+///
+/// É uma decisão pura: quem sincroniza é o worker, pelo barramento — o
+/// `runtime_api` nunca chama o provedor no caminho da requisição.
+fn precisa_sincronizar_foto(verificada_ha: Option<chrono::Duration>, forcar: bool) -> bool {
+    let prazo = if forcar {
+        chrono::Duration::minutes(PISO_FOTO_FORCADA_MIN)
+    } else {
+        chrono::Duration::days(PRAZO_FOTO_DIAS)
+    };
+    verificada_ha.is_none_or(|idade| idade > prazo)
+}
+
+/// P6 — idade da última verificação da foto (`foto_verificada_em` RFC3339).
+fn idade_da_verificacao(v: &serde_json::Value, campo: &str) -> Option<chrono::Duration> {
+    v.get(campo)
+        .and_then(|x| x.as_str())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|d| chrono::Utc::now().signed_duration_since(d))
+}
+
+/// P6 — o `origem` do span de `ObterContatoDoAtendimento`: `agendada` quando
+/// pediu sincronização, `r2` quando devolve a foto guardada, `cache` quando
+/// não há foto e a verificação está em dia.
+fn origem_da_foto(agendada: bool, tem_chave: bool) -> &'static str {
+    match (agendada, tem_chave) {
+        (true, _) => "agendada",
+        (false, true) => "r2",
+        (false, false) => "cache",
     }
-    true
+}
+
+/// P6 — publica `contato.foto.sincronizar` no barramento; o worker baixa a
+/// foto e grava no R2. Best-effort: falhar aqui só adia a foto.
+async fn pedir_sincronizacao_da_foto(
+    bus: &redis::aio::ConnectionManager,
+    tenant_uuid: Uuid,
+    contato_id: i32,
+    traceparent: &str,
+) {
+    let evento = contracts::TenantEnvelope::novo(
+        tenant_uuid,
+        "contato.foto.sincronizar",
+        serde_json::json!({ "contato_id": contato_id, "instance_id": null }),
+    )
+    .com_traceparent(traceparent);
+    let mut conn = bus.clone();
+    if let Err(e) = transport::bus::publicar_evento(&mut conn, &evento).await {
+        tracing::warn!(erro = %e, "falha ao pedir a sincronização da foto do contato");
+    }
+}
+
+/// P6 — o tenant do access token já validado pela chamada anterior (só decodifica:
+/// a blocklist foi conferida por quem autenticou).
+fn tenant_do_token<T>(req: &Request<T>) -> Option<Uuid> {
+    let bearer = bearer_do_metadata(req);
+    let token = bearer.strip_prefix("Bearer ").unwrap_or(&bearer).trim();
+    application::jwt::validar_access_token(token)
+        .ok()
+        .and_then(|c| Uuid::parse_str(&c.tenant_id).ok())
 }
 
 /// Header com que o `mcp_server` declara a tool e o consentimento de cada chamada.
@@ -1790,6 +1890,73 @@ impl AdminFacade {
     pub fn com_ia_jev(mut self, ia_jev: Option<Arc<dyn ia_client::IaEngineClient>>) -> Self {
         self.ia_jev = ia_jev;
         self
+    }
+
+    /// P6 — fotos dos cartões do quadro.
+    ///
+    /// Assina as chaves do R2 (`contato_foto_chave`) numa chamada
+    /// `PresignFiles` (TTL de 3600 s) e grava `contato_foto_url` em cada item.
+    /// Para os contatos com a verificação vencida (ou nunca feita), pede ao
+    /// worker a sincronização — no máximo [`TETO_SYNC_FOTO_POR_LISTAGEM`] por
+    /// chamada; o provedor nunca é chamado aqui.
+    #[tracing::instrument(
+        skip_all,
+        name = "runtime.fotos_do_quadro",
+        fields(tenant_id = %tenant_uuid, qtd = itens.len(), agendadas = tracing::field::Empty)
+    )]
+    async fn preparar_fotos_do_quadro(
+        &self,
+        tenant_uuid: Uuid,
+        traceparent: &str,
+        itens: &mut [serde_json::Value],
+    ) {
+        let mut agendar: Vec<i32> = Vec::new();
+        let mut vistas = std::collections::HashSet::new();
+        let mut pedidos: Vec<serde_json::Value> = Vec::new();
+        for item in itens.iter() {
+            if let Some(chave) = chave_de_foto(&texto_do(item, "contato_foto_chave")) {
+                if vistas.insert(chave.to_string()) {
+                    pedidos.push(serde_json::json!({ "file_name": chave }));
+                }
+            }
+            let contato_id = item.get("contato_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            if contato_id > 0
+                && agendar.len() < TETO_SYNC_FOTO_POR_LISTAGEM
+                && !agendar.contains(&contato_id)
+                && item.get("contato_foto_chave").is_some()
+                && precisa_sincronizar_foto(
+                    idade_da_verificacao(item, "contato_foto_verificada_em"),
+                    false,
+                )
+            {
+                agendar.push(contato_id);
+            }
+        }
+        tracing::Span::current().record("agendadas", agendar.len());
+        for contato_id in agendar {
+            pedir_sincronizacao_da_foto(&self.bus, tenant_uuid, contato_id, traceparent).await;
+        }
+
+        if pedidos.is_empty() {
+            return;
+        }
+        let Some(storage) = self.deps.storage.as_ref() else {
+            return;
+        };
+        let Some(urls) =
+            presign_em_lote(storage, tenant_uuid, traceparent, &pedidos, TTL_URL_FOTO_S).await
+        else {
+            tracing::warn!("falha ao assinar as fotos do quadro");
+            return;
+        };
+        for item in itens.iter_mut() {
+            let url = chave_de_foto(&texto_do(item, "contato_foto_chave"))
+                .and_then(|c| urls.get(c))
+                .cloned();
+            if let (Some(url), Some(obj)) = (url, item.as_object_mut()) {
+                obj.insert("contato_foto_url".into(), serde_json::Value::String(url));
+            }
+        }
     }
 
     /// O motor efetivo do tenant (`llm` | `sombra` | `jev`). Leitura interna,
@@ -6470,15 +6637,15 @@ impl AdminService for AdminFacade {
         Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
-    /// P13 — o contato da conversa, com a foto buscada no WhatsApp sob demanda.
+    /// P13/P6 — o contato da conversa, com a foto guardada no R2.
     ///
-    /// O provedor é consultado no máximo uma vez a cada 7 dias por contato,
-    /// inclusive quando a resposta foi "sem foto". `forcar` ignora o prazo —
-    /// a tela o usa quando a URL guardada não abre (o CDN do WhatsApp assina as
-    /// URLs com validade) — mas não em menos de 10 minutos da última consulta,
-    /// para uma tela em laço não bater no provedor a cada quadro.
-    ///
-    /// Falhar a consulta ao provedor não é erro: devolve o que está guardado.
+    /// `foto_url` é a URL assinada do avatar no R2 (TTL de 3600 s), vazia quando
+    /// não há foto. A foto é sincronizada pelo worker (`contato.foto.sincronizar`):
+    /// no máximo a cada 7 dias por contato, ou com `forcar` (a tela o usa quando
+    /// a imagem não abre) a partir de 10 minutos da última verificação. A
+    /// resposta sai com o que já está guardado — **o provedor nunca é chamado no
+    /// caminho da requisição**; quando a foto nova chega, o realtime avisa com
+    /// `contato.foto_atualizada { contato_id }`.
     #[tracing::instrument(
         skip_all,
         fields(service = "runtime_api", rpc = "ObterContatoDoAtendimento", origem = tracing::field::Empty, traceparent)
@@ -6504,73 +6671,31 @@ impl AdminService for AdminFacade {
             .get("contato_id")
             .and_then(|v| v.as_i64())
             .unwrap_or(0) as i32;
-        let mut foto_url = texto_do(&contato, "foto_url");
-        let verificada_ha = contato
-            .get("foto_verificada_em")
-            .and_then(|v| v.as_str())
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-            .map(|d| chrono::Utc::now().signed_duration_since(d));
-        let prazo = if inner.forcar {
-            chrono::Duration::minutes(10)
-        } else {
-            chrono::Duration::days(7)
-        };
-        let consultar = verificada_ha.is_none_or(|idade| idade > prazo);
+        let foto_chave = texto_do(&contato, "foto_chave");
+        let chave = chave_de_foto(&foto_chave);
+        let agendar = contato_id > 0
+            && precisa_sincronizar_foto(
+                idade_da_verificacao(&contato, "foto_verificada_em"),
+                inner.forcar,
+            );
 
-        let span = tracing::Span::current();
-        if !consultar {
-            span.record("origem", "cache");
-        } else {
-            // A instância e o telefone do atendimento: o mesmo caminho da
-            // presença (P3).
-            let destino = self
-                .encaminhar_operacional(
-                    &req,
-                    "ResolverDestinoDoAtendimento",
-                    &["atendimentos:read"],
-                    serde_json::json!({ "atendimento_id": inner.atendimento_id }),
-                )
-                .await
-                .ok();
-            let alvo = destino.as_ref().and_then(|d| {
-                Some((
-                    d.get("instance_id").and_then(|v| v.as_i64())?,
-                    d.get("to_number").and_then(|v| v.as_str())?.to_string(),
-                ))
-            });
-            if let Some((instance_id, numero)) = alvo {
-                let resposta = self
-                    .encaminhar_tenant(
-                        &req,
-                        &self.whatsapp,
-                        "GetWhatsappProfilePicture",
-                        serde_json::json!({ "id": instance_id, "number": numero }),
-                    )
-                    .await;
-                let achada = resposta
-                    .ok()
-                    .and_then(|r| r.get("url").and_then(|v| v.as_str()).map(str::to_string))
-                    .filter(|u| !u.trim().is_empty());
-                span.record(
-                    "origem",
-                    if achada.is_some() {
-                        "provedor"
-                    } else {
-                        "sem_foto"
-                    },
-                );
-                // Grava a consulta — com ou sem foto — para o freio valer.
-                let _ = self
-                    .encaminhar_operacional(
-                        &req,
-                        "RegistrarFotoDoContato",
-                        &["atendimentos:read"],
-                        serde_json::json!({ "contato_id": contato_id, "foto_url": achada }),
-                    )
-                    .await;
-                if let Some(u) = achada {
-                    foto_url = u;
-                }
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = tenant_do_token(&req);
+        if let (true, Some(tenant_uuid)) = (agendar, tenant_uuid) {
+            pedir_sincronizacao_da_foto(&self.bus, tenant_uuid, contato_id, &traceparent).await;
+        }
+        tracing::Span::current().record("origem", origem_da_foto(agendar, chave.is_some()));
+
+        // URL assinada do avatar. Storage fora do ar = sem foto, nunca erro.
+        let mut foto_url = String::new();
+        if let (Some(chave), Some(storage), Some(tenant_uuid)) =
+            (chave, self.deps.storage.as_ref(), tenant_uuid)
+        {
+            let itens = [serde_json::json!({ "file_name": chave })];
+            match presign_em_lote(storage, tenant_uuid, &traceparent, &itens, TTL_URL_FOTO_S).await
+            {
+                Some(urls) => foto_url = urls.get(chave).cloned().unwrap_or_default(),
+                None => tracing::warn!("falha ao assinar a foto do contato"),
             }
         }
 
@@ -8351,8 +8476,15 @@ impl AdminService for AdminFacade {
                     return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
                 }
 
-                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                let mut val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
+
+                // P6 — fotos dos cartões: assinadas em lote, e sincronização
+                // pedida ao worker para as vencidas. Nada disso derruba o quadro.
+                if let Some(arr) = val.get_mut("atendimentos").and_then(|v| v.as_array_mut()) {
+                    self.preparar_fotos_do_quadro(tenant_uuid, &traceparent, arr)
+                        .await;
+                }
 
                 let mut atendimentos = Vec::new();
                 if let Some(arr) = val.get("atendimentos").and_then(|v| v.as_array()) {
@@ -12294,5 +12426,194 @@ mod tests {
 
         let status = facade.list_tenants(req).await.unwrap_err();
         assert_eq!(status.code(), tonic::Code::Unauthenticated);
+    }
+
+    // -----------------------------------------------------------------------
+    // P6 — foto do contato no R2
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn precisa_sincronizar_foto_respeita_prazo_e_piso_do_forcar() {
+        let horas = chrono::Duration::hours;
+        let minutos = chrono::Duration::minutes;
+        // Nunca verificada: sempre sincroniza.
+        assert!(precisa_sincronizar_foto(None, false));
+        assert!(precisa_sincronizar_foto(None, true));
+        // Dentro dos 7 dias: não sincroniza sem `forcar`.
+        assert!(!precisa_sincronizar_foto(Some(horas(24)), false));
+        assert!(precisa_sincronizar_foto(
+            Some(chrono::Duration::days(8)),
+            false
+        ));
+        // `forcar` respeita o piso de 10 minutos.
+        assert!(!precisa_sincronizar_foto(Some(minutos(5)), true));
+        assert!(precisa_sincronizar_foto(Some(minutos(11)), true));
+    }
+
+    #[test]
+    fn chave_de_foto_aceita_so_chave_do_r2() {
+        assert_eq!(
+            chave_de_foto(" contatos/7/avatar-0a1b2c3d.jpg "),
+            Some("contatos/7/avatar-0a1b2c3d.jpg")
+        );
+        assert_eq!(chave_de_foto(""), None);
+        // Valor legado (URL do CDN) nunca é assinado nem devolvido.
+        assert_eq!(chave_de_foto("https://pps.whatsapp.net/v/t61/x.jpg"), None);
+        assert_eq!(chave_de_foto("contatos/https://evil"), None);
+    }
+
+    #[test]
+    fn origem_da_foto_distingue_agendada_r2_e_cache() {
+        assert_eq!(origem_da_foto(true, true), "agendada");
+        assert_eq!(origem_da_foto(true, false), "agendada");
+        assert_eq!(origem_da_foto(false, true), "r2");
+        assert_eq!(origem_da_foto(false, false), "cache");
+    }
+
+    /// P6 — `ObterContatoDoAtendimento` responde com a foto do R2 assinada por
+    /// 3600 s e, com a verificação vencida, só agenda a sincronização: o
+    /// `data_whatsapp` (provedor) não recebe NENHUMA chamada no caminho da
+    /// requisição.
+    #[tokio::test]
+    async fn obter_contato_nao_chama_o_provedor_e_assina_a_foto_do_r2() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use transport::runtime::{Endpoint, Server};
+
+        let _ =
+            application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
+        let addr = |i: u16| format!("tcp://127.0.0.1:{}", 29470 + i);
+        let resposta = |env: Envelope, corpo: serde_json::Value| Envelope {
+            kind: MessageKind::Reply as i32,
+            payload: serde_json::to_vec(&corpo).unwrap(),
+            ..env
+        };
+
+        // data_postgres: o contato com a chave do R2 e a verificação nunca feita.
+        let pg = Server::new(Endpoint::parse(&addr(0)).unwrap(), "flatbuffers").route(
+            "ContatoDoAtendimento",
+            move |env| {
+                Box::pin(async move {
+                    resposta(
+                        env,
+                        serde_json::json!({
+                            "contato_id": 7,
+                            "nome": "Maria",
+                            "telefone": "5511999998888",
+                            "foto_chave": "contatos/7/avatar-0a1b2c3d.jpg",
+                            "foto_verificada_em": null,
+                        }),
+                    )
+                })
+            },
+        );
+        // data_redis: o token não está na blocklist.
+        let rd = Server::new(Endpoint::parse(&addr(1)).unwrap(), "flatbuffers").route(
+            "IsTokenBlocked",
+            move |env| {
+                Box::pin(async move { resposta(env, serde_json::json!({ "blocked": false })) })
+            },
+        );
+        // data_whatsapp: qualquer chamada aqui seria o provedor no caminho da requisição.
+        let chamadas_provedor = Arc::new(AtomicUsize::new(0));
+        let (c1, c2) = (chamadas_provedor.clone(), chamadas_provedor.clone());
+        let wa = Server::new(Endpoint::parse(&addr(2)).unwrap(), "flatbuffers")
+            .route("GetWhatsappProfilePicture", move |env| {
+                c1.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move { resposta(env, serde_json::json!({ "url": null })) })
+            })
+            .route("BaixarFotoDoContato", move |env| {
+                c2.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move { resposta(env, serde_json::json!({ "sem_foto": true })) })
+            });
+        // data_storage: assina o lote; o TTL volta na URL para o teste conferir.
+        let st = Server::new(Endpoint::parse(&addr(3)).unwrap(), "flatbuffers").route(
+            "PresignFiles",
+            move |env| {
+                Box::pin(async move {
+                    let p: serde_json::Value =
+                        serde_json::from_slice(&env.payload).unwrap_or_default();
+                    let ttl = p["expires_in"].as_u64().unwrap_or(0);
+                    let urls: Vec<serde_json::Value> = p["itens"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .map(|i| {
+                            serde_json::json!({
+                                "file_name": i["file_name"],
+                                "url": format!("https://r2.example/avatar?ttl={ttl}"),
+                            })
+                        })
+                        .collect();
+                    resposta(env, serde_json::json!({ "urls": urls }))
+                })
+            },
+        );
+        for servidor in [pg, rd, wa, st] {
+            tokio::spawn(async move {
+                let _ = servidor.run().await;
+            });
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+        let cliente = |i: u16| async move {
+            transport::MuxClient::conectar(
+                Endpoint::parse(&addr(i)).unwrap(),
+                Box::new(transport::codec::FlatbuffersCodec),
+            )
+            .await
+            .unwrap()
+        };
+        let deps = Arc::new(AuthDeps {
+            pg: cliente(0).await,
+            redis: cliente(1).await,
+            access_ttl_s: 900,
+            refresh_ttl_s: 604_800,
+            login_rate_max: 5,
+            login_rate_window_s: 300,
+            storage: Some(cliente(3).await),
+        });
+        let facade = AdminFacade::new(
+            deps,
+            bus_stub().await,
+            stub_rpc(&addr(4)).await,
+            crate::realtime::RealtimeManager::new("redis://127.0.0.1:63799").unwrap(),
+            cliente(2).await,
+            Arc::new(ia_client::MockIaEngineClient::new()),
+            application::pagamento::RegistroProvedores::default(),
+        );
+
+        let agora = chrono::Utc::now().timestamp();
+        let token = application::jwt::gerar_access_token(&application::jwt::Claims {
+            sub: "1".to_string(),
+            tenant_id: Uuid::new_v4().to_string(),
+            scopes: vec!["atendimentos:read".to_string()],
+            // Superusuário só para pular a resolução de permissões por fluxo,
+            // que não é o assunto deste teste.
+            is_superuser: true,
+            jti: "jti-p6".to_string(),
+            iat: agora as usize,
+            exp: (agora + 300) as usize,
+        })
+        .unwrap();
+        let mut req = Request::new(ObterContatoDoAtendimentoRequest {
+            atendimento_id: 3,
+            forcar: true,
+        });
+        req.metadata_mut()
+            .insert("authorization", format!("Bearer {token}").parse().unwrap());
+
+        let resp = facade
+            .obter_contato_do_atendimento(req)
+            .await
+            .expect("contato")
+            .into_inner();
+
+        assert_eq!(resp.contato_id, 7);
+        assert_eq!(resp.foto_url, "https://r2.example/avatar?ttl=3600");
+        assert_eq!(
+            chamadas_provedor.load(Ordering::SeqCst),
+            0,
+            "o provedor não pode ser chamado no caminho da requisição"
+        );
     }
 }

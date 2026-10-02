@@ -620,6 +620,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_contato_do_atendimento = state_clone.clone();
     let state_for_revisao_pendente = state_clone.clone();
     let state_for_registrar_foto = state_clone.clone();
+    let state_for_destino_foto = state_clone.clone();
     let state_for_listar_nao_entregues = state_clone.clone();
     let state_for_atualizar_perfil_contato = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
@@ -765,6 +766,12 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_registrar_foto.clone();
             Box::pin(async move {
                 handler_registrar_foto_do_contato(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("DestinoDaFotoDoContato", move |env| {
+            let state = state_for_destino_foto.clone();
+            Box::pin(async move {
+                handler_destino_da_foto_do_contato(state.atendimento.as_ref(), env).await
             })
         })
         .route("AplicarReacaoMensagem", move |env| {
@@ -2326,7 +2333,16 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
                         if let Some(c) = contatos.get(&a.id) {
                             obj.insert("contato_nome".into(), serde_json::json!(c.nome));
                             obj.insert("contato_telefone".into(), serde_json::json!(c.telefone));
-                            obj.insert("contato_foto_url".into(), serde_json::json!(c.foto_url));
+                            // P6 — a chave do avatar no R2; o `runtime_api`
+                            // assina em lote e devolve `contato_foto_url`.
+                            obj.insert(
+                                "contato_foto_chave".into(),
+                                serde_json::json!(c.foto_chave),
+                            );
+                            obj.insert(
+                                "contato_foto_verificada_em".into(),
+                                serde_json::json!(c.foto_verificada_em),
+                            );
                             obj.insert(
                                 "revisao_pendente".into(),
                                 serde_json::json!(c.revisao_pendente),
@@ -4142,8 +4158,41 @@ async fn handler_contato_do_atendimento(
     }
 }
 
-/// P13 — grava o resultado da consulta da foto. Sem auditoria, de propósito:
-/// é enriquecimento derivado (decisão da N11 E6).
+/// P6 — o que o payload de `RegistrarFotoDoContato` pede para gravar.
+///
+/// `chave` preenchida = nova foto no R2; `sem_foto: true` = apagar a chave;
+/// nenhum dos dois = só registrar a verificação. A chave precisa estar sob
+/// `contatos/` e caber em `foto_perfil` (VARCHAR(255)) — é o que impede de
+/// gravar ali uma URL do CDN do WhatsApp por engano.
+fn foto_do_payload(
+    payload: &serde_json::Value,
+) -> Result<infrastructure_postgres::atendimentos::atendimentos::FotoDoContato, String> {
+    use infrastructure_postgres::atendimentos::atendimentos::FotoDoContato;
+    let chave = payload
+        .get("chave")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if let Some(c) = chave {
+        if !c.starts_with("contatos/") || c.len() > 255 || c.contains("://") {
+            return Err("chave da foto inválida".into());
+        }
+        return Ok(FotoDoContato::Chave(c.to_string()));
+    }
+    let sem_foto = payload
+        .get("sem_foto")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    Ok(if sem_foto {
+        FotoDoContato::SemFoto
+    } else {
+        FotoDoContato::SoVerificada
+    })
+}
+
+/// P6 — grava o resultado da sincronização da foto (chave do R2). Sem
+/// auditoria, de propósito: é sincronização de sistema (decisão da N11 E6 e
+/// do plano P6). Resposta: `{ alterada }`.
 async fn handler_registrar_foto_do_contato(
     store: &dyn ports::AtendimentoStore,
     env: Envelope,
@@ -4162,20 +4211,56 @@ async fn handler_registrar_foto_do_contato(
             &env,
         );
     };
-    let foto_url = payload
-        .get("foto_url")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.trim().is_empty())
-        .map(|s| s.to_string());
+    let foto = match foto_do_payload(&payload) {
+        Ok(f) => f,
+        Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
+    };
     let ctx = contexto_do_envelope(&env);
     match store
-        .registrar_foto_do_contato(&ctx, contato_id, foto_url)
+        .registrar_foto_do_contato(&ctx, contato_id, foto)
         .await
     {
-        Ok(()) => ok_reply(
+        Ok(alterada) => ok_reply(
             &env,
             "RegistrarFotoDoContatoReply",
-            serde_json::json!({ "sucesso": true }),
+            serde_json::json!({ "sucesso": true, "alterada": alterada }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P6 — conexão e telefone para o worker buscar a foto do contato.
+/// Resposta: `{ instance_id, telefone }`, ou `{ instance_id: null }` quando não
+/// há por onde buscar (o worker então desiste sem erro).
+async fn handler_destino_da_foto_do_contato(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(contato_id) = payload
+        .get("contato_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    else {
+        return erro(
+            error_core::AppError::Validation("contato_id ausente".into()),
+            &env,
+        );
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store.destino_da_foto_do_contato(&ctx, contato_id).await {
+        Ok(Some((instance_id, telefone))) => ok_reply(
+            &env,
+            "DestinoDaFotoDoContatoReply",
+            serde_json::json!({ "instance_id": instance_id, "telefone": telefone }),
+        ),
+        Ok(None) => ok_reply(
+            &env,
+            "DestinoDaFotoDoContatoReply",
+            serde_json::json!({ "instance_id": null }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
@@ -4241,7 +4326,7 @@ async fn handler_aplicar_reacao(store: &dyn ports::AtendimentoStore, env: Envelo
     }
 }
 
-/// P8 — nome de perfil e foto do evento `CONTACTS`.
+/// P8 — nome de perfil do evento `CONTACTS` (P6: a foto saiu daqui).
 async fn handler_atualizar_perfil_do_contato(
     store: &dyn ports::AtendimentoStore,
     env: Envelope,
@@ -4267,22 +4352,21 @@ async fn handler_atualizar_perfil_do_contato(
         .get("nome_perfil")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
-    let foto = payload
-        .get("foto_url")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
+    // P6 — `foto_url` do payload é ignorada de propósito: a URL do CDN do
+    // WhatsApp expira em horas e não pode ser persistida. A foto vai para o R2
+    // pela sincronização (`contato.foto.sincronizar`), com o `contato_id` daqui.
 
     let ctx = contexto_do_envelope(&env);
     match store
-        .atualizar_perfil_do_contato(&ctx, telefone, nome, foto)
+        .atualizar_perfil_do_contato(&ctx, telefone, nome)
         .await
     {
-        // `false` = ninguém com esse telefone no tenant. É o caso comum quando o
+        // `None` = ninguém com esse telefone no tenant. É o caso comum quando o
         // provedor manda a agenda inteira do aparelho, e não é erro.
-        Ok(atualizou) => ok_reply(
+        Ok(contato_id) => ok_reply(
             &env,
             "AtualizarPerfilDoContatoReply",
-            serde_json::json!({ "atualizou": atualizou }),
+            serde_json::json!({ "atualizou": contato_id.is_some(), "contato_id": contato_id }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
@@ -13553,7 +13637,8 @@ mod tests_atendimento_cliente_unit {
                         atendimento_id: 7,
                         nome: "Maria".into(),
                         telefone: "5511999998888".into(),
-                        foto_url: String::new(),
+                        foto_chave: "contatos/42/avatar-0a1b2c3d.jpg".into(),
+                        foto_verificada_em: None,
                         revisao_pendente: false,
                         ultima_mensagem: "Bom dia, quero um orçamento".into(),
                         ultima_mensagem_tipo: "conversation".into(),
@@ -13570,6 +13655,64 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(body["atendimentos"][0]["nao_lidas"], 3);
         // P13 — o cartão deixa de ser `Contato #id`.
         assert_eq!(body["atendimentos"][0]["contato_nome"], "Maria");
+        // P6 — sai a chave do R2 (o runtime_api assina); a URL do CDN não sai mais.
+        assert_eq!(
+            body["atendimentos"][0]["contato_foto_chave"],
+            "contatos/42/avatar-0a1b2c3d.jpg"
+        );
+        assert!(body["atendimentos"][0].get("contato_foto_url").is_none());
+    }
+
+    /// P6 — o payload de `RegistrarFotoDoContato` vira o desfecho certo, e uma
+    /// URL (do CDN ou qualquer outra) nunca é aceita como chave.
+    #[test]
+    fn foto_do_payload_distingue_chave_sem_foto_e_so_verificada() {
+        use infrastructure_postgres::atendimentos::atendimentos::FotoDoContato;
+        assert_eq!(
+            foto_do_payload(&serde_json::json!({ "chave": "contatos/7/avatar-12345678.jpg" })),
+            Ok(FotoDoContato::Chave(
+                "contatos/7/avatar-12345678.jpg".into()
+            ))
+        );
+        assert_eq!(
+            foto_do_payload(&serde_json::json!({ "chave": null, "sem_foto": true })),
+            Ok(FotoDoContato::SemFoto)
+        );
+        assert_eq!(
+            foto_do_payload(&serde_json::json!({ "contato_id": 7 })),
+            Ok(FotoDoContato::SoVerificada)
+        );
+        assert!(foto_do_payload(
+            &serde_json::json!({ "chave": "https://pps.whatsapp.net/v/t61/abc?oh=token" })
+        )
+        .is_err());
+        assert!(foto_do_payload(
+            &serde_json::json!({ "chave": format!("contatos/{}", "x".repeat(300)) })
+        )
+        .is_err());
+    }
+
+    /// P6 — `RegistrarFotoDoContato` repassa a chave ao store e devolve `alterada`.
+    #[tokio::test]
+    async fn registrar_foto_do_contato_grava_a_chave_e_devolve_alterada() {
+        use infrastructure_postgres::atendimentos::atendimentos::FotoDoContato;
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_registrar_foto_do_contato()
+            .times(1)
+            .withf(|_, id, foto| {
+                *id == 7 && *foto == FotoDoContato::Chave("contatos/7/avatar-12345678.jpg".into())
+            })
+            .returning(|_, _, _| Ok(true));
+        let env = envelope_com_payload(
+            "RegistrarFotoDoContato",
+            serde_json::json!({ "contato_id": 7, "chave": "contatos/7/avatar-12345678.jpg" }),
+        );
+
+        let resp = handler_registrar_foto_do_contato(&store, env).await;
+
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["alterada"], true);
     }
 
     /// B6: marcar como lida devolve o espelho para o WhatsApp só quando há o

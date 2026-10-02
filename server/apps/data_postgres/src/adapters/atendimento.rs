@@ -2550,23 +2550,21 @@ impl AtendimentoStore for PgAtendimentoStore {
         ctx: &RequestContext,
         telefone: &str,
         nome_perfil: &str,
-        foto_url: &str,
-    ) -> Result<bool, DbError> {
+    ) -> Result<Option<i32>, DbError> {
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
         let telefone = telefone.to_string();
         let nome = nome_perfil.to_string();
-        let foto = foto_url.to_string();
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            let atualizou = infrastructure_postgres::clientes::contatos::atualizar_perfil_whatsapp(
-                &mut tx,
-                &ctx,
-                &telefone,
-                Some(&nome),
-                Some(&foto),
-            )
-            .await?;
-            Ok((atualizou, tx))
+            let contato_id =
+                infrastructure_postgres::clientes::contatos::atualizar_perfil_whatsapp(
+                    &mut tx,
+                    &ctx,
+                    &telefone,
+                    Some(&nome),
+                )
+                .await?;
+            Ok((contato_id, tx))
         })
         .await
     }
@@ -2640,19 +2638,36 @@ impl AtendimentoStore for PgAtendimentoStore {
         &self,
         ctx: &RequestContext,
         contato_id: i32,
-        foto_url: Option<String>,
-    ) -> Result<(), DbError> {
+        foto: infrastructure_postgres::atendimentos::atendimentos::FotoDoContato,
+    ) -> Result<bool, DbError> {
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            infrastructure_postgres::atendimentos::atendimentos::registrar_foto_do_contato(
-                &mut tx,
-                &ctx,
-                contato_id,
-                foto_url.as_deref(),
-            )
-            .await?;
-            Ok(((), tx))
+            let alterada =
+                infrastructure_postgres::atendimentos::atendimentos::registrar_foto_do_contato(
+                    &mut tx, &ctx, contato_id, &foto,
+                )
+                .await?;
+            Ok((alterada, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, contato_id = contato_id))]
+    async fn destino_da_foto_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<Option<(i64, String)>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let destino =
+                infrastructure_postgres::atendimentos::atendimentos::destino_da_foto_do_contato(
+                    &mut tx, &ctx, contato_id,
+                )
+                .await?;
+            Ok((destino, tx))
         })
         .await
     }

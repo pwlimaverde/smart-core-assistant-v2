@@ -123,6 +123,27 @@ pub fn registrar_realtime_publicado(evento_tipo: &str, resultado: &'static str) 
     );
 }
 
+/// P6 (correcoes-app-windows-flutter) — contador das sincronizações da foto do
+/// contato no R2, por desfecho.
+fn contador_contato_foto() -> &'static Counter<u64> {
+    static C: OnceLock<Counter<u64>> = OnceLock::new();
+    C.get_or_init(|| {
+        global::meter("smartcore_usage")
+            .u64_counter("smartcore_contato_foto_total")
+            .with_description("Sincronizações da foto do contato, por resultado")
+            .init()
+    })
+}
+
+/// Incrementa o contador de sincronizações da foto do contato.
+///
+/// `resultado` é literal de baixa cardinalidade (`"ok"`, `"sem_foto"`,
+/// `"host_recusado"`, `"grande_demais"`, `"erro"`). O `tenant_id` fica de fora
+/// de propósito: o recorte por tenant está no span `contato.foto.sincronizar`.
+pub fn registrar_contato_foto(resultado: &'static str) {
+    contador_contato_foto().add(1, &[KeyValue::new("resultado", resultado)]);
+}
+
 /// Incrementa o contador de transferências decididas pela IA.
 ///
 /// `resultado` e `motor` precisam ser literais de baixa cardinalidade
@@ -184,5 +205,12 @@ mod tests {
     fn registrar_transferencia_ia_nao_entra_em_panico() {
         registrar_transferencia_ia("aplicada", "jev");
         registrar_transferencia_ia("fluxo_desconhecido", "llm");
+    }
+
+    #[test]
+    fn registrar_contato_foto_nao_entra_em_panico() {
+        registrar_contato_foto("ok");
+        registrar_contato_foto("sem_foto");
+        registrar_contato_foto("erro");
     }
 }
