@@ -1266,7 +1266,7 @@ async fn responder_via_ia(
 
     // A confiança entra no span: é número, não revela conteúdo, e é o que
     // permitirá calibrar os limiares antes de ligar o veto.
-    span.record("confianca", resposta.confiabilidade);
+    span.record("smartcore_ia_response_confidence", resposta.confiabilidade);
     // Reserva do motor Jev: quem escreveu e decidiu foi a LLM com schema, e a
     // confiança está na escala dela (cosseno). Marcar "jev" na mensagem e na
     // `resposta_apoiada` misturaria as escalas que o `motor` existe para
@@ -1294,7 +1294,7 @@ async fn responder_via_ia(
     span.record("llm_chamada", llm_chamada);
     span.record("ato", resposta.ato.as_str());
     span.record("escalada", resposta.escalada);
-    span.record("requisicoes", resposta.uso.requisicoes);
+    span.record("smartcore_openai_requests_total", resposta.uso.requisicoes);
     if motor == "jev" {
         // O resumo da decisão num evento só, para os testes com a chave: o
         // ato, por que, quanto custou e onde o tempo foi. Sem texto nenhum.
@@ -3566,7 +3566,7 @@ async fn analisar_mensagem_best_effort(
     )
     .await;
     span.record("assunto_definido", assunto);
-    span.record("duracao_ms", inicio.elapsed().as_millis() as u64);
+    span.record("smartcore_worker_analyse_duration_ms", inicio.elapsed().as_millis() as u64);
 }
 
 /// Grava a análise de uma mensagem: o registro da decisão (motores novos), as
