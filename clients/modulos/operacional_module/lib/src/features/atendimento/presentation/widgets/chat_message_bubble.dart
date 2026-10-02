@@ -4,6 +4,61 @@ import 'package:intl/intl.dart';
 
 import '../../domain/model/mensagem_thread.dart';
 
+/// P1.1-D — onde a bolha cai dentro do bloco de mensagens consecutivas do
+/// mesmo remetente. Decide espaçamento, cantos, rodapé e selo de IA.
+enum PosicaoNoGrupo {
+  /// Sozinha: nem a anterior nem a próxima são do mesmo bloco.
+  unica,
+
+  /// Abre o bloco: a próxima continua, a anterior não.
+  primeira,
+
+  /// No miolo: anterior e próxima são do mesmo bloco.
+  meio,
+
+  /// Fecha o bloco: a anterior continua, a próxima não.
+  ultima;
+
+  /// Começa um bloco — leva o espaço maior acima e o selo de IA.
+  bool get abreBloco => this == unica || this == primeira;
+
+  /// Termina um bloco — leva o espaço maior abaixo e o rodapé (hora + ticks).
+  bool get fechaBloco => this == unica || this == ultima;
+}
+
+/// P1.1-D — duas mensagens são do mesmo bloco quando vêm do mesmo lado da
+/// conversa (bot e atendente contam separados), no mesmo dia e com até
+/// 2 minutos entre elas.
+///
+/// O "mesmo dia" é o que faz o separador de dia quebrar o bloco: onde ele
+/// aparece, as vizinhas nunca são do mesmo bloco. A pendente local (id < 0)
+/// não tem regra própria — está no fim (`ordenarParaExibir`) e agrupa com a
+/// anterior pelo mesmo critério.
+bool mesmoBloco(MensagemThread? a, MensagemThread? b) =>
+    a != null &&
+    b != null &&
+    a.remetente == b.remetente &&
+    DateUtils.isSameDay(a.timestamp, b.timestamp) &&
+    b.timestamp.difference(a.timestamp).abs() <= const Duration(minutes: 2);
+
+/// P1.1-D — a posição de [atual] no bloco, dadas as vizinhas na ordem em que
+/// a conversa é desenhada (mais antiga primeiro). Função pura: a tela só a
+/// chama no `itemBuilder`.
+PosicaoNoGrupo posicaoNoGrupo(
+  MensagemThread? anterior,
+  MensagemThread atual,
+  MensagemThread? proxima,
+) {
+  final continuaAnterior = mesmoBloco(anterior, atual);
+  final continuaNaProxima = mesmoBloco(atual, proxima);
+  return switch ((continuaAnterior, continuaNaProxima)) {
+    (false, false) => PosicaoNoGrupo.unica,
+    (false, true) => PosicaoNoGrupo.primeira,
+    (true, true) => PosicaoNoGrupo.meio,
+    (true, false) => PosicaoNoGrupo.ultima,
+  };
+}
+
 /// Bolha de mensagem do chat (WS-6.3), estilo WhatsApp — usa as cores `chat*`
 /// reservadas no design system. Mensagens de `atendente`/`bot` (outbound)
 /// alinham à direita; `usuario` (inbound) à esquerda.
@@ -16,10 +71,49 @@ class ChatMessageBubble extends StatelessWidget {
   /// ele (a conversa embutida na ficha, por exemplo, não cita).
   final VoidCallback? aoCitar;
 
-  const ChatMessageBubble({super.key, required this.mensagem, this.aoCitar});
+  /// P1.1-D — posição no bloco de mensagens consecutivas. O padrão `unica`
+  /// mantém a bolha completa onde não há vizinhas (ficha, testes).
+  final PosicaoNoGrupo posicao;
+
+  const ChatMessageBubble({
+    super.key,
+    required this.mensagem,
+    this.aoCitar,
+    this.posicao = PosicaoNoGrupo.unica,
+  });
 
   bool get _isOutbound =>
       mensagem.remetente == 'atendente' || mensagem.remetente == 'bot';
+
+  /// Canto "cheio" e canto reduzido do lado de quem falou.
+  static const _raio = Radius.circular(10);
+  static const _raioReduzido = Radius.circular(3);
+
+  /// P1.1-D — no meio e no fim do bloco, o canto de cima do lado do remetente
+  /// encolhe e as bolhas parecem uma pilha só.
+  BorderRadius get _cantos {
+    if (posicao.abreBloco) return AppRadius.card;
+    return BorderRadius.only(
+      topLeft: _isOutbound ? _raio : _raioReduzido,
+      topRight: _isOutbound ? _raioReduzido : _raio,
+      bottomLeft: _raio,
+      bottomRight: _raio,
+    );
+  }
+
+  /// P1.1-D — 1 px dentro do bloco; `AppSpacing.xs` nas bordas do bloco.
+  EdgeInsets get _margem => EdgeInsets.only(
+    top: posicao.abreBloco ? AppSpacing.xs : 1,
+    bottom: posicao.fechaBloco ? AppSpacing.xs : 0,
+  );
+
+  /// P1.1-D — o tick sai do meio do bloco, como no WhatsApp Web, MENOS quando
+  /// a mensagem falhou: esconder a falha atrás da vizinha faria o atendente
+  /// achar que o contato recebeu.
+  bool get _mostraTickSozinho =>
+      !posicao.fechaBloco &&
+      _isOutbound &&
+      mensagem.statusEntrega == StatusEntrega.falhou;
 
   @override
   Widget build(BuildContext context) {
@@ -37,17 +131,19 @@ class ChatMessageBubble extends StatelessWidget {
       alignment: _isOutbound ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 380),
-        margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        margin: _margem,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
           vertical: AppSpacing.xs,
         ),
-        decoration: BoxDecoration(color: bg, borderRadius: AppRadius.card),
+        decoration: BoxDecoration(color: bg, borderRadius: _cantos),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (mensagem.geradoPorIa) ...[
+            // P1.1-D — o selo de IA abre o bloco; repetido em cada bolha
+            // seguida do bot ele vira ruído.
+            if (mensagem.geradoPorIa && posicao.abreBloco) ...[
               _IndicadorIa(colors: colors),
               const SizedBox(height: 4),
             ],
@@ -67,24 +163,32 @@ class ChatMessageBubble extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               _ResumoMidia(resumo: resumo, colors: colors, fg: fg),
             ],
-            const SizedBox(height: 2),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  DateFormat('HH:mm').format(mensagem.timestamp),
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: fg.withValues(alpha: 0.7),
+            // P1.1-D — hora e ticks fecham o bloco: só a última bolha diz
+            // quando o bloco terminou e como ele foi entregue.
+            if (posicao.fechaBloco) ...[
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    DateFormat('HH:mm').format(mensagem.timestamp),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: fg.withValues(alpha: 0.7),
+                    ),
                   ),
-                ),
-                // Tick só no que SAIU: na mensagem do contato não há entrega
-                // a confirmar, e o ícone ali significaria outra coisa.
-                if (_isOutbound) ...[
-                  const SizedBox(width: 4),
-                  _Ticks(status: mensagem.statusEntrega, fg: fg),
+                  // Tick só no que SAIU: na mensagem do contato não há
+                  // entrega a confirmar, e o ícone ali significaria outra
+                  // coisa.
+                  if (_isOutbound) ...[
+                    const SizedBox(width: 4),
+                    _Ticks(status: mensagem.statusEntrega, fg: fg),
+                  ],
                 ],
-              ],
-            ),
+              ),
+            ] else if (_mostraTickSozinho) ...[
+              const SizedBox(height: 2),
+              _Ticks(status: mensagem.statusEntrega, fg: fg),
+            ],
           ],
         ),
       ),
@@ -220,7 +324,9 @@ class _TrechoCitado extends StatelessWidget {
       decoration: BoxDecoration(
         color: fg.withValues(alpha: 0.08),
         borderRadius: AppRadius.card,
-        border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
+        border: Border(
+          left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,9 +344,9 @@ class _TrechoCitado extends StatelessWidget {
             citacao.preview,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: fg.withValues(alpha: 0.75),
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: fg.withValues(alpha: 0.75)),
           ),
         ],
       ),

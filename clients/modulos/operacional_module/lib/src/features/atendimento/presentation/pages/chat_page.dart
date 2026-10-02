@@ -975,6 +975,13 @@ class _ChatBody extends StatelessWidget {
                         final anterior = posicao == 0
                             ? null
                             : viewModel.mensagens[posicao - 1];
+                        // P1.1-D — a vizinha de baixo (mais nova). Com a
+                        // anterior, decide se a bolha abre, continua ou
+                        // fecha o bloco do mesmo remetente.
+                        final proxima =
+                            posicao == viewModel.mensagens.length - 1
+                            ? null
+                            : viewModel.mensagens[posicao + 1];
                         return Column(
                           // P1 — o id é a identidade que existe no cliente: a
                           // pendente local não carrega o `action_id` da fila, e
@@ -990,6 +997,13 @@ class _ChatBody extends StatelessWidget {
                             ChatMessageBubble(
                               mensagem: mensagem,
                               aoCitar: () => aoCitar(mensagem),
+                              // O separador de dia sempre quebra o bloco:
+                              // `mesmoBloco` exige o mesmo dia.
+                              posicao: posicaoNoGrupo(
+                                anterior,
+                                mensagem,
+                                proxima,
+                              ),
                             ),
                           ],
                         );
