@@ -160,6 +160,11 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   int chamadasEnviarMidia = 0;
   String? mimetypeEnviado;
   int bytesEnviados = 0;
+
+  /// P2b — o áudio gravado sobe como `.m4a`, sem legenda.
+  String? nomeArquivoEnviado;
+  String? legendaEnviada;
+  bool? pttEnviado;
   Object? erroEnviarMidia;
 
   /// Progresso reportado ao chamador, para o teste verificar que a barra chega
@@ -180,6 +185,9 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   }) async {
     chamadasEnviarMidia++;
     mimetypeEnviado = mimetype;
+    nomeArquivoEnviado = nomeArquivo;
+    legendaEnviada = legenda;
+    pttEnviado = ehPtt;
     bytesEnviados = bytes.length;
     aoProgredir?.call(0);
     if (erroEnviarMidia != null) throw erroEnviarMidia!;

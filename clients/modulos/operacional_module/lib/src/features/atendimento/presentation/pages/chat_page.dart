@@ -1,19 +1,15 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:cross_file/cross_file.dart';
 import 'package:dependencies_module/dependencies_module.dart' show GetIt;
 import 'package:design_system_module/design_system_module.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:get_it_module/get_it_module.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
-import 'package:record/record.dart';
 
 import '../../domain/model/contato_da_conversa.dart';
 import '../../domain/model/ficha.dart';
@@ -24,6 +20,7 @@ import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/chat_state.dart';
 import '../controllers/ficha_controller.dart';
+import '../gravacao/gravador_de_audio.dart';
 import '../widgets/atendimento_no_quadro.dart';
 import '../widgets/avatar_do_contato.dart';
 import '../widgets/chat_connection_badge.dart';
@@ -79,6 +76,11 @@ class PainelDeConversa extends StatefulWidget {
   /// Falta quando a conversa foi aberta fora do quadro.
   final AtendimentoNoQuadro? noQuadro;
 
+  /// P2b — de onde vem o gravador de áudio. Nulo no app (usa o microfone de
+  /// verdade); os testes passam um com o `AudioRecorder` falso.
+  @visibleForTesting
+  final GravadorDeAudio Function()? criarGravador;
+
   const PainelDeConversa({
     super.key,
     required this.atendimentoId,
@@ -87,6 +89,7 @@ class PainelDeConversa extends StatefulWidget {
     this.aoMinimizar,
     this.aoExpandir,
     this.noQuadro,
+    this.criarGravador,
   });
 
   @override
@@ -216,6 +219,9 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
     _detalhesProprios.dispose();
     _inputController.dispose();
     _rolagem.dispose();
+    // P2b — solta o microfone e o recurso nativo; gravação em curso é
+    // descartada junto com o arquivo temporário.
+    unawaited(_gravador.dispose());
     super.dispose();
   }
 
@@ -374,9 +380,15 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
     }
   }
 
-  /// P3 — o gravador do áudio de voz. Só existe enquanto se grava.
-  final _gravador = AudioRecorder();
+  /// P3 — o gravador do áudio de voz. P2b — o `AudioRecorder` dentro dele só
+  /// nasce no primeiro clique no microfone e é liberado no [dispose].
+  late final GravadorDeAudio _gravador =
+      widget.criarGravador?.call() ?? GravadorDeAudio();
   bool _gravando = false;
+
+  /// Um clique de cada vez: entre o clique e o `start`/`stop` responder há
+  /// espera nativa, e um segundo clique nesse meio embaralharia o estado.
+  bool _mexendoNoGravador = false;
 
   /// P3 — escolhe um arquivo e o manda para a conversa.
   Future<void> _anexar() async {
@@ -395,43 +407,83 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
     );
   }
 
-  /// P3 — grava um áudio de voz (PTT) e o envia ao soltar.
+  /// P3 — grava um áudio de voz e o envia no segundo clique.
   Future<void> _alternarGravacao() async {
     if (!GetIt.instance.isRegistered<EnviarMidiaUsecase>()) return;
-    if (_gravando) {
-      final caminho = await _gravador.stop();
-      setState(() => _gravando = false);
-      await _controller.pararDeDigitar();
-      if (caminho == null) return;
-      final bytes = await XFile(caminho).readAsBytes();
-      await _enviarMidia(
-        nomeArquivo: 'audio.m4a',
-        mimetype: 'audio/mp4',
-        bytes: bytes,
-        ehPtt: true,
+    if (_mexendoNoGravador) return;
+    _mexendoNoGravador = true;
+    try {
+      if (_gravando) {
+        await _pararEEnviar();
+      } else {
+        await _iniciarGravacao();
+      }
+    } finally {
+      _mexendoNoGravador = false;
+    }
+  }
+
+  /// P2b — falha do microfone (sem dispositivo, ocupado, encoder ausente) vira
+  /// aviso, e o botão continua pronto para outra tentativa.
+  Future<void> _iniciarGravacao() async {
+    try {
+      if (!await _gravador.temPermissao()) {
+        _avisar('Sem permissão para usar o microfone.');
+        return;
+      }
+      await _gravador.iniciar();
+    } catch (e) {
+      developer.log(
+        'falha ao iniciar gravação',
+        name: 'operacional_module.audio',
+        level: 900,
+        error: e.runtimeType,
       );
+      _avisar('Não deu para usar o microfone.');
       return;
     }
-    if (!await _gravador.hasPermission()) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sem permissão para usar o microfone.')),
-      );
-      return;
-    }
-    await _gravador.start(const RecordConfig(), path: await _caminhoDoAudio());
+    if (!mounted) return;
     setState(() => _gravando = true);
     // Enquanto grava, o contato vê "gravando áudio...", como no WhatsApp.
     await _controller.avisarQueEstaDigitando(gravandoAudio: true);
   }
 
-  /// Onde o gravador escreve. Na Web não há sistema de arquivos: o `record`
-  /// devolve um blob e ignora o caminho.
-  Future<String> _caminhoDoAudio() async {
-    if (kIsWeb) return '';
-    final dir = await getTemporaryDirectory();
-    final agora = DateTime.now().millisecondsSinceEpoch;
-    return '${dir.path}/ptt_$agora.m4a';
+  Future<void> _pararEEnviar() async {
+    FimDaGravacao fim;
+    try {
+      fim = await _gravador.parar();
+    } catch (e) {
+      developer.log(
+        'falha ao concluir gravação',
+        name: 'operacional_module.audio',
+        level: 900,
+        error: e.runtimeType,
+      );
+      fim = const GravacaoVazia();
+      _avisar('Não deu para concluir a gravação.');
+    }
+    if (!mounted) return;
+    setState(() => _gravando = false);
+    await _controller.pararDeDigitar();
+    switch (fim) {
+      case GravacaoCurta():
+        _avisar('Áudio curto demais: grave por pelo menos 1 segundo.');
+      case GravacaoVazia():
+        return;
+      case AudioGravado(:final bytes):
+        if (!mounted) return;
+        await _enviarMidia(
+          nomeArquivo: nomeDoAudioGravado,
+          mimetype: mimetypeDoAudioGravado,
+          bytes: bytes,
+          ehPtt: true,
+        );
+    }
+  }
+
+  void _avisar(String texto) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
   }
 
   Future<void> _enviarMidia({
@@ -446,6 +498,9 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
         nomeArquivo: nomeArquivo,
         mimetype: mimetype,
         bytes: bytes,
+        // P2b — sem legenda: o servidor manda só a mídia, e o nome do
+        // arquivo deixou de virar texto da mensagem.
+        legenda: '',
         ehPtt: ehPtt,
       ),
     );
