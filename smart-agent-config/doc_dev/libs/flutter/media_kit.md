@@ -34,18 +34,39 @@ Alternativas descartadas:
 ```yaml
 dependencies:
   media_kit: ^1.2.6
-  media_kit_video: ^1.2.6  # Se usar vídeo; opcional para áudio puro
+  media_kit_video: ^2.0.1  # Widget Video/VideoController; série 2.x (não acompanha a versão do media_kit)
+  # Binários nativos (libmpv) — escolher UM pacote de libs, no pubspec do APP:
+  media_kit_libs_windows_video: ^1.0.11  # só Windows (o que o smart-core-tenant usa)
+  # media_kit_libs_video: ^1.0.7         # agregador Android/iOS/macOS/Windows/Linux
 ```
+
+> Os pacotes `media_kit_libs_*_video` e `media_kit_libs_*_audio` não se misturam (README oficial).
+> O pacote de libs vai no app, não no módulo: o `operacional_module` declara só `media_kit` e
+> `media_kit_video`.
 
 ### 2.2 Setup por Plataforma
 
 #### Windows
-Não requer configuração adicional. A lib baixa automaticamente `mpv.dll` na primeira execução.
+O libmpv **não é baixado em runtime**. Ele vem do pacote `media_kit_libs_windows_video` (ou do
+agregador `media_kit_libs_video`): o `CMakeLists.txt` desse plugin baixa o
+`mpv-dev-x86_64-*.7z` (e o ANGLE) **durante o build CMake** e copia `libmpv-2.dll` para junto do
+executável. Consequências:
+
+- o `flutter build windows` precisa de rede nesse passo (CI incluída) — ou de cache do download;
+- o instalador cresce (libmpv + ANGLE);
+- sem o pacote de libs o app compila, mas `Player()` falha ao abrir a biblioteca nativa.
+
+No código, chamar `MediaKit.ensureInitialized()` no `main` antes do `runApp`.
 
 ```powershell
-# (Automático na primeira run)
-flutter run -d windows
+flutter build windows   # o CMake baixa e empacota o libmpv aqui
 ```
+
+#### Web
+Sem libmpv: o `media_kit` usa o elemento HTML `<video>`/`<audio>` do navegador (via
+`package:web`/`dart:js_interop`, compatível com `--wasm`). O suporte a formatos é o do navegador —
+ogg/opus funciona no Chrome/Firefox/Edge, mas não em todos os Safari. URL de outro domínio (R2)
+exige CORS liberado para o domínio do app.
 
 #### macOS/Linux
 ```bash
@@ -358,12 +379,15 @@ Future<void> robustPlayback(String url) async {
 
 | Plataforma | Suporte | Requer |
 |-----------|---------|--------|
-| **Windows** | ✅ Completo | Nada (mpv baixado automaticamente) |
-| macOS | ✅ Completo | libmpv (via Homebrew) |
-| Linux | ✅ Completo | libmpv-dev |
-| Android | ✅ Completo | Media3/ExoPlayer |
-| iOS | ⚠️ Limitado | Via MediaKit iOS (em desenvolvimento) |
-| Web | ❌ Não | Use alternativa (audio element HTML5) |
+| **Windows** | ✅ Completo | `media_kit_libs_windows_video` (libmpv baixado no build CMake) |
+| macOS | ✅ Completo | `media_kit_libs_macos_video` |
+| Linux | ✅ Completo | `media_kit_libs_linux` + libmpv do sistema (`libmpv-dev`) |
+| Android | ✅ Completo | `media_kit_libs_android_video` |
+| iOS | ✅ Completo | `media_kit_libs_ios_video` |
+| Web | ✅ Suportado (README oficial) | Nada: usa `<video>` do navegador; formatos limitados ao navegador; compila com `--wasm` (imports condicionais por `dart.library.js_interop`) |
+
+> Correção (P2a, 2026-10-02): a versão anterior desta tabela dizia "Web ❌" e "mpv baixado
+> automaticamente" — ambos errados frente ao README oficial e ao `CMakeLists.txt` do pacote de libs.
 
 ---
 
@@ -383,6 +407,7 @@ Future<void> robustPlayback(String url) async {
 | Versão | Data | Motivo |
 |--------|------|--------|
 | 1.2.6 | 2026-10-01 | EM_HOMOLOGACAO para Windows desktop; ogg/opus nativo; performance superior; recomendado para áudio/vídeo em desktop |
+| 1.2.6 | 2026-10-02 | P2a (correcoes-app-windows-flutter): adotado na bolha do chat (`operacional_module`) com `media_kit_video` 2.0.1 e `media_kit_libs_windows_video` 1.0.11 no app; corrigidos §2.2 e §7 (libmpv vem do pacote de libs no build; Web suportada) |
 
 ---
 

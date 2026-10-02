@@ -31,6 +31,12 @@ dependencies:
   treinamento_module:
     path: ../../modulos/treinamento_module
   cupertino_icons: ^1.0.8
+  # P2a — `MediaKit.ensureInitialized()` nos entrypoints.
+  media_kit: ^1.2.6
+  # P2a — libmpv empacotado no build CMake do Windows (o app nativo é só
+  # Windows; os pacotes de Android/iOS/macOS/Linux ficam de fora). Na Web o
+  # plugin não tem implementação e não entra no bundle.
+  media_kit_libs_windows_video: ^1.0.11
 
 dev_dependencies:
   flutter_test:

@@ -52,6 +52,13 @@ dependencies:
   path_provider: ^2.1.5
   # P16 — aviso nativo do Windows (só desktop; a web usa o SnackBar).
   flutter_local_notifications: ^22.3.1
+  # P2a — player de áudio e vídeo da bolha. Único que toca ogg/opus (PTT do
+  # WhatsApp) e vídeo no Windows; na Web cai no <video>/<audio> do navegador.
+  # Os binários do libmpv NÃO vêm daqui: o app declara o `media_kit_libs_*`.
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  # P2a — documento da bolha abre no visualizador do sistema.
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   # Registro do controller nos testes de widget.

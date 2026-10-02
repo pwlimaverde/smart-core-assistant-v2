@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/model/mensagem_thread.dart';
+import 'midia_da_bolha.dart';
 
 /// P1.1-D — onde a bolha cai dentro do bloco de mensagens consecutivas do
 /// mesmo remetente. Decide espaçamento, cantos, rodapé e selo de IA.
@@ -75,15 +76,34 @@ class ChatMessageBubble extends StatelessWidget {
   /// mantém a bolha completa onde não há vizinhas (ficha, testes).
   final PosicaoNoGrupo posicao;
 
+  /// P2a — o anexo não carregou (URL assinada vencida). A tela decide
+  /// recarregar a conversa; sem o callback a bolha só mostra "indisponível".
+  final VoidCallback? aoMidiaExpirada;
+
+  /// P2a — substitui o `url_launcher` do cartão de documento (testes).
+  final AbrirUrlExterna? abrirUrl;
+
   const ChatMessageBubble({
     super.key,
     required this.mensagem,
     this.aoCitar,
     this.posicao = PosicaoNoGrupo.unica,
+    this.aoMidiaExpirada,
+    this.abrirUrl,
   });
 
   bool get _isOutbound =>
       mensagem.remetente == 'atendente' || mensagem.remetente == 'bot';
+
+  /// P2a — numa mensagem com anexo o `conteudo` costuma ser o nome do arquivo
+  /// (o que o servidor grava sem legenda); só vira texto da bolha quando é
+  /// legenda de verdade.
+  bool get _mostraConteudo {
+    final midia = mensagem.midia;
+    if (midia == null) return true;
+    final texto = mensagem.conteudo.trim();
+    return texto.isNotEmpty && texto != midia.nomeArquivo.trim();
+  }
 
   /// Canto "cheio" e canto reduzido do lado de quem falou.
   static const _raio = Radius.circular(10);
@@ -151,7 +171,17 @@ class ChatMessageBubble extends StatelessWidget {
               _TrechoCitado(citacao: citacao, fg: fg),
               const SizedBox(height: 4),
             ],
-            Text(mensagem.conteudo, style: TextStyle(color: fg)),
+            if (mensagem.midia case final midia?) ...[
+              MidiaDaBolha(
+                midia: midia,
+                fg: fg,
+                aoMidiaExpirada: aoMidiaExpirada,
+                abrirUrl: abrirUrl,
+              ),
+              if (_mostraConteudo) const SizedBox(height: 4),
+            ],
+            if (_mostraConteudo)
+              Text(mensagem.conteudo, style: TextStyle(color: fg)),
             // P8 — o que a mensagem interativa carrega além do título. Sem isto
             // a enquete chegava só com a pergunta e nenhuma alternativa: quem
             // lia o chat não fazia ideia do que tinha sido perguntado.

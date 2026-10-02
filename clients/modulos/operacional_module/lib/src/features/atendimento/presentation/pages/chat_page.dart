@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:cross_file/cross_file.dart';
 import 'package:dependencies_module/dependencies_module.dart' show GetIt;
@@ -115,6 +116,30 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   /// novo a cada redesenho martelaria o provedor.
   bool _jaPediuFotoNova = false;
 
+  /// P2a — (mensagem, URL) cuja mídia já pediu recarga por estar vencida.
+  /// Uma recarga por mensagem: se a URL que voltar ainda falhar, a bolha fica
+  /// em "indisponível" em vez de recarregar em laço. A URL entra só pelo hash
+  /// — é credencial — e uma URL nova (recarga trouxe outra) pode pedir de novo.
+  final _midiasQuePediramRecarga = <(int, int)>{};
+
+  void _aoMidiaExpirada(MensagemThread mensagem) {
+    final midia = mensagem.midia;
+    if (midia == null) return;
+    if (!_midiasQuePediramRecarga.add((
+      mensagem.id,
+      midia.urlAssinada.hashCode,
+    ))) {
+      return;
+    }
+    developer.log(
+      'mídia indisponível; pedindo recarga da conversa',
+      name: 'operacional_module.midia',
+      level: 500,
+      error: 'tipo=${midia.tipo.name} mimetype=${midia.mimetype}',
+    );
+    _controller.recarregar(motivo: 'midia_expirada');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -222,6 +247,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                 rolagem: _rolagem,
                 aoPararDeRolar: _marcarSeNoFim,
                 aoCitar: _controller.citar,
+                aoMidiaExpirada: _aoMidiaExpirada,
                 aoCancelarCitacao: _controller.cancelarCitacao,
                 aoDigitar: _controller.avisarQueEstaDigitando,
                 aoAnexar: _anexar,
@@ -879,6 +905,9 @@ class _ChatBody extends StatelessWidget {
   final ScrollController rolagem;
   final VoidCallback aoPararDeRolar;
   final void Function(MensagemThread) aoCitar;
+
+  /// P2a — o anexo de uma bolha não carregou.
+  final void Function(MensagemThread) aoMidiaExpirada;
   final VoidCallback aoCancelarCitacao;
   final VoidCallback aoDigitar;
   final VoidCallback aoAnexar;
@@ -894,6 +923,7 @@ class _ChatBody extends StatelessWidget {
     required this.rolagem,
     required this.aoPararDeRolar,
     required this.aoCitar,
+    required this.aoMidiaExpirada,
     required this.aoCancelarCitacao,
     required this.aoDigitar,
     required this.aoAnexar,
@@ -997,6 +1027,7 @@ class _ChatBody extends StatelessWidget {
                             ChatMessageBubble(
                               mensagem: mensagem,
                               aoCitar: () => aoCitar(mensagem),
+                              aoMidiaExpirada: () => aoMidiaExpirada(mensagem),
                               // O separador de dia sempre quebra o bloco:
                               // `mesmoBloco` exige o mesmo dia.
                               posicao: posicaoNoGrupo(
