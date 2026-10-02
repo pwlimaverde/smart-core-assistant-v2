@@ -24,8 +24,8 @@ query_range:
 
 limits_config:
   reject_old_samples: true
-  reject_old_samples_max_age: 744h  # 31 dias
-  retention_period: 720h            # 30 dias (padrão DEV)
+  reject_old_samples_max_age: 168h  # 7 dias
+  retention_period: 336h            # 14 dias
 
 compactor:
   working_directory: /loki/compactor
