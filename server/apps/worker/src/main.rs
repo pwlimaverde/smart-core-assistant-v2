@@ -1859,6 +1859,12 @@ async fn processar_presenca_contato(
     Ok(())
 }
 
+/// P1.1-B — Chave Redis do dedupe realtime. Só ids e o tipo do evento: nome de
+/// chave aparece em `SLOWLOG`/`MONITOR`, então nada de telefone aqui.
+fn chave_dedupe_realtime(tenant_id: Uuid, tipo: &str, discriminador: &str) -> String {
+    format!("tenant:{tenant_id}:rt:{tipo}:{discriminador}")
+}
+
 /// Publica um evento no canal de realtime do tenant (`tenant:<id>:events`), que o
 /// `RealtimeManager` do runtime_api assina.
 ///
@@ -1885,7 +1891,7 @@ async fn publicar_realtime_unico(
         return;
     };
 
-    let chave = format!("tenant:{tenant_id}:rt:{tipo}:{discriminador}");
+    let chave = chave_dedupe_realtime(tenant_id, tipo, discriminador);
     let mut conn = bus_conn.clone();
 
     match redis::cmd("SET")
@@ -6801,13 +6807,21 @@ mod tests {
     /// P1.1-B — Dedupe realtime: o discriminador nunca contém PII (telefone).
     #[test]
     fn publicar_realtime_unico_discriminador_sem_pii() {
-        // A chave de dedupe deve ser genérica: {mensagem_id}:{status}, não números/telefones.
-        let disc_status = format!("{}:{}", 12345, "delivered");
-        assert!(disc_status.chars().all(|c| c.is_ascii_digit() || c == ':'));
-        assert!(!disc_status.contains("55"), "não deve conter DDI");
-        assert!(
-            !disc_status.contains("99"),
-            "não deve conter número parcial"
+        // A chave de dedupe é montada só com ids, tipo e status.
+        let tenant = Uuid::nil();
+        let chave = chave_dedupe_realtime(
+            tenant,
+            "mensagem.status_atualizado",
+            &format!("{}:{}", 12345, "delivered"),
+        );
+        assert_eq!(
+            chave,
+            format!("tenant:{tenant}:rt:mensagem.status_atualizado:12345:delivered")
+        );
+        // Status diferentes da mesma mensagem não colidem na janela.
+        assert_ne!(
+            chave,
+            chave_dedupe_realtime(tenant, "mensagem.status_atualizado", "12345:read")
         );
     }
 
@@ -6841,14 +6855,14 @@ mod tests {
         tx.send("evento_1".to_string()).ok();
         tx.send("evento_2".to_string()).ok();
 
-        // Primeiro recv pega evento_1
-        assert_eq!(rx.recv().await, Ok("evento_1".to_string()));
-
-        // Segundo recv encontra Lagged porque evento_2 foi perdido
-        // (capacidade é 1, só cabe uma mensagem)
+        // Com capacidade 1, evento_1 foi sobrescrito: o primeiro recv informa a perda...
         assert!(matches!(
             rx.recv().await,
-            Err(tokio::sync::broadcast::error::RecvError::Lagged(_))
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(1))
         ));
+
+        // ...e o canal continua utilizável: é por isso que o stream_atendimentos
+        // avisa `stream.defasado` e segue no laço em vez de encerrar.
+        assert_eq!(rx.recv().await, Ok("evento_2".to_string()));
     }
 }
