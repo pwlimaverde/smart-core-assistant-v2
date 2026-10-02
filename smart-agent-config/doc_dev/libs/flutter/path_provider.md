@@ -1,8 +1,8 @@
 # Path Provider (path_provider)
 
-- **Versão Recomendada:** 2.1.2
+- **Versão Recomendada:** 2.1.5
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-05-31
+- **Última Verificação:** 2026-10-01
 - **Propósito no Projeto:** Localização multiplataforma de diretórios de arquivos no sistema operacional (Windows) para armazenamento persistente de mídias baixadas (cache de imagem, áudio) e índice do banco local.
 - **Documentação Oficial:** [https://pub.dev/packages/path_provider](https://pub.dev/packages/path_provider)
 
@@ -59,3 +59,25 @@ Future<void> bootstrapLocalEngine() async {
 
 ### 2.3 Resiliência de I/O de Arquivos
 Operações de leitura e gravação física em disco do Windows podem falhar caso o usuário fique sem espaço de disco ou o antivírus bloqueie a pasta local. Sempre trate erros de I/O em bloco try-catch do Dart/Rust e execute limpezas periódicas de mídias antigas (cache LRU) para respeitar limites de armazenamento em disco.
+
+---
+
+## 3. APIs Principais
+
+| API | Descrição | Windows |
+|-----|-----------|---------|
+| `getTemporaryDirectory()` | Retorna pasta de cache temporário do SO | ✅ |
+| `getApplicationSupportDirectory()` | Retorna `AppData/Local/<app>` do usuário | ✅ |
+| `getApplicationDocumentsDirectory()` | Retorna `Documents` do usuário | ✅ |
+| `getDownloadsDirectory()` | Retorna pasta de Downloads | ✅ |
+| `getApplicationCacheDirectory()` | Retorna pasta de cache do aplicativo | ✅ |
+| `getExternalStorageDirectory()` | Android; N/A em Windows | ❌ |
+
+---
+
+## 4. Histórico de Atualizações
+
+| Versão | Data | Motivo |
+|--------|------|--------|
+| 2.1.5 | 2026-10-01 | Versão recomendada para Windows; melhorias em PlatformInterface; suporte Flutter >=3.19.0 |
+| 2.1.2 | 2026-05-31 | Versão anterior estável |

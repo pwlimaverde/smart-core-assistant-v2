@@ -1,8 +1,8 @@
 # Just Audio
 
-- **Versão Recomendada:** 0.9.34 (compatível com Flutter 3.12.2/Dart 3.12)
+- **Versão Recomendada:** 0.10.6 (compatível com Flutter 3.44+/Dart 3.12; Windows via just_audio_windows/just_audio_media_kit)
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-08-09
+- **Última Verificação:** 2026-10-01
 - **Propósito no Projeto:** Reprodução de áudio de múltiplas fontes (URL/arquivo/asset/stream) com suporte a gapless playback, playlists, duração e controles avançados em Web e Windows.
 - **Documentação Oficial:** [https://github.com/ryanheise/just_audio](https://github.com/ryanheise/just_audio)
 - **Source (Context7):** `/ryanheise/just_audio` | Reputation: High | Code Snippets: 439
@@ -322,8 +322,58 @@ Future<void> robustPlayback(AudioPlayer player) async {
 
 ---
 
-## 8. Histórico de Atualizações
+## 8. Suporte Windows Desktop
+
+Para usar just_audio no Windows, adicione um dos backends:
+
+```yaml
+dependencies:
+  just_audio: ^0.10.6
+  just_audio_windows: ^0.9.x  # OU
+  # just_audio_media_kit: ^1.x  # OU
+  # just_audio_libwinmedia: ^0.x
+```
+
+### Opções de Backend Windows
+
+| Backend | Codec | Recomendado | Notas |
+|---------|-------|-------------|-------|
+| `just_audio_windows` | WinMedia | ✅ | Simples; codecs limitados |
+| `just_audio_media_kit` | libmpv | ✅ | Melhor; ogg/opus; seek preciso |
+| `just_audio_libwinmedia` | libwinmedia | ⚠️ | Experimental |
+
+### Exemplo: Reproduzir OGG/Opus no Windows
+
+```dart
+import 'package:just_audio/just_audio.dart';
+
+Future<void> playOggOpusOnWindows() async {
+  final player = AudioPlayer();
+  
+  try {
+    // URL com arquivo opus/ogg
+    final duration = await player.setUrl(
+      'https://api.example.com/audio/message.opus',
+      headers: {'Authorization': 'Bearer token'},
+    );
+    
+    print('Duração: $duration');
+    await player.play();
+  } on PlayerException catch (e) {
+    print('Erro: ${e.message}');
+  } finally {
+    await player.dispose();
+  }
+}
+```
+
+**Nota:** OGG/Opus funciona melhor com `just_audio_media_kit`. No `just_audio_windows` puro, pode haver limitações.
+
+---
+
+## 9. Histórico de Atualizações
 
 | Versão | Data | Motivo |
 |--------|------|--------|
-| 0.9.34 | 2026-08-09 | Versão estável atual; suporte robusto a Web e Windows; compatível com Flutter 3.12.2; gapless playback em desktop |
+| 0.10.6 | 2026-10-01 | Versão recomendada; Windows via just_audio_media_kit (ogg/opus); gapless playback desktop; melhorias em buffering |
+| 0.9.34 | 2026-08-09 | Versão anterior estável; suporte robusto a Web e Windows; compatível com Flutter 3.12.2 |

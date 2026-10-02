@@ -1,8 +1,8 @@
 # Record
 
-- **Versão Recomendada:** 5.1.2 (compatível com Flutter 3.12.2/Dart 3.12)
+- **Versão Recomendada:** 6.1.1 (compatível com Flutter 3.44+/Dart 3.12; Windows Media Foundation, opus/ogg)
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-08-09
+- **Última Verificação:** 2026-10-01
 - **Propósito no Projeto:** Gravação de áudio from microphone (push-to-talk pattern), com suporte a múltiplos codecs/formatos, permissões nativas e obtenção de bytes ao parar a gravação.
 - **Documentação Oficial:** [https://github.com/llfbandit/record](https://github.com/llfbandit/record)
 - **Source (Context7):** `/llfbandit/record` | Reputation: Medium | Code Snippets: 108
@@ -274,10 +274,19 @@ const RecordConfig(
 - `RecorderConfig` renomeado para `RecordConfig`
 - Disposição obrigatória via `dispose()` para liberar recursos
 
+### v5.1.2 → v6.0.0+
+
+- **Streams como broadcast**: `startStream()` agora retorna broadcast stream (múltiplos listeners)
+- Comportamento de `stop()` melhorado: resolve adequadamente mesmo se não estiver gravando
+- iOS/macOS separados em packages específicos (compatibilidade melhor)
+- Linux: `parecord` e `ffmpeg` agora usados em vez de `fmedia`
+- **API core inalterada**: `hasPermission()`, `start()`, `stop()`, `RecordConfig()` funcionam igual
+
 ---
 
 ## 8. Histórico de Atualizações
 
 | Versão | Data | Motivo |
 |--------|------|--------|
-| 5.1.2 | 2026-08-09 | Versão estável; suporte robusto a Web (MediaRecorder), Windows (WMF) e desktop; compatível com Flutter 3.12.2 |
+| 6.1.1 | 2026-10-01 | Versão recomendada para Windows; suporte opus/ogg; streams broadcast; melhor estabilidade; last version before v7 (que exigirá Flutter >=3.44) |
+| 5.1.2 | 2026-08-09 | Versão anterior estável; suporte robusto a Web (MediaRecorder), Windows (WMF) e desktop; compatível com Flutter 3.12.2 |

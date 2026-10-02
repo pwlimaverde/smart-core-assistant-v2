@@ -4,14 +4,16 @@ This directory contains plans for coordinating work across documentation and pla
 
 ## Plan Queue
 1. [Cadastro Retomavel E Pagamento](./cadastro-retomavel-e-pagamento.md)
-2. [Ia Engine Jev](./ia-engine-jev.md)
-3. [N10 Ia Analitica](./n10-ia-analitica.md)
-4. [N11 Operacao Cadastros](./n11-operacao-cadastros.md)
-5. [N12 Cutover Producao](./n12-cutover-producao.md)
-6. [N13 Mcp Agentes](./n13-mcp-agentes.md)
-7. [N9 Conversa Completa](./n9-conversa-completa.md)
-8. [Painel Crm E Campos Do Cartao](./painel-crm-e-campos-do-cartao.md)
-9. [Regras Do Bot E Permissoes](./regras-do-bot-e-permissoes.md)
+2. [Contact Sync](./contact-sync.md)
+3. [Correcoes App Windows Flutter](./correcoes-app-windows-flutter.md)
+4. [Ia Engine Jev](./ia-engine-jev.md)
+5. [N10 Ia Analitica](./n10-ia-analitica.md)
+6. [N11 Operacao Cadastros](./n11-operacao-cadastros.md)
+7. [N12 Cutover Producao](./n12-cutover-producao.md)
+8. [N13 Mcp Agentes](./n13-mcp-agentes.md)
+9. [N9 Conversa Completa](./n9-conversa-completa.md)
+10. [Painel Crm E Campos Do Cartao](./painel-crm-e-campos-do-cartao.md)
+11. [Regras Do Bot E Permissoes](./regras-do-bot-e-permissoes.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

@@ -2,7 +2,7 @@
 
 - **Versão Recomendada:** 1.38.0
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-05-31
+- **Última Verificação:** 2026-10-01
 - **Propósito no Projeto:** Runtime assíncrono para execução concorrente do backend Rust e do local_engine.
 - **Documentação Oficial:** [https://tokio.rs/](https://tokio.rs/)
 
@@ -80,3 +80,35 @@ match response {
     Err(_) => log::warn!("Operação expirou (timeout de 5s excedido)."),
 }
 ```
+
+---
+
+## 3. Features Principais de Tokio 1.38 (com feature `full`)
+
+Quando ativada a feature `full`, o Tokio expõe:
+
+- **tokio::time**: `sleep()`, `interval()`, `timeout()`, `Instant`, `Sleep`
+- **tokio::sync**: `mpsc` (canal multi-produtor, single-consumidor), `broadcast` (pub/sub com tracking de lag), `watch` (broadcast de um único valor), `oneshot` (canal de resposta)
+- **tokio::task**: `spawn()`, `spawn_blocking()`, `JoinSet` (gerenciador de múltiplas tasks com Builder)
+- **tokio::select!**: Macro para multiplexação de operações assíncronas (semelhante a `select` Unix)
+- **I/O assíncrono**: TCP, UDP, pipes nomeados, file system ops (novo em 1.38: `File::create_new`)
+- **Notificações**: `Notify::notify_last()` (novo em 1.38) para notificar apenas a última task aguardando
+- **Semáforo**: Suporte a `split()` de permits (novo em 1.38)
+- **Metricas de runtime**: `RuntimeMetrics::worker_count` estabilizado em 1.38
+
+### Features adicionadas em 1.38.0 (sem breaking changes)
+
+- `mpsc::Receiver::{capacity,max_capacity}()` para introspecção de canais
+- `JoinSet::Builder::spawn_blocking()` para integração com operações síncronas
+- Suporte a plataformas: Apple visionOS, QNX, wasm32-wasi-preview1-threads
+- `Copy` trait para `NamedPipeInfo`
+- `copy_bidirectional_with_sizes()` para controlar buffer de cópia bidirecional
+
+Nenhuma API foi depreciada ou removida em 1.38.0 — versão é totalmente retrocompatível com 1.37.
+
+---
+
+## Histórico de Atualizações
+
+- **2026-10-01:** Atualização de verificação: confirmadas features de 1.38.0 via docs.rs e GitHub releases. Adicionada seção "Features Principais de Tokio 1.38 (com feature `full`)" com novas APIs (capacity/max_capacity, notify_last, split de semáforo, Builder::spawn_blocking, RuntimeMetrics::worker_count). Nenhuma breaking change identificada — 1.38 é retrocompatível com 1.37. Documentação oficial: https://tokio.rs/, docs.rs: https://docs.rs/tokio/1.38/tokio/
+- **2026-05-31:** Documentação inicial.

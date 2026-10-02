@@ -2,7 +2,7 @@
 
 - **Versão Recomendada:** 0.25.0
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-06-10
+- **Última Verificação:** 2026-10-01
 - **Library ID Context7:** `/redis-rs/redis-rs`
 - **Propósito no Projeto:** Barramento de eventos assíncronos (Redis Streams), gerenciamento de cache, controle de presença e pub/sub de realtime (WebSocket).
 - **Documentação Oficial:** [https://docs.rs/redis/latest/redis/](https://docs.rs/redis/latest/redis/)
@@ -359,10 +359,51 @@ pub fn xack<K, G, I>(
 
 ---
 
+---
+
+## 8. Mudanças Importantes 0.25.x → 0.26+
+
+> **Atenção:** Projeto está fixado em redis **0.25.0** e não há plano imediato de bump. Esta seção documenta o que muda se/quando atualizar.
+
+### 0.26+ Changes (Breaking)
+
+A partir de redis-rs **0.26**, a seguinte API é descontinuada:
+
+- **`ConnectionManagerConfig` e `AsyncConnectionConfig` foram removidas** (não existem em 0.25.x, só aparecem em ≥1.0)
+- **`xautoclaim`/`xautoclaim_options` passam a existir** a partir de redis-rs 1.0, simplificando o retry de streams
+
+### Padrão de Migração Futuro (quando bumpar)
+
+Quando migrar de 0.25.x para 0.26+:
+
+```rust
+// ===== 0.25.x (Atual) =====
+let manager = ConnectionManager::new_with_backoff_and_timeouts(
+    client,
+    2, 100, 6,
+    Duration::from_secs(2),  // response_timeout
+    Duration::from_secs(2),  // connection_timeout
+).await?;
+
+// ===== 0.26+ / 1.0+ (Futuro) =====
+use redis::aio::ConnectionManagerConfig;
+
+let config = ConnectionManagerConfig::default()
+    .response_timeout(Duration::from_secs(2))
+    .connection_timeout(Duration::from_secs(2));
+
+let manager = ConnectionManager::new_with_config(client, config).await?;
+```
+
+Seções 5.2 e 5.3 (XPENDING/XCLAIM) podem ser simplificadas com `xautoclaim` em 1.0+.
+
+---
+
 ## Histórico de Atualizações
 
 | Data | Motivo | Mudanças |
 | --- | --- | --- |
+| 2026-10-01 | Atualização de verificação (v0.25.0) | Confirmada fixação em 0.25.0. Adicionada seção "Mudanças Importantes 0.25.x → 0.26+" com path de migração futuro (ConnectionManagerConfig, xautoclaim em 1.0+). Coletada documentação via docs.rs/redis/0.25 e GitHub. Nenhuma breaking change detectada em 0.25.0 — maintenance/bug-fix release. Documentação: https://docs.rs/redis/0.25/redis/ |
 | 2026-06-10 | Plan `otimizacao-pools-observabilidade` | Adicionadas seções 3–7 (timeouts, conexão dedicada BLOCK, XPENDING/XCLAIM, DEL variádico, XREADGROUP/XACK). **Correção pós-validação no fonte vendorizado 0.25.5:** removidas APIs inexistentes nesta versão — `ConnectionManagerConfig`/`AsyncConnectionConfig` → `new_with_backoff_and_timeouts`; `xautoclaim`/`xautoclaim_options` → `xpending_count.times_delivered` + `xclaim`. (Context7 só indexa redis ≥1.0.) |
 | 2026-05-31 | Inicial | Contexto, namespaces, publicação no Streams, debounce lock |
 ```

@@ -1,8 +1,8 @@
 # Serde
 
-- **Versão Recomendada:** 1.0.203
+- **Versão Recomendada:** 1.0.229
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-05-31
+- **Última Verificação:** 2026-10-01
 - **Propósito no Projeto:** Serialização e desserialização de estruturas de dados (DTOs, eventos, payloads do webhook e bancos de dados) para formatos como JSON e Protobuf.
 - **Documentação Oficial:** [https://serde.rs/](https://serde.rs/)
 
@@ -82,3 +82,63 @@ Sempre ative as features `serde` em crates externas como `chrono` e `uuid` no `C
 uuid = { version = "1.8", features = ["v4", "v7", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 ```
+
+---
+
+## 3. APIs Principais de Serde 1.0.x
+
+### Derive Macros (com feature `derive`)
+
+```rust
+#[derive(Serialize, Deserialize)]
+pub struct MyStruct {
+    field: String,
+}
+```
+
+### Traits Fundamentais
+
+```rust
+// Serialização
+pub trait Serialize {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    { ... }
+}
+
+// Desserialização
+pub trait Deserialize<'de>: Sized {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    { ... }
+}
+```
+
+### Atributos Comuns de Derive
+
+- `#[serde(rename_all = "camelCase")]` — Rename todos os campos
+- `#[serde(skip_serializing_if = "Option::is_none")]` — Omitir campos vazios no JSON
+- `#[serde(default)]` — Usar tipo Default se campo omitido na desserialização
+- `#[serde(tag = "type", content = "data")]` — Serialização internamente marcada de enums
+- `#[serde(deny_unknown_fields)]` — Falhar se JSON contém campos não definidos
+- `#[serde(remote = "path")]` — Derivar para tipos de crates externas (bypass orphan rule)
+
+### Suporte a Zero-Copy Deserialization (Lifetime `'de`)
+
+Serde 1.0 habilita desserialização com borrowing — strings podem referenciar substrings do input sem alocação:
+
+```rust
+#[derive(Deserialize)]
+pub struct Record<'de> {
+    pub name: &'de str,  // Referencia a substring do JSON, sem clone
+}
+```
+
+---
+
+## 4. Histórico de Atualizações
+
+- **2026-10-01:** Atualização de verificação: confirmada versão 1.0.229 (released 2026-09-29). Coletada documentação via docs.rs/serde/1.0 e GitHub release notes. Adicionada seção "APIs Principais de Serde 1.0.x" com assinaturas dos traits Serialize/Deserialize, atributos comuns de derive (rename_all, skip_serializing_if, default, tag/content, deny_unknown_fields, remote), e exemplo de zero-copy deserialization com lifetime `'de`. Nenhuma breaking change em 1.0.x — versão mantém estabilidade API desde 1.0.0 (setembro 2026). Documentação oficial: https://serde.rs/, docs.rs: https://docs.rs/serde/1.0/serde/
+- **2026-05-31:** Documentação inicial.

@@ -1,8 +1,8 @@
 # Video Player
 
-- **Versão Recomendada:** 2.8.5 (compatível com Flutter 3.12.2/Dart 3.12)
+- **Versão Recomendada:** 2.8.5 (compatível com Flutter 3.44+/Dart 3.12; Web/Mobile apenas — NÃO Windows)
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-08-09
+- **Última Verificação:** 2026-10-01
 - **Propósito no Projeto:** Reprodução de vídeo por URL com suporte a Web e mobile (Android/iOS). **ATENÇÃO: Não suporta Windows Desktop.**
 - **Documentação Oficial:** [https://pub.dev/packages/video_player](https://pub.dev/packages/video_player)
 - **Source (Context7):** `/websites/pub_dev_video_player` | Reputation: High | Code Snippets: 397
@@ -334,8 +334,26 @@ Future<void> safeVideoPlayback(String url) async {
 
 ---
 
-## 8. Histórico de Atualizações
+## 8. Recomendação para Windows Desktop
+
+**Para Windows, use `media_kit` em vez de `video_player`:**
+
+```yaml
+dependencies:
+  media_kit: ^1.2.6
+  media_kit_video: ^1.2.6
+```
+
+Motivos:
+- Video_player não suporta Windows desktop
+- Media_kit suporta ogg, mp4, e muitos formatos
+- Performance melhor em desktop (libmpv)
+- Melhor para reprodução profissional
+
+---
+
+## 9. Histórico de Atualizações
 
 | Versão | Data | Motivo |
 |--------|------|--------|
-| 2.8.5 | 2026-08-09 | Versão estável; Web (HTML5) e mobile (Android/iOS) suportados; **Windows NÃO suportado** — usar media_kit ou better_player para desktop |
+| 2.8.5 | 2026-10-01 | Versão estável; Web (HTML5) e mobile (Android/iOS) suportados; **Windows NÃO suportado** — usar media_kit para desktop |

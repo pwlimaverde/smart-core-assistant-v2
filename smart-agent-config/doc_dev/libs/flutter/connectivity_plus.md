@@ -1,8 +1,8 @@
 # connectivity_plus
 
-- **Versão Recomendada:** 6.x (atual 6.1.x+)
+- **Versão Recomendada:** 7.3.0
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-07-18
+- **Última Verificação:** 2026-10-01
 - **Propósito no Projeto:** Trigger de sincronização por reconexão no desktop (fase N7.4) — o `local_engine_ffi` dispara `sincronizar()` quando a conectividade volta, complementando o timer periódico e o best-effort na abertura da fila.
 - **Documentação Oficial:** https://pub.dev/packages/connectivity_plus
 - **Library ID Context7:** `/websites/pub_dev_packages_connectivity_plus`
@@ -11,7 +11,24 @@
 
 ## Histórico de Atualizações
 
-- **2026-07-18** — Documentação inicial criada via Context7. Foco no listener `onConnectivityChanged` (retorna `Stream<List<ConnectivityResult>>` desde a v5), `checkConnectivity()` e no **caveat central**: detecta tipo de interface de rede, NÃO garante alcance real da internet.
+| Versão | Data | Motivo |
+|--------|------|--------|
+| 7.3.0 | 2026-10-01 | Versão recomendada; Stream<List<ConnectivityResult>> confirmado; suporte Windows 10+ estável; Flutter >=3.19.0 |
+| 6.1.x | 2026-07-18 | Versão anterior; API similar mas sem aprimoramentos da v7 |
+
+---
+
+## Breaking Changes (v6 → v7)
+
+A transição da v6 para v7 mantém a **API principal inalterada**:
+- `onConnectivityChanged` continua retornando `Stream<List<ConnectivityResult>>`
+- `checkConnectivity()` idem
+
+**Mudanças de requisitos:**
+- Requer Flutter >=3.19.0, Dart >=3.3.0 (vs 3.0.0 antes)
+- Melhorias internas em estabilidade e performance no listener
+
+**Recomendação:** Upgrade direto; sem código necessário para adaptar.
 
 ---
 

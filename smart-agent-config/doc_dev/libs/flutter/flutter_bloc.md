@@ -2,7 +2,7 @@
 
 - **Versão Recomendada:** 9.1.1 (par com `bloc ^9.2.1`; API de `Cubit`/`BlocBuilder`/`BlocListener` inalterada vs 8.x — 9.0 removeu apenas `BlocOverrides`)
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-06-14
+- **Última Verificação:** 2026-10-01
 - **Propósito no Projeto:** Gerenciamento de estado previsível e reativo baseado no padrão BLoC (Business Logic Component) para controlar as interações visuais complexas do Chat e Kanban.
 - **Documentação Oficial:** [https://bloclibrary.dev/](https://bloclibrary.dev/)
 
@@ -110,3 +110,125 @@ Widget build(BuildContext context) {
   );
 }
 ```
+
+### 2.4 Emit, isClosed e Ciclo de Vida
+
+O método `emit()` é usado para emitir novos estados. Porém, **emitir após `close()` gera erro**. Para evitar isso:
+
+```dart
+Future<void> _onSomeEvent(SomeEvent event, Emitter<State> emit) async {
+  if (isClosed) return; // Guarda: bloc já foi descartado
+  
+  emit(LoadingState());
+  
+  try {
+    final data = await _repository.fetch();
+    if (!isClosed) { // Verificar novamente antes de emit assíncrono
+      emit(SuccessState(data));
+    }
+  } catch (e) {
+    if (!isClosed) {
+      emit(ErrorState(e.toString()));
+    }
+  }
+}
+```
+
+**Melhor prática:** Use `isClosed` para guardar emits em operações assíncronas prolongadas, evitando erros ao descartar o BLoC durante requisições pendentes.
+
+### 2.5 Filtragem com buildWhen e listenWhen
+
+Para evitar rebuilds desnecessários quando chegam múltiplos eventos por mensagem:
+
+```dart
+BlocBuilder<KanbanBloc, KanbanState>(
+  buildWhen: (previous, current) {
+    // Só reconstrói se o estado for diferente (não apenas emitido novamente)
+    return previous.hashCode != current.hashCode;
+  },
+  builder: (context, state) {
+    return KanbanBoardWidget(stages: state.stages);
+  },
+)
+
+BlocListener<KanbanBloc, KanbanState>(
+  listenWhen: (previous, current) {
+    // Só dispara listener se houver mudança relevante
+    return current is KanbanError;
+  },
+  listener: (context, state) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(state.message)),
+    );
+  },
+)
+```
+
+### 2.6 Transformers e Debounce com bloc_concurrency
+
+Para evitar múltiplos eventos de rede quando chegam vários eventos rapidamente:
+
+```dart
+import 'package:bloc_concurrency/bloc_concurrency.dart';
+import 'package:stream_transform/stream_transform.dart';
+
+class SearchBloc extends Bloc<SearchEvent, SearchState> {
+  SearchBloc() : super(SearchInitial()) {
+    on<SearchQueryChanged>(
+      _onSearchQueryChanged,
+      transformer: debounceDroppable(const Duration(milliseconds: 300)),
+    );
+  }
+
+  Future<void> _onSearchQueryChanged(
+    SearchQueryChanged event,
+    Emitter<SearchState> emit,
+  ) async {
+    emit(SearchLoading());
+    try {
+      final results = await _repository.search(event.query);
+      emit(SearchSuccess(results));
+    } catch (e) {
+      emit(SearchError(e.toString()));
+    }
+  }
+}
+```
+
+**Transformers disponíveis:**
+- `debounceDroppable()` — aguarda N ms antes de processar; cancela anteriores
+- `throttleDroppable()` — processa apenas 1 evento a cada N ms
+- `restartable()` — cancela anterior e reinicia ao novo evento
+- `concurrent()` — processa sem cancelar
+
+### 2.7 Distinct e Equatable
+
+Para evitar emits de estado duplicado:
+
+```dart
+import 'package:equatable/equatable.dart';
+
+class MyState extends Equatable {
+  final List<Item> items;
+  
+  const MyState({required this.items});
+  
+  @override
+  List<Object?> get props => [items]; // Compara por valor, não referência
+}
+
+// No BLoC:
+Future<void> _onLoad(LoadEvent event, Emitter<MyState> emit) async {
+  emit(const MyState(items: [])); // distinct ignora emit idêntico
+  final items = await _repository.fetch();
+  emit(MyState(items: items)); // Emite sempre (lista nova)
+}
+```
+
+---
+
+## 3. Histórico de Atualizações
+
+| Versão | Data | Motivo |
+|--------|------|--------|
+| 9.1.1 | 2026-10-01 | Verificado: versão estável; bloc ^9.2.1 compatível; adicionadas seções sobre emit/isClosed, buildWhen/listenWhen, transformers com bloc_concurrency e Equatable |

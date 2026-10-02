@@ -2,7 +2,7 @@
 
 - **Versão Recomendada:** 0.9.0
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-06-10
+- **Última Verificação:** 2026-10-01
 - **Propósito no Projeto:** Driver assíncrono para conexão, execução de consultas validadas em tempo de compilação, transações e migrações do PostgreSQL único (com RLS).
 - **Documentação Oficial:** [https://github.com/launchbadge/sqlx](https://github.com/launchbadge/sqlx)
 - **Library ID (Context7):** `/websites/rs_sqlx`
@@ -18,8 +18,8 @@ O **SQLx** é o executor das queries assíncronas no backend Rust (crate `infras
 ### Features de Cargo utilizadas
 
 ```toml
-sqlx = { version = "0.8.2", default-features = false, features = [
-    "postgres", "runtime-tokio-rustls", "macros", "migrate",
+sqlx = { version = "0.9", default-features = false, features = [
+    "postgres", "runtime-tokio", "tls-rustls", "macros", "migrate",
     "uuid", "chrono", "rust_decimal", "json"
 ] }
 ```
@@ -226,6 +226,7 @@ Nenhuma breaking change nos métodos de pool utilizados neste projeto. Versão 0
 
 ## 4. Histórico de Atualizações
 
+- **2026-10-01:** Atualização de verificação: confirmada versão 0.9.0 (sem bump necessário). Feature corrigida de `runtime-tokio-rustls` → `runtime-tokio` + `tls-rustls` (split de features em 0.9). Coletada documentação via docs.rs/0.9 e GitHub release notes. APIs-chave confirmadas: macros `query!`/`query_as!`/`query_scalar!`/`query_file!`, Pool pools (PgPool, MySqlPool, SqlitePool), Transaction, Executor, FromRow, Encode/Decode. Nenhuma breaking change detectada em 0.9.0 — maintenance release com dependency updates (rand, cryptographic crates, etcetera 0.11.0) e bug fixes (SQLite panic fix). Documentação: https://docs.rs/sqlx/0.9/sqlx/
 - **2026-06-10:** Adicionada seção "## Pool de Conexões — Configuração e Introspecção" com assinaturas exatas de `PgPoolOptions` (versão 0.9), métodos de introspecção `size()` e `num_idle()`, tipos de retorno, e exemplo de configuração de timeouts. Coletada documentação via Context7 library ID `/websites/rs_sqlx`. Nenhuma breaking change detectada de 0.8 → 0.9.
 - **2026-06-01 (b):** Bump 0.8.2 → **0.9.0**. Necessário para unificar a versão de `sqlx` no grafo: `pgvector 0.4.2` exige `sqlx >= 0.8, < 0.10` e o Cargo resolvia `pgvector` para `sqlx 0.9.0`, gerando duas versões de `sqlx-core` no mesmo build. Validado contra o banco real (migrations + `cargo sqlx prepare --workspace --all-targets` + suíte de integração). APIs utilizadas (macros, `PgPool`, `Transaction`, `migrate`, `set_config`) permanecem compatíveis.
 - **2026-06-01 (a):** Bump 0.7.3 → 0.8.2 (alinhamento com a `estrategia_implementacao_rust.md` do projeto). **Correção de padrão:** substituído o anti-padrão `SET LOCAL app.current_tenant = $1` (que falha por `SET` não aceitar bind) por `SELECT set_config('app.current_tenant', $1, true)`.
