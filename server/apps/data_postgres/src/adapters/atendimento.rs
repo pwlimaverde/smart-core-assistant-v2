@@ -1161,7 +1161,6 @@ impl AtendimentoStore for PgAtendimentoStore {
                     &ctx,
                     &telefone,
                     Some(nome),
-                    None,
                 )
                 .await?;
             }
