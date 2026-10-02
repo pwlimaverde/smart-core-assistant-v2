@@ -395,7 +395,10 @@ mod tests {
         assert_eq!(h1, h2, "hash deve ser determinístico");
         assert_ne!(h1, h3, "telefones diferentes devem dar hashes diferentes");
         assert_eq!(h1.len(), 16, "hash truncado deve ter 16 caracteres hex");
-        assert!(h1.chars().all(|c| c.is_ascii_hexdigit()), "hash deve conter só dígitos hex");
+        assert!(
+            h1.chars().all(|c| c.is_ascii_hexdigit()),
+            "hash deve conter só dígitos hex"
+        );
         assert!(!h1.contains("5511"), "hash não deve conter telefone");
     }
 }

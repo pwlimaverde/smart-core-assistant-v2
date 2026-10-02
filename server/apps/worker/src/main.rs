@@ -1905,7 +1905,10 @@ async fn publicar_realtime_unico(
         Ok(None) => {
             span.record("resultado", "duplicado");
             observability::usage_metrics::registrar_realtime_publicado(tipo, "duplicado");
-            tracing::debug!(evento = tipo, "evento realtime repetido na janela; descartado");
+            tracing::debug!(
+                evento = tipo,
+                "evento realtime repetido na janela; descartado"
+            );
         }
         Err(e) => {
             span.record("resultado", "redis_falhou");
@@ -4230,7 +4233,8 @@ async fn processar_status_mensagem(
     // P1.1-B — Publicar status com dedupe. Sem `atendimento_id` o cliente não sabe
     // que é da conversa aberta.
     for (mensagem_id, atendimento_id) in eventos_realtime {
-        publicar_status_na_conversa(state, tenant_uuid, mensagem_id, atendimento_id, status_str).await;
+        publicar_status_na_conversa(state, tenant_uuid, mensagem_id, atendimento_id, status_str)
+            .await;
     }
 
     Ok(())
@@ -4279,7 +4283,14 @@ async fn publicar_status_na_conversa(
         "status": status,
     });
     let discriminador = format!("{mensagem_id}:{status}");
-    publicar_realtime_unico(state, tenant_id, "mensagem.status_atualizado", &discriminador, payload).await;
+    publicar_realtime_unico(
+        state,
+        tenant_id,
+        "mensagem.status_atualizado",
+        &discriminador,
+        payload,
+    )
+    .await;
 }
 
 /// Consome "message.persisted" (drenado do outbox pelo `OutboxRelay` do data_postgres)
@@ -6081,7 +6092,10 @@ mod tests {
         let disc_status = format!("{}:{}", 12345, "delivered");
         assert!(disc_status.chars().all(|c| c.is_ascii_digit() || c == ':'));
         assert!(!disc_status.contains("55"), "não deve conter DDI");
-        assert!(!disc_status.contains("99"), "não deve conter número parcial");
+        assert!(
+            !disc_status.contains("99"),
+            "não deve conter número parcial"
+        );
     }
 
     /// P1.1-B — Buffer com hash: chave sem telefone, determinístico por sender.
