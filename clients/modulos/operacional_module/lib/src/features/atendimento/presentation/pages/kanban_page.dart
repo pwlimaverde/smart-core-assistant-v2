@@ -1167,10 +1167,8 @@ class _Coluna extends StatelessWidget {
                           ),
                         ),
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(8),
+                    : _ListaDaColuna(
                         itemCount: itens.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {
                           final atendimento = itens[i];
                           return _Cartao(
@@ -1758,12 +1756,59 @@ class _ItemDaTrilha extends StatelessWidget {
   }
 }
 
+/// A lista de cartões de uma coluna, com rolagem vertical própria.
+///
+/// Cada coluna tem o seu `ScrollController` (e não o primário): várias listas
+/// no mesmo quadro não podem dividir um controlador, e a barra sempre à vista
+/// precisa de um para mostrar, no desktop, que a coluna rola. A altura vem do
+/// `Expanded` da coluna, que por sua vez é esticada pelo `Row` do quadro.
+class _ListaDaColuna extends StatefulWidget {
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  const _ListaDaColuna({required this.itemCount, required this.itemBuilder});
+
+  @override
+  State<_ListaDaColuna> createState() => _ListaDaColunaState();
+}
+
+class _ListaDaColunaState extends State<_ListaDaColuna> {
+  final _rolagem = ScrollController();
+
+  @override
+  void dispose() {
+    _rolagem.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scrollbar(
+      controller: _rolagem,
+      thumbVisibility: true,
+      // A barra é a deste `Scrollbar`; sem desligar a automática do
+      // comportamento de rolagem do desktop, seriam duas pintadas uma sobre a
+      // outra.
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: ListView.separated(
+          controller: _rolagem,
+          padding: const EdgeInsets.all(8),
+          itemCount: widget.itemCount,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: widget.itemBuilder,
+        ),
+      ),
+    );
+  }
+}
+
 /// A rolagem horizontal do quadro, com a barra sempre à vista.
 ///
 /// No desktop o mouse não arrasta a lista e a roda rola na vertical: sem a
 /// barra, a coluna fora da tela simplesmente não tinha como ser alcançada. A
-/// roda sobre o fundo do quadro (fora de uma coluna, que rola os cartões) e o
-/// Shift+roda também levam para os lados.
+/// roda vertical é da coluna (rola os cartões); o quadro vai para os lados com
+/// Shift+roda, com a roda horizontal/trackpad ou pela barra.
 class _RolagemDoQuadro extends StatefulWidget {
   final Widget child;
 
@@ -1842,15 +1887,25 @@ class _RolagemDoQuadroState extends State<_RolagemDoQuadro> {
 
   void _rodar(PointerSignalEvent evento) {
     if (evento is! PointerScrollEvent || !_rolagem.hasClients) return;
+    // Roda vertical é da coluna; o quadro só toma o dy com Shift. O dx (roda
+    // horizontal, trackpad) é sempre do quadro.
+    final shift = HardwareKeyboard.instance.isShiftPressed;
     final delta = evento.scrollDelta.dx != 0
         ? evento.scrollDelta.dx
-        : evento.scrollDelta.dy;
-    final posicao = _rolagem.position;
-    final destino = (posicao.pixels + delta).clamp(
-      posicao.minScrollExtent,
-      posicao.maxScrollExtent,
-    );
-    if (destino != posicao.pixels) _rolagem.jumpTo(destino);
+        : (shift ? evento.scrollDelta.dy : 0.0);
+    if (delta == 0) return;
+    // Pelo resolver, e não `jumpTo` direto: se uma rolagem mais interna (a
+    // coluna, ou a própria rolagem horizontal) já reivindicou o evento, o
+    // quadro não mexe — senão o mesmo giro rolaria duas coisas.
+    GestureBinding.instance.pointerSignalResolver.register(evento, (_) {
+      if (!_rolagem.hasClients) return;
+      final posicao = _rolagem.position;
+      final destino = (posicao.pixels + delta).clamp(
+        posicao.minScrollExtent,
+        posicao.maxScrollExtent,
+      );
+      if (destino != posicao.pixels) _rolagem.jumpTo(destino);
+    });
   }
 
   @override

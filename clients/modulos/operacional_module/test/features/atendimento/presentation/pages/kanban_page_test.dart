@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_controller.dart';
@@ -197,6 +198,101 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.statusRecebido, 'resolvido');
+  });
+
+  group('roda do mouse no quadro', () {
+    // P5 — a roda vertical sobre uma coluna arrastava o quadro de lado no
+    // mesmo giro: para quem usava, "a coluna não rola". A roda é da coluna; o
+    // quadro anda com Shift+roda.
+
+    /// Janela estreita (o quadro transborda na horizontal) e uma coluna com
+    /// cartões de sobra (transborda na vertical).
+    Future<({ScrollController coluna, ScrollController quadro, Offset ponto})>
+    montarQuadroCheio(WidgetTester tester) async {
+      final gateway =
+          FakeAtendimentoGateway(
+              fila: [
+                for (var id = 1; id <= 30; id++)
+                  atendimentoDeTeste(id: id, etapaAtualId: 10),
+              ],
+            )
+            ..colunas = colunasDeTeste()
+            ..fluxos = fluxosDeTeste();
+      registrar(gateway);
+
+      tester.view.physicalSize = const Size(700, 700);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(const MaterialApp(home: KanbanPage()));
+      await tester.pumpAndSettle();
+
+      // Só a coluna ENTRADA tem cartões: é a única lista do quadro.
+      final lista = find.byType(ListView);
+      expect(lista, findsOneWidget);
+      final quadro = find.ancestor(
+        of: lista,
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is SingleChildScrollView &&
+              w.scrollDirection == Axis.horizontal,
+        ),
+      );
+      expect(quadro, findsOneWidget);
+
+      final coluna = tester.widget<ListView>(lista).controller!;
+      final rolagemDoQuadro = tester
+          .widget<SingleChildScrollView>(quadro)
+          .controller!;
+      // Sem transbordo nos dois eixos o teste passaria sem provar nada.
+      expect(coluna.position.maxScrollExtent, greaterThan(0));
+      expect(rolagemDoQuadro.position.maxScrollExtent, greaterThan(0));
+
+      return (
+        coluna: coluna,
+        quadro: rolagemDoQuadro,
+        ponto: tester.getCenter(lista),
+      );
+    }
+
+    testWidgets('a roda sobre a coluna rola a coluna e não move o quadro', (
+      tester,
+    ) async {
+      final r = await montarQuadroCheio(tester);
+
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: r.ponto,
+          scrollDelta: const Offset(0, 200),
+        ),
+      );
+      await tester.pump();
+
+      expect(r.coluna.offset, greaterThan(0));
+      expect(
+        r.quadro.offset,
+        0,
+        reason: 'o mesmo giro da roda moveu o quadro para o lado',
+      );
+    });
+
+    testWidgets('Shift+roda move o quadro e não a coluna', (tester) async {
+      final r = await montarQuadroCheio(tester);
+
+      await simulateKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: r.ponto,
+          scrollDelta: const Offset(0, 200),
+        ),
+      );
+      await tester.pump();
+      await simulateKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+
+      expect(r.quadro.offset, greaterThan(0));
+      expect(r.coluna.offset, 0);
+    });
   });
 }
 
