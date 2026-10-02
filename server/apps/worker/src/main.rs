@@ -1266,7 +1266,7 @@ async fn responder_via_ia(
 
     // A confiança entra no span: é número, não revela conteúdo, e é o que
     // permitirá calibrar os limiares antes de ligar o veto.
-    span.record("confianca", resposta.confiabilidade);
+    span.record("smartcore_ia_response_confidence", resposta.confiabilidade);
     // Reserva do motor Jev: quem escreveu e decidiu foi a LLM com schema, e a
     // confiança está na escala dela (cosseno). Marcar "jev" na mensagem e na
     // `resposta_apoiada` misturaria as escalas que o `motor` existe para
@@ -1294,7 +1294,7 @@ async fn responder_via_ia(
     span.record("llm_chamada", llm_chamada);
     span.record("ato", resposta.ato.as_str());
     span.record("escalada", resposta.escalada);
-    span.record("requisicoes", resposta.uso.requisicoes);
+    span.record("smartcore_openai_requests_total", resposta.uso.requisicoes);
     if motor == "jev" {
         // O resumo da decisão num evento só, para os testes com a chave: o
         // ato, por que, quanto custou e onde o tempo foi. Sem texto nenhum.
@@ -1906,7 +1906,14 @@ async fn processar_mensagem_recebida(
     // 1. Resolve atendimento para contato
     let resolve_payload = serde_json::json!({
         "phone": msg_normalized.sender,
-        "push_name": msg_normalized.push_name,
+        // Mensagem que o próprio aparelho enviou traz o nome de perfil do DONO
+        // do número, não o do cliente: usá-lo cadastrava o cliente com o nome
+        // de quem atende.
+        "push_name": if msg_normalized.is_from_me {
+            ""
+        } else {
+            msg_normalized.push_name.as_str()
+        },
         // D3 — sem o `instance_id` o `data_postgres` não tem como ler o
         // `resposta_bot` da conexão e responde "a instância responde". Resultado:
         // desligar a resposta automática no painel não calava o bot, e a única
@@ -3036,14 +3043,16 @@ async fn processar_pipeline_midia(
     let inicio = std::time::Instant::now();
     let tipo_str = rotulo_media_type(&media_type);
 
-    // A Evolution espera a mensagem completa (nó `data` do webhook, com key+message)
-    // no corpo do downloadmedia. A URL da CDN do WhatsApp expira em ~1h, por isso o
-    // download é disparado imediatamente após a persistência (fila curta).
-    let message = match raw_event.get("data") {
-        Some(d) => d.clone(),
-        None => {
+    // A URL da CDN do WhatsApp expira em ~1h, por isso o download é disparado
+    // imediatamente após a persistência (fila curta).
+    // O downloadmedia espera só a mensagem do WhatsApp (`{"audioMessage": …}`),
+    // não o evento inteiro: com o `data` completo a Evolution responde
+    // "invalid media type" e nenhuma mídia era salva.
+    let message = match raw_event.get("data").and_then(|d| d.get("message")) {
+        Some(d) if d.is_object() => d.clone(),
+        _ => {
             span.record("error_code", "sem_data");
-            tracing::warn!("pipeline de mídia abortado: raw_event sem 'data'");
+            tracing::warn!("pipeline de mídia abortado: evento sem a mensagem do WhatsApp");
             return;
         }
     };
@@ -3557,7 +3566,7 @@ async fn analisar_mensagem_best_effort(
     )
     .await;
     span.record("assunto_definido", assunto);
-    span.record("duracao_ms", inicio.elapsed().as_millis() as u64);
+    span.record("smartcore_worker_analyse_duration_ms", inicio.elapsed().as_millis() as u64);
 }
 
 /// Grava a análise de uma mensagem: o registro da decisão (motores novos), as
@@ -4018,11 +4027,10 @@ async fn processar_status_mensagem(
     evt: transport::bus::EventoBruto,
 ) -> anyhow::Result<()> {
     let envelope = evt.desserializar::<serde_json::Value>()?;
-    let raw_payload = &envelope.payload;
-    let raw_event = raw_payload
+    let raw_event = envelope
+        .payload
         .get("raw_event")
         .ok_or_else(|| anyhow::anyhow!("raw_event ausente"))?;
-
     let data = raw_event
         .get("data")
         .ok_or_else(|| anyhow::anyhow!("data ausente no status"))?;
@@ -4030,59 +4038,40 @@ async fn processar_status_mensagem(
         .get("status")
         .and_then(|v| v.as_str())
         .unwrap_or("sent");
-    let key = data
-        .get("key")
-        .ok_or_else(|| anyhow::anyhow!("key ausente no status"))?;
-    let msg_id = key
-        .get("id")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("id da mensagem ausente"))?;
+    let ids = ids_do_status(data);
+    if ids.is_empty() {
+        anyhow::bail!("id da mensagem ausente");
+    }
 
     tracing::info!(
         event_id = %envelope.event_id,
         tenant_id = %envelope.tenant_id,
-        message_id = %msg_id,
+        mensagens = ids.len(),
         status = %status_str,
         "Worker processando evento whatsapp.message.status"
     );
 
-    let pg_client = &state.pg_client;
-
-    let req_payload = serde_json::json!({
-        "message_id_whatsapp": msg_id,
-        "status": status_str,
-    });
-
-    let req_envelope = Envelope {
-        tenant_id: envelope.tenant_id.to_string(),
-        schema_version: 1,
-        message_id: Uuid::now_v7().to_string(),
-        causation_id: envelope.event_id.to_string(),
-        traceparent: envelope.traceparent.clone(),
-        occurred_at: chrono::Utc::now().timestamp_millis(),
-        kind: MessageKind::Request as i32,
-        method: "UpdateMessageStatus".to_string(),
-        payload: serde_json::to_vec(&req_payload).unwrap_or_default(),
-        error: None,
-        auth_user_id: 0,
-        auth_scopes: escopos_sistema(),
-        auth_is_superuser: false,
-        flow_permissions: vec![],
-        user_agent: String::new(),
-    };
-
-    let resp = pg_client.call(req_envelope, Duration::from_secs(5)).await?;
-
-    if resp.kind == MessageKind::Error as i32 {
-        let err_msg = resp
-            .error
-            .as_ref()
-            .map(|e| e.message.as_str())
-            .unwrap_or("Erro desconhecido");
-        anyhow::bail!(
-            "Falha ao atualizar status da mensagem no data_postgres: {}",
-            err_msg
-        );
+    let tenant = envelope.tenant_id.to_string();
+    let causation = envelope.event_id.to_string();
+    let mut conversas: Vec<i64> = Vec::new();
+    for msg_id in &ids {
+        let resp = chamar_rpc(
+            &state.pg_client,
+            &tenant,
+            "UpdateMessageStatus",
+            serde_json::json!({ "message_id_whatsapp": msg_id, "status": status_str }),
+            &causation,
+            &envelope.traceparent,
+        )
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!("Falha ao atualizar status da mensagem no data_postgres: {e}")
+        })?;
+        if let Some(a) = resp.get("atendimento_id").and_then(|v| v.as_i64()) {
+            if !conversas.contains(&a) {
+                conversas.push(a);
+            }
+        }
     }
 
     // Convenção do glossário (§8): confirmação de status outbound usa `mensagem.confirmada`.
@@ -4091,39 +4080,81 @@ async fn processar_status_mensagem(
         "mensagem.confirmada",
         "Status de mensagem do WhatsApp atualizado",
         serde_json::json!({
-            "message_id_whatsapp": msg_id,
+            "message_id_whatsapp": ids.first(),
+            "mensagens": ids.len(),
             "status": status_str,
         }),
         None,
         None,
-        Some(envelope.event_id.to_string()),
+        Some(causation.clone()),
     );
 
-    if let Some(ref bus_conn) = state.bus_conn {
-        let channel = format!("tenant:{}:events", envelope.tenant_id);
-        let event_payload = serde_json::json!({
-            "event_type": "mensagem.status_atualizado",
-            "tenant_id": envelope.tenant_id.to_string(),
-            "payload": {
-                "message_id_whatsapp": msg_id,
-                "status": status_str,
-            }
-        });
-
-        let mut conn = bus_conn.clone();
-        let payload_str = event_payload.to_string();
-        let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
-            .arg(&channel)
-            .arg(&payload_str)
-            .query_async(&mut conn)
-            .await;
-
-        if let Err(e) = publish_res {
-            tracing::error!("Erro ao publicar status no Redis Pub/Sub: {:?}", e);
-        }
+    // Recibo de mensagem que não está no banco (enviada fora do sistema) não
+    // tem conversa para avisar.
+    for atendimento_id in conversas {
+        publicar_status_na_conversa(state, &tenant, atendimento_id, status_str).await;
     }
 
     Ok(())
+}
+
+/// Os ids que um evento de status cobre: o recibo da evolution-go traz vários
+/// (`ids`); o formato antigo, um só (`key.id`).
+fn ids_do_status(data: &serde_json::Value) -> Vec<String> {
+    let mut ids: Vec<String> = data
+        .get("ids")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    if ids.is_empty() {
+        if let Some(id) = data
+            .get("key")
+            .and_then(|k| k.get("id"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
+            ids.push(id.to_string());
+        }
+    }
+    ids
+}
+
+/// Avisa a conversa aberta que o ✓ de uma mensagem mudou. Sem o
+/// `atendimento_id` a tela não sabe que o evento é dela e não recarrega — o
+/// status só aparecia ao fechar e abrir a janela.
+async fn publicar_status_na_conversa(
+    state: &AppState,
+    tenant_id: &str,
+    atendimento_id: i64,
+    status: &str,
+) {
+    let Some(ref bus_conn) = state.bus_conn else {
+        return;
+    };
+    let channel = format!("tenant:{tenant_id}:events");
+    let event_payload = serde_json::json!({
+        "event_type": "mensagem.status_atualizado",
+        "tenant_id": tenant_id,
+        "payload": {
+            "atendimento_id": atendimento_id,
+            "status": status,
+        }
+    });
+    let mut conn = bus_conn.clone();
+    let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
+        .arg(&channel)
+        .arg(event_payload.to_string())
+        .query_async(&mut conn)
+        .await;
+    if let Err(e) = publish_res {
+        tracing::error!("Erro ao publicar status no Redis Pub/Sub: {:?}", e);
+    }
 }
 
 /// Consome "message.persisted" (drenado do outbox pelo `OutboxRelay` do data_postgres)
@@ -4190,6 +4221,7 @@ async fn processar_mensagem_persistida(
         return Ok(());
     }
 
+    let atendimento_do_destino = destino.get("atendimento_id").and_then(|v| v.as_i64());
     let instance_id = destino
         .get("instance_id")
         .and_then(|v| v.as_i64())
@@ -4251,6 +4283,10 @@ async fn processar_mensagem_persistida(
             &envelope.traceparent,
         )
         .await?;
+        // A conversa aberta troca o relógio pelo ✓ sem precisar reabrir.
+        if let Some(atendimento_id) = atendimento_do_destino {
+            publicar_status_na_conversa(state, &tenant_id, atendimento_id, "sent").await;
+        }
         return Ok(());
     }
 
@@ -4281,6 +4317,9 @@ async fn processar_mensagem_persistida(
         None,
         Some(causation_id),
     );
+    if let Some(atendimento_id) = atendimento_do_destino {
+        publicar_status_na_conversa(state, &tenant_id, atendimento_id, "failed").await;
+    }
 
     anyhow::bail!(
         "Falha definitiva ao enviar mensagem outbound (mensagem_id={}): {:?}",
@@ -4291,6 +4330,19 @@ async fn processar_mensagem_persistida(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn status_do_recibo_cobre_todos_os_ids() {
+        let data = serde_json::json!({ "status": "read", "key": { "id": "A" }, "ids": ["A", "B"] });
+        assert_eq!(super::ids_do_status(&data), vec!["A", "B"]);
+    }
+
+    #[test]
+    fn status_no_formato_antigo_usa_a_chave() {
+        let data = serde_json::json!({ "status": "read", "key": { "id": "A" } });
+        assert_eq!(super::ids_do_status(&data), vec!["A"]);
+        assert!(super::ids_do_status(&serde_json::json!({})).is_empty());
+    }
+
     use super::*;
     use contracts::{Envelope, MessageKind};
     use std::time::Duration;

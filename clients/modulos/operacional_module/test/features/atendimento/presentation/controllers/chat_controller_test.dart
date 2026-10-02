@@ -269,15 +269,17 @@ void main() {
   // ─── P2: histórico para trás e citação ───────────────────────────────────
   group('conversa fiel (P2)', () {
     test('rolar para o topo carrega o trecho anterior e o mantém', () async {
-      final gateway = FakeAtendimentoGateway(
-        thread: [
-          mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2)),
-          mensagemDeTeste(id: 11, timestamp: DateTime(2026, 1, 2, 1)),
-        ],
-      )..anteriores = [
-        mensagemDeTeste(id: 8, timestamp: DateTime(2026, 1, 1)),
-        mensagemDeTeste(id: 9, timestamp: DateTime(2026, 1, 1, 1)),
-      ];
+      final gateway =
+          FakeAtendimentoGateway(
+              thread: [
+                mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2)),
+                mensagemDeTeste(id: 11, timestamp: DateTime(2026, 1, 2, 1)),
+              ],
+            )
+            ..anteriores = [
+              mensagemDeTeste(id: 8, timestamp: DateTime(2026, 1, 1)),
+              mensagemDeTeste(id: 9, timestamp: DateTime(2026, 1, 1, 1)),
+            ];
       final controller = _controller(gateway);
       await controller.abrir(5);
 
@@ -328,6 +330,29 @@ void main() {
         (controller.state as SuccessState<ChatViewModel>).data.citando,
         isNull,
       );
+      await controller.close();
+    });
+
+    test('a cópia local confirmada pelo servidor não fica repetida', () async {
+      // A pendente (id negativo) aparece logo após enviar; quando o servidor a
+      // confirma, a recarga seguinte traz só a definitiva.
+      final gateway = FakeAtendimentoGateway(
+        thread: [
+          mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2)),
+          mensagemDeTeste(id: -1, timestamp: DateTime(2026, 1, 3)),
+        ],
+      );
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+
+      gateway.thread = [
+        mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2)),
+        mensagemDeTeste(id: 11, timestamp: DateTime(2026, 1, 3)),
+      ];
+      await controller.enviar('oi');
+
+      final vm = (controller.state as SuccessState<ChatViewModel>).data;
+      expect(vm.mensagens.map((m) => m.id), [10, 11]);
       await controller.close();
     });
 

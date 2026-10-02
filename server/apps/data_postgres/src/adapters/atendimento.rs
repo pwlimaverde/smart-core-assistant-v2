@@ -1148,6 +1148,19 @@ impl AtendimentoStore for PgAtendimentoStore {
                         .await?
                 }
             };
+            // O nome de perfil acompanha o que o próprio cliente usa no
+            // WhatsApp. Só chega aqui o nome de quem escreveu: o worker não
+            // repassa o do aparelho do negócio (mensagem enviada por ele).
+            if let Some(nome) = push_name.as_deref().filter(|n| !n.trim().is_empty()) {
+                infrastructure_postgres::clientes::contatos::atualizar_perfil_whatsapp(
+                    &mut tx,
+                    &ctx,
+                    &telefone,
+                    Some(nome),
+                    None,
+                )
+                .await?;
+            }
 
             let mut is_new = false;
             // 2. Busca se já existe um atendimento ativo para o contato
@@ -1176,16 +1189,17 @@ impl AtendimentoStore for PgAtendimentoStore {
         ctx: &RequestContext,
         message_id_whatsapp: &str,
         status: &str,
-    ) -> Result<(), DbError> {
+    ) -> Result<Option<i32>, DbError> {
         let repo = PostgresMensagemRepository;
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
         let message_id_whatsapp = message_id_whatsapp.to_string();
         let status = status.to_string();
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            repo.atualizar_status_por_whatsapp_id(&mut tx, &ctx, &message_id_whatsapp, &status)
+            let atendimento = repo
+                .atualizar_status_por_whatsapp_id(&mut tx, &ctx, &message_id_whatsapp, &status)
                 .await?;
-            Ok(((), tx))
+            Ok((atendimento, tx))
         })
         .await
     }

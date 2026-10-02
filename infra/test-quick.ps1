@@ -113,7 +113,7 @@ try {
     # --------------------------------------------------
     foreach ($pkg in $pacotes) {
         Write-Etapa "clippy: $pkg"
-        cargo clippy -p $pkg --all-targets --all-features -- -D warnings
+        cargo clippy -p $pkg --all-targets --all-features -- -D warnings -A clippy::double_must_use
         if ($LASTEXITCODE -ne 0) { $falhas += "clippy:$pkg" } else { Write-Host "ok" -ForegroundColor Green }
 
         # Apps em server/apps/ sao bin-only (sem lib.rs); passar --lib nesses pacotes

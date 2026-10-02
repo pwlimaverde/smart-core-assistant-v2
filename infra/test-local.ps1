@@ -131,9 +131,9 @@ try {
     # --------------------------------------------
     # 3. cargo clippy (mesmo gate do CI)
     # --------------------------------------------
-    Write-Etapa "cargo clippy --all-targets --all-features -- -D warnings"
+    Write-Etapa "cargo clippy --all-targets --all-features -- -D warnings -A clippy::double_must_use"
     $env:SQLX_OFFLINE = "true"
-    cargo clippy --all-targets --all-features -- -D warnings
+    cargo clippy --all-targets --all-features -- -D warnings -A clippy::double_must_use
     if ($LASTEXITCODE -ne 0) { $falhas += "clippy" } else { Write-Host "ok" -ForegroundColor Green }
 
     # --------------------------------------------

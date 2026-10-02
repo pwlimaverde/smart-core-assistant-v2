@@ -1169,3 +1169,101 @@ async fn test_delete_instance_erro_api() {
         MessagingProviderError::ProviderApi { status: 404, .. }
     ));
 }
+
+#[tokio::test]
+async fn test_send_text_formato_da_evolution_go() {
+    // O formato real: envelope `data` com o `MessageInfo` do whatsmeow.
+    let (server, provider) = setup().await;
+    let token = SecretString::from("t".to_string());
+    Mock::given(method("POST"))
+        .and(path("/send/text"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "message": "success",
+            "data": {
+                "Info": { "ID": "3EB0C767D82B6A9E2A1F", "Chat": "558897141275@s.whatsapp.net" },
+                "Message": { "conversation": "oi" }
+            }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let res = provider.send_text("i", &token, "5511", "oi").await.unwrap();
+    assert_eq!(res.message_id, "3EB0C767D82B6A9E2A1F");
+}
+
+#[tokio::test]
+async fn test_send_text_aceito_sem_id_nao_falha_nem_reenvia() {
+    // 2xx sem id: a mensagem saiu. Falhar aqui fazia o worker reenviar, e o
+    // cliente recebia a mesma mensagem quatro vezes.
+    let (server, provider) = setup().await;
+    let token = SecretString::from("t".to_string());
+    Mock::given(method("POST"))
+        .and(path("/send/text"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "message": "success", "data": {} })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let res = provider.send_text("i", &token, "5511", "oi").await.unwrap();
+    assert_eq!(res.message_id, "");
+}
+
+#[tokio::test]
+async fn test_send_media_formato_da_evolution_go() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("t".to_string());
+    Mock::given(method("POST"))
+        .and(path("/send/media"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "message": "success",
+            "data": { "Info": { "ID": "MIDIA-1" } }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let res = provider
+        .send_media(
+            "i",
+            &token,
+            "5511",
+            MediaType::Image,
+            "https://exemplo/x.png",
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.message_id, "MIDIA-1");
+}
+
+#[tokio::test]
+async fn test_media_downloader_formato_da_evolution_go() {
+    // Envelope `data` com data URL no lugar do base64 puro.
+    let (server, provider) = setup().await;
+    let token = SecretString::from("t".to_string());
+    Mock::given(method("POST"))
+        .and(path("/message/downloadmedia"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "message": "success",
+            "data": { "base64": "data:audio/ogg; codecs=opus;base64,T2xh", "timestamp": "" }
+        })))
+        .mount(&server)
+        .await;
+
+    let res = provider
+        .media_downloader()
+        .unwrap()
+        .download_media(
+            "i",
+            &token,
+            &serde_json::json!({ "audioMessage": { "URL": "u" } }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.base64, "T2xh");
+    assert_eq!(res.mime_type.as_deref(), Some("audio/ogg"));
+}

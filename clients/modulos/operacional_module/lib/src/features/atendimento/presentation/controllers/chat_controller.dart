@@ -370,7 +370,13 @@ final class ChatController extends BaseController<ChatViewModel> {
         // A recarga traz só a última página. Quem já tinha rolado para cima
         // perderia o histórico carregado se a lista fosse trocada inteira.
         final novos = {for (final m in value) m.id};
-        final antigas = atual.data.mensagens.where((m) => !novos.contains(m.id));
+        // A cópia local de uma mensagem ainda não sincronizada (id negativo)
+        // não é histórico: o gateway a devolve enquanto estiver pendente.
+        // Guardá-la aqui deixava a mensagem repetida no topo da conversa depois
+        // que o servidor a confirmava com o id definitivo.
+        final antigas = atual.data.mensagens.where(
+          (m) => m.id > 0 && !novos.contains(m.id),
+        );
         final unidas = [...antigas, ...value]
           ..sort((a, b) => a.id.compareTo(b.id));
         emit(SuccessState(atual.data.copyWith(mensagens: unidas)));
