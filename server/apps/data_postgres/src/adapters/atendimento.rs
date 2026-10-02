@@ -16,7 +16,7 @@ use infrastructure_postgres::atendimentos::etiquetas::{
     EtiquetaRepository, NotaRepository, PostgresEtiquetaRepository, PostgresNotaRepository,
 };
 use infrastructure_postgres::atendimentos::mensagens::{
-    DestinoEnvioOutbound, Mensagem, MensagemRepository, PostgresMensagemRepository,
+    AnexoMidia, DestinoEnvioOutbound, Mensagem, MensagemRepository, PostgresMensagemRepository,
 };
 use infrastructure_postgres::atendimentos::movimentos::{
     MovimentoFluxoRepository, PostgresMovimentoFluxoRepository,
@@ -1951,27 +1951,14 @@ impl AtendimentoStore for PgAtendimentoStore {
         &self,
         ctx: &RequestContext,
         mensagem_id: i32,
-        arquivo_midia: &str,
-        analise_midia: &str,
-        resumo_midia: &str,
+        anexo: AnexoMidia,
     ) -> Result<(), DbError> {
         let repo = PostgresMensagemRepository;
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
-        // String vazia = campo ausente; converte para `None` (não sobrescreve).
-        let arquivo = (!arquivo_midia.is_empty()).then(|| arquivo_midia.to_string());
-        let analise = (!analise_midia.is_empty()).then(|| analise_midia.to_string());
-        let resumo = (!resumo_midia.is_empty()).then(|| resumo_midia.to_string());
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            repo.anexar_analise_midia(
-                &mut tx,
-                &ctx,
-                mensagem_id,
-                arquivo.as_deref(),
-                analise.as_deref(),
-                resumo.as_deref(),
-            )
-            .await?;
+            repo.anexar_analise_midia(&mut tx, &ctx, mensagem_id, &anexo)
+                .await?;
             Ok(((), tx))
         })
         .await

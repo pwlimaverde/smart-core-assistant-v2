@@ -4,7 +4,9 @@
 
 use async_trait::async_trait;
 use infrastructure_postgres::atendimentos::atendimentos::{Atendimento, AtendimentoInativo};
-use infrastructure_postgres::atendimentos::mensagens::{DestinoEnvioOutbound, Mensagem};
+use infrastructure_postgres::atendimentos::mensagens::{
+    AnexoMidia, DestinoEnvioOutbound, Mensagem,
+};
 use infrastructure_postgres::operacional::fluxos::FluxoDisponivel;
 use infrastructure_postgres::{DbError, RequestContext};
 use uuid::Uuid;
@@ -688,16 +690,14 @@ pub trait AtendimentoStore: Send + Sync {
         mensagem_id: i32,
     ) -> Result<(), DbError>;
 
-    /// Anexa análise/resumo de mídia + ponteiro do arquivo a uma mensagem já
-    /// persistida (pipeline de mídia do worker, N6.1). Campos vazios (`""`) são
-    /// tratados como ausentes e não sobrescrevem o valor atual.
+    /// Anexa ponteiro do arquivo, metadados do anexo e análise/resumo de mídia a
+    /// uma mensagem já persistida (pipeline de mídia do worker, N6.1/P2a). Campos
+    /// `None` não sobrescrevem o valor atual. Owned por causa do `automock`.
     async fn anexar_analise_midia(
         &self,
         ctx: &RequestContext,
         mensagem_id: i32,
-        arquivo_midia: &str,
-        analise_midia: &str,
-        resumo_midia: &str,
+        anexo: AnexoMidia,
     ) -> Result<(), DbError>;
 
     /// B9 (N10 E1+E2) — grava a análise prévia de uma mensagem e, se o

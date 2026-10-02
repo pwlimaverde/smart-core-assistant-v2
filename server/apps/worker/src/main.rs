@@ -3131,16 +3131,64 @@ fn trace_id_de(traceparent: &str) -> &str {
     traceparent.split('-').nth(1).unwrap_or(traceparent)
 }
 
-/// Pipeline de mídia (N6.1): baixa o binário da mídia da Evolution (via
-/// `data_whatsapp`), grava no R2 (via `data_storage`), pede transcrição/análise à
-/// IA (via `ia_engine`) e anexa resumo/análise + ponteiro à mensagem (via
-/// `data_postgres`). Roda em background (fire-and-forget): TODA falha aqui degrada
-/// graciosamente — a mensagem já está no chat, só a análise fica ausente. Nunca
-/// propaga erro nem faz pânico.
+/// P2a — bytes decodificados de um base64 sem decodificá-lo (o binário pode ter
+/// dezenas de MB). Vale com e sem `=` de preenchimento; espaços e quebras de linha
+/// não contam.
+fn bytes_do_base64(base64: &str) -> i64 {
+    let caracteres = base64
+        .bytes()
+        .filter(|b| !b.is_ascii_whitespace() && *b != b'=')
+        .count() as i64;
+    caracteres * 3 / 4
+}
+
+/// P2a — campos do ponteiro da mídia para o `AnexarAnaliseMidia`: chave do objeto,
+/// mimetype, tamanho, nome original (só documento) e a marca de nota de voz.
+///
+/// O nome vem de `documentMessage.fileName` e é PII: vai no payload da RPC (para a
+/// bolha mostrar), nunca em log ou span.
+fn ponteiro_da_midia(
+    file_key: &str,
+    mime: &str,
+    tamanho: i64,
+    media_type: &domain_whatsapp::MediaType,
+    media_payload: &serde_json::Value,
+) -> serde_json::Value {
+    let nome = match media_type {
+        domain_whatsapp::MediaType::Document => media_payload
+            .get("fileName")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|n| !n.is_empty()),
+        _ => None,
+    };
+    let is_ptt = match media_type {
+        domain_whatsapp::MediaType::Audio => media_payload.get("ptt").and_then(|v| v.as_bool()),
+        _ => None,
+    };
+    serde_json::json!({
+        "arquivo_midia": file_key,
+        "mimetype": (!mime.is_empty()).then_some(mime),
+        "tamanho": (tamanho > 0).then_some(tamanho),
+        "nome_arquivo": nome,
+        "is_ptt": is_ptt,
+    })
+}
+
+/// Pipeline de mídia (N6.1/P2a): baixa o binário da mídia da Evolution (via
+/// `data_whatsapp`), grava no R2 (via `data_storage`, com `Content-Type`), grava
+/// **logo em seguida** o ponteiro + metadados na mensagem (via `data_postgres`) e
+/// avisa o realtime com `mensagem.midia_disponivel` — a bolha mostra o anexo sem
+/// esperar a IA. Só então pede transcrição/análise ao `ia_engine` e anexa o
+/// resultado numa segunda chamada. Roda em background (fire-and-forget): TODA
+/// falha aqui degrada graciosamente — a mensagem já está no chat. Nunca propaga
+/// erro nem faz pânico.
 ///
 /// `skip_all`: `media_payload`/`raw_event` carregam metadados da mídia (potencial
-/// PII); só ids de correlação entram no span. `error_code` é preenchido via
-/// `Span::record` quando alguma etapa falha.
+/// PII) e o base64 nunca entra no span; só ids de correlação. `error_code` é
+/// preenchido via `Span::record` quando alguma etapa falha; `ponteiro_ms` é o
+/// tempo até o anexo ficar visível e `resultado` resume o desfecho
+/// (`ok` | `parcial` — anexo visível, IA/análise ausente | `falhou` — sem anexo).
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(
     skip_all,
@@ -3151,6 +3199,8 @@ fn trace_id_de(traceparent: &str) -> &str {
         message_id = mensagem_id,
         media_type = %rotulo_media_type(&media_type),
         error_code = tracing::field::Empty,
+        ponteiro_ms = tracing::field::Empty,
+        resultado = tracing::field::Empty,
     )
 )]
 async fn processar_pipeline_midia(
@@ -3162,12 +3212,14 @@ async fn processar_pipeline_midia(
     mensagem_id: i32,
     media_type: domain_whatsapp::MediaType,
     media_mime: Option<String>,
-    _media_payload: serde_json::Value,
+    media_payload: serde_json::Value,
     raw_event: &serde_json::Value,
     causation_id: &str,
     traceparent: &str,
 ) {
     let span = tracing::Span::current();
+    // Até o ponteiro ser gravado, qualquer saída antecipada é "sem anexo".
+    span.record("resultado", "falhou");
     let inicio = std::time::Instant::now();
     let tipo_str = rotulo_media_type(&media_type);
 
@@ -3232,12 +3284,19 @@ async fn processar_pipeline_midia(
         format!("{:x}", hasher.finalize())
     };
     let file_key = format!("media/{tenant_str}/{instance_id}/{tipo_str}/{hash}");
+    let tamanho = bytes_do_base64(&base64);
 
+    // P2a: `content_type` vira metadado do objeto no R2 — sem ele o player recebe
+    // `application/octet-stream` e não toca.
     if let Err(e) = chamar_rpc(
         &state.storage_client,
         tenant_str,
         "PutFile",
-        serde_json::json!({ "file_name": file_key, "content_base64": base64 }),
+        serde_json::json!({
+            "file_name": file_key,
+            "content_base64": base64,
+            "content_type": (!mime.is_empty()).then_some(mime.as_str()),
+        }),
         causation_id,
         traceparent,
     )
@@ -3247,6 +3306,67 @@ async fn processar_pipeline_midia(
         tracing::warn!(erro = %e, "falha ao gravar mídia no storage; análise ausente");
         return;
     }
+    // O binário já está no R2: o base64 (até dezenas de MB) não precisa viver
+    // até o fim da IA.
+    drop(base64);
+
+    // 2b. P2a — ponteiro + metadados na mensagem ANTES da IA, e aviso ao realtime:
+    // a bolha mostra o anexo assim que ele existe. Se esta gravação falhar, a
+    // segunda chamada (depois da IA) leva o ponteiro de novo.
+    let ponteiro = ponteiro_da_midia(&file_key, &mime, tamanho, &media_type, &media_payload);
+    let ponteiro_gravado = match chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "AnexarAnaliseMidia",
+        {
+            let mut p = ponteiro.clone();
+            p["mensagem_id"] = serde_json::json!(mensagem_id);
+            p
+        },
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        Ok(_) => {
+            span.record("ponteiro_ms", inicio.elapsed().as_millis() as i64);
+            span.record("resultado", "parcial");
+            publicar_realtime_unico(
+                state,
+                tenant_uuid,
+                "mensagem.midia_disponivel",
+                &mensagem_id.to_string(),
+                serde_json::json!({
+                    "atendimento_id": atendimento_id,
+                    "mensagem_id": mensagem_id,
+                }),
+            )
+            .await;
+            true
+        }
+        Err(e) => {
+            span.record("error_code", "ponteiro_falhou");
+            tracing::warn!(erro = %e, "falha ao gravar o ponteiro da mídia; nova tentativa após a IA");
+            false
+        }
+    };
+    // Na segunda chamada vai só o que ainda falta gravar.
+    let ponteiro_pendente = (!ponteiro_gravado).then_some(&ponteiro);
+
+    // Desfecho comum de todas as saídas daqui em diante (`anexar_analise_midia`):
+    // grava o que ainda falta (ponteiro pendente e/ou análise) e registra
+    // `resultado` no span.
+    let anexo = ContextoAnexo {
+        tenant_uuid,
+        tenant_str,
+        atendimento_id,
+        mensagem_id,
+        tipo_str,
+        inicio,
+        causation_id,
+        traceparent,
+        ponteiro_pendente,
+    };
 
     // 3. Config de IA do tenant (mesmo provider/api_key do LLM é reusado para
     // transcrição/visão neste ciclo — simplificação conhecida; providers dedicados
@@ -3258,6 +3378,7 @@ async fn processar_pipeline_midia(
         Err(e) => {
             span.record("error_code", "config_falhou");
             tracing::warn!(erro = %e, "falha ao resolver config de IA; análise ausente");
+            anexar_analise_midia(state, &span, anexo, "", "", false).await;
             return;
         }
     };
@@ -3270,20 +3391,7 @@ async fn processar_pipeline_midia(
         matches!(media_type, domain_whatsapp::MediaType::Audio) && !cfg_midia;
     if audio_sem_transcricao {
         tracing::debug!("transcrição desligada para o tenant; persistindo só o ponteiro do áudio");
-        anexar_analise_midia(
-            state,
-            tenant_uuid,
-            tenant_str,
-            mensagem_id,
-            &file_key,
-            "",
-            "",
-            tipo_str,
-            inicio,
-            causation_id,
-            traceparent,
-        )
-        .await;
+        anexar_analise_midia(state, &span, anexo, "", "", true).await;
         return;
     }
 
@@ -3306,6 +3414,7 @@ async fn processar_pipeline_midia(
         Err(e) => {
             span.record("error_code", "presign_falhou");
             tracing::warn!(erro = %e, "falha ao pré-assinar URL da mídia; análise ausente");
+            anexar_analise_midia(state, &span, anexo, "", "", false).await;
             return;
         }
     };
@@ -3317,8 +3426,8 @@ async fn processar_pipeline_midia(
     };
 
     // 5. Transcrição (áudio) ou interpretação (imagem/vídeo). Documento não passa por
-    // IA neste ciclo — só o ponteiro é persistido. Falha na IA degrada: persistimos
-    // ao menos o ponteiro do arquivo.
+    // IA neste ciclo — só o ponteiro é persistido. Falha na IA degrada: o ponteiro
+    // já está gravado (ou vai na chamada final, se a primeira falhou).
     let (analise, resumo) = match media_type {
         domain_whatsapp::MediaType::Audio => {
             match state
@@ -3365,22 +3474,15 @@ async fn processar_pipeline_midia(
         _ => (String::new(), String::new()),
     };
 
-    // 6. Anexa análise/resumo + ponteiro à mensagem (data_postgres). Sempre grava ao
-    // menos o ponteiro do arquivo, mesmo quando a IA falhou.
-    anexar_analise_midia(
-        state,
-        tenant_uuid,
-        tenant_str,
-        mensagem_id,
-        &file_key,
-        &analise,
-        &resumo,
-        tipo_str,
-        inicio,
-        causation_id,
-        traceparent,
-    )
-    .await;
+    // 6. Segunda chamada: só análise/resumo (e o ponteiro, se a primeira falhou).
+    // A IA "completa" quando não registrou falha (documento não passa pela IA).
+    let ia_ok = !matches!(
+        media_type,
+        domain_whatsapp::MediaType::Audio
+            | domain_whatsapp::MediaType::Image
+            | domain_whatsapp::MediaType::Video
+    ) || !(analise.is_empty() && resumo.is_empty());
+    anexar_analise_midia(state, &span, anexo, &analise, &resumo, ia_ok).await;
 
     // 6b. Sentimento (N6.5): áudio transcrito também avalia o tom da conversa,
     // best-effort, em background — não atrasa o retorno deste pipeline.
@@ -3405,62 +3507,112 @@ async fn processar_pipeline_midia(
     }
 }
 
-/// Anexa análise/resumo + ponteiro do arquivo à mensagem e audita `midia.analisada`.
-/// Chamado nos dois desfechos do pipeline: com análise da IA, e com análise vazia
-/// (IA falhou, tipo sem IA neste ciclo, ou transcrição desligada para o tenant) —
-/// em todos, o ponteiro do arquivo no R2 é o que não pode faltar.
+/// Contexto do desfecho do pipeline de mídia: ids de correlação e o ponteiro que
+/// ainda falta gravar (`None` quando a gravação logo após o upload deu certo).
+#[derive(Clone, Copy)]
+struct ContextoAnexo<'a> {
+    tenant_uuid: Uuid,
+    tenant_str: &'a str,
+    atendimento_id: i32,
+    mensagem_id: i32,
+    tipo_str: &'a str,
+    inicio: std::time::Instant,
+    causation_id: &'a str,
+    traceparent: &'a str,
+    ponteiro_pendente: Option<&'a serde_json::Value>,
+}
+
+/// Desfecho do pipeline de mídia: grava análise/resumo (e o ponteiro, se a
+/// gravação logo após o upload falhou), avisa o realtime quando o anexo só agora
+/// ficou visível, audita `midia.analisada` e registra `resultado` no span
+/// `midia.pipeline` (recebido em `span`).
 ///
-/// `skip_all`: `analise`/`resumo` derivam de conteúdo do contato (PII) e nunca
-/// entram no span nem na auditoria — só ids, tipo e duração.
-#[allow(clippy::too_many_arguments)]
-#[tracing::instrument(skip_all, fields(mensagem_id = mensagem_id, tipo = tipo_str))]
+/// Sem nada a gravar (ponteiro já salvo e análise vazia — documento, IA falhou,
+/// transcrição desligada) não chama o `data_postgres`: a primeira chamada já fez
+/// o que importa.
+///
+/// `analise`/`resumo` derivam de conteúdo do contato (PII) e nunca entram no
+/// span nem na auditoria — só ids, tipo e duração.
 async fn anexar_analise_midia(
     state: &AppState,
-    tenant_uuid: Uuid,
-    tenant_str: &str,
-    mensagem_id: i32,
-    file_key: &str,
+    span: &tracing::Span,
+    ctx: ContextoAnexo<'_>,
     analise: &str,
     resumo: &str,
-    tipo_str: &str,
-    inicio: std::time::Instant,
-    causation_id: &str,
-    traceparent: &str,
+    completo: bool,
 ) {
-    if let Err(e) = chamar_rpc(
-        &state.pg_client,
-        tenant_str,
-        "AnexarAnaliseMidia",
-        serde_json::json!({
-            "mensagem_id": mensagem_id,
-            "arquivo_midia": file_key,
-            "analise": analise,
-            "resumo": resumo,
-        }),
-        causation_id,
-        traceparent,
-    )
-    .await
-    {
-        tracing::Span::current().record("error_code", "persist_falhou");
-        tracing::warn!(erro = %e, "falha ao anexar análise de mídia à mensagem");
-        return;
+    let mut payload = ctx
+        .ponteiro_pendente
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    payload["mensagem_id"] = serde_json::json!(ctx.mensagem_id);
+    if !analise.is_empty() {
+        payload["analise"] = serde_json::json!(analise);
     }
+    if !resumo.is_empty() {
+        payload["resumo"] = serde_json::json!(resumo);
+    }
+    let ha_o_que_gravar =
+        ctx.ponteiro_pendente.is_some() || !analise.is_empty() || !resumo.is_empty();
+
+    if ha_o_que_gravar {
+        if let Err(e) = chamar_rpc(
+            &state.pg_client,
+            ctx.tenant_str,
+            "AnexarAnaliseMidia",
+            payload,
+            ctx.causation_id,
+            ctx.traceparent,
+        )
+        .await
+        {
+            span.record("error_code", "persist_falhou");
+            // Sem o ponteiro, a mensagem fica sem anexo; com ele, só sem análise.
+            span.record(
+                "resultado",
+                if ctx.ponteiro_pendente.is_some() {
+                    "falhou"
+                } else {
+                    "parcial"
+                },
+            );
+            tracing::warn!(erro = %e, "falha ao anexar análise de mídia à mensagem");
+            return;
+        }
+    }
+
+    // O ponteiro entrou só agora (a primeira gravação tinha falhado): é aqui que
+    // o anexo fica visível, então é aqui que o realtime é avisado.
+    if ctx.ponteiro_pendente.is_some() {
+        span.record("ponteiro_ms", ctx.inicio.elapsed().as_millis() as i64);
+        publicar_realtime_unico(
+            state,
+            ctx.tenant_uuid,
+            "mensagem.midia_disponivel",
+            &ctx.mensagem_id.to_string(),
+            serde_json::json!({
+                "atendimento_id": ctx.atendimento_id,
+                "mensagem_id": ctx.mensagem_id,
+            }),
+        )
+        .await;
+    }
+    span.record("resultado", if completo { "ok" } else { "parcial" });
 
     // Auditoria: mídia analisada (nível INFO). SEM conteúdo/transcrição — só
     // metadados operacionais. O download em si não gera evento (o span já o rastreia).
     state.audit_logger.info(
-        tenant_uuid,
+        ctx.tenant_uuid,
         "midia.analisada",
         "Mídia recebida analisada e anexada à mensagem",
         serde_json::json!({
-            "mensagem_id": mensagem_id,
-            "tipo": tipo_str,
-            "duracao_ms": inicio.elapsed().as_millis() as i64,
+            "mensagem_id": ctx.mensagem_id,
+            "tipo": ctx.tipo_str,
+            "duracao_ms": ctx.inicio.elapsed().as_millis() as i64,
         }),
         None,
         None,
-        Some(causation_id.to_string()),
+        Some(ctx.causation_id.to_string()),
     );
 }
 
@@ -5334,6 +5486,41 @@ mod tests {
     }
 
     #[test]
+    fn bytes_do_base64_conta_com_e_sem_preenchimento() {
+        assert_eq!(bytes_do_base64("QUJD"), 3);
+        assert_eq!(bytes_do_base64("QQ=="), 1);
+        assert_eq!(bytes_do_base64("QQ"), 1);
+        assert_eq!(bytes_do_base64("QUI="), 2);
+        assert_eq!(bytes_do_base64("QU\nJD"), 3);
+        assert_eq!(bytes_do_base64(""), 0);
+    }
+
+    #[test]
+    fn ponteiro_da_midia_leva_nome_so_de_documento_e_ptt_so_de_audio() {
+        let doc = ponteiro_da_midia(
+            "media/t/1/document/h",
+            "application/pdf",
+            10,
+            &domain_whatsapp::MediaType::Document,
+            &serde_json::json!({ "fileName": "contrato.pdf", "ptt": true }),
+        );
+        assert_eq!(doc["nome_arquivo"], "contrato.pdf");
+        assert!(doc["is_ptt"].is_null());
+
+        let audio = ponteiro_da_midia(
+            "media/t/1/audio/h",
+            "",
+            0,
+            &domain_whatsapp::MediaType::Audio,
+            &serde_json::json!({ "fileName": "x", "ptt": true }),
+        );
+        assert!(audio["nome_arquivo"].is_null());
+        assert_eq!(audio["is_ptt"], true);
+        assert!(audio["mimetype"].is_null());
+        assert!(audio["tamanho"].is_null());
+    }
+
+    #[test]
     fn trace_id_de_extrai_o_segundo_campo_do_traceparent() {
         assert_eq!(
             trace_id_de("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"),
@@ -5382,9 +5569,12 @@ mod tests {
         assert_eq!(extrair_nota_da_resposta("⭐⭐⭐⭐⭐⭐⭐"), None);
     }
 
-    /// HAPPY PATH do pipeline de mídia (áudio): download -> storage -> transcrição
-    /// -> anexa análise. Cobre a orquestração ponta-a-ponta com servidores mock dos
-    /// três serviços de dados + `MockIaEngineClient` para o ia_engine.
+    /// HAPPY PATH do pipeline de mídia (áudio): download -> storage -> ponteiro
+    /// -> transcrição -> anexa análise. Cobre a orquestração ponta-a-ponta com
+    /// servidores mock dos três serviços de dados + `MockIaEngineClient`.
+    ///
+    /// P2a: o ponteiro (com mimetype e tamanho) é gravado ANTES da IA, o `PutFile`
+    /// leva `content_type`, e a segunda chamada leva só a análise.
     #[tokio::test]
     async fn test_pipeline_midia_audio_transcreve_e_anexa() {
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -5399,6 +5589,14 @@ mod tests {
 
         let anexou = Arc::new(AtomicBool::new(false));
         let anexou_c = anexou.clone();
+        // Payloads de `AnexarAnaliseMidia`, na ordem em que chegaram.
+        let anexos: Arc<std::sync::Mutex<Vec<serde_json::Value>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let anexos_pg = anexos.clone();
+        let anexos_ia = anexos.clone();
+        let content_type_put: Arc<std::sync::Mutex<Option<String>>> =
+            Arc::new(std::sync::Mutex::new(None));
+        let content_type_put_c = content_type_put.clone();
 
         let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers")
             .route("ResolverConfigIa", |env| {
@@ -5419,7 +5617,11 @@ mod tests {
             })
             .route("AnexarAnaliseMidia", move |env| {
                 let anexou = anexou_c.clone();
+                let anexos = anexos_pg.clone();
                 Box::pin(async move {
+                    let payload: serde_json::Value =
+                        serde_json::from_slice(&env.payload).unwrap_or_default();
+                    anexos.lock().unwrap().push(payload);
                     anexou.store(true, Ordering::SeqCst);
                     Envelope {
                         kind: MessageKind::Reply as i32,
@@ -5446,8 +5648,13 @@ mod tests {
             },
         );
         let st_server = Server::new(Endpoint::parse(st_addr).unwrap(), "flatbuffers")
-            .route("PutFile", |env| {
+            .route("PutFile", move |env| {
+                let content_type_put = content_type_put_c.clone();
                 Box::pin(async move {
+                    let payload: serde_json::Value =
+                        serde_json::from_slice(&env.payload).unwrap_or_default();
+                    *content_type_put.lock().unwrap() =
+                        payload["content_type"].as_str().map(String::from);
                     Envelope {
                         kind: MessageKind::Reply as i32,
                         payload: serde_json::to_vec(&serde_json::json!({ "uri": "r2://k" }))
@@ -5475,7 +5682,19 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(150)).await;
 
         let mut mock_ia = ia_engine::MockIaEngineClient::new();
-        mock_ia.expect_transcribe().times(1).returning(|_, _| {
+        mock_ia.expect_transcribe().times(1).returning(move |_, _| {
+            // P2a: quando a IA é chamada, o ponteiro já tem de estar gravado.
+            let gravados = anexos_ia.lock().unwrap();
+            assert_eq!(gravados.len(), 1, "o ponteiro deve ser gravado antes da IA");
+            assert_eq!(
+                gravados[0]["arquivo_midia"]
+                    .as_str()
+                    .map(|s| s.starts_with("media/")),
+                Some(true)
+            );
+            assert_eq!(gravados[0]["mimetype"].as_str(), Some("audio/ogg"));
+            // "QUJD" decodifica em 3 bytes ("ABC").
+            assert_eq!(gravados[0]["tamanho"].as_i64(), Some(3));
             Ok(ia_engine::client::TranscribeOutput {
                 transcricao: "olá mundo".to_string(),
                 resumo: "saudação".to_string(),
@@ -5526,6 +5745,17 @@ mod tests {
             anexou.load(Ordering::SeqCst),
             "AnexarAnaliseMidia deveria ter sido chamado ao fim do pipeline"
         );
+        assert_eq!(
+            content_type_put.lock().unwrap().as_deref(),
+            Some("audio/ogg"),
+            "PutFile deve levar o content_type da mídia"
+        );
+        let gravados = anexos.lock().unwrap().clone();
+        assert_eq!(gravados.len(), 2, "ponteiro e análise em duas chamadas");
+        // A segunda chamada grava só análise/resumo.
+        assert!(gravados[1].get("arquivo_midia").is_none());
+        assert_eq!(gravados[1]["analise"].as_str(), Some("olá mundo"));
+        assert_eq!(gravados[1]["resumo"].as_str(), Some("saudação"));
 
         pg_handle.abort();
         wa_handle.abort();
@@ -5575,9 +5805,11 @@ mod tests {
                 Box::pin(async move {
                     let payload: serde_json::Value =
                         serde_json::from_slice(&env.payload).unwrap_or_default();
-                    // O ponteiro do arquivo é o que não pode faltar; análise vazia.
+                    // O ponteiro do arquivo é o que não pode faltar, já com os
+                    // metadados do anexo (P2a); sem análise.
                     assert!(!payload["arquivo_midia"].as_str().unwrap_or("").is_empty());
-                    assert_eq!(payload["analise"].as_str(), Some(""));
+                    assert_eq!(payload["mimetype"].as_str(), Some("audio/ogg"));
+                    assert!(payload.get("analise").is_none());
                     anexou.store(true, Ordering::SeqCst);
                     Envelope {
                         kind: MessageKind::Reply as i32,

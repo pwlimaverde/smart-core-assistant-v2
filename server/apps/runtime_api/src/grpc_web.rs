@@ -469,9 +469,11 @@ fn millis_do_item(item: &serde_json::Value, campo: &str) -> Option<i64> {
 
 /// N9/E2 — monta a mídia da mensagem quando ela existe.
 ///
-/// A `url_assinada` vem pronta do `data_postgres` (gerada no momento da leitura,
-/// com TTL curto). Aqui é só transporte: **não logar** este campo em nenhum
-/// ponto — é credencial de leitura do objeto até expirar.
+/// O `data_postgres` devolve o bloco `midia` **sem** URL (ponteiro e metadados:
+/// `chave`, `kind`, `mimetype`, `filename`, `size_bytes`, `is_ptt`); a
+/// `url_assinada` é preenchida antes daqui por [`assinar_midias_da_pagina`], que
+/// pede ao `data_storage` a assinatura em lote da página (P2a). **Não logar**
+/// este campo em nenhum ponto — é credencial de leitura do objeto até expirar.
 fn midia_do_item(item: &serde_json::Value) -> Option<ProtoMidiaMensagem> {
     let m = item.get("midia")?;
     // Sem URL não há o que o cliente possa fazer com o registro: a mídia foi
@@ -499,6 +501,122 @@ fn midia_do_item(item: &serde_json::Value) -> Option<ProtoMidiaMensagem> {
         seconds: m.get("seconds").and_then(|v| v.as_i64()).map(|v| v as i32),
         is_ptt: m.get("is_ptt").and_then(|v| v.as_bool()),
     })
+}
+
+/// P2a — validade (s) da URL de leitura das mídias da thread e da galeria. O
+/// cliente reaproveita a URL enquanto ela tem menos de 80% desse tempo e pede
+/// recarga quando ela vence.
+const TTL_URL_MIDIA_S: u64 = 900;
+
+/// P2a — teto de itens por chamada `PresignFiles` (o mesmo do `data_storage`).
+const TETO_PRESIGN_LOTE: usize = 100;
+
+/// P2a — preenche `url_assinada` nos blocos `midia` de uma página (thread ou
+/// galeria) com uma chamada `PresignFiles` ao `data_storage` por lote de até
+/// [`TETO_PRESIGN_LOTE`] chaves — na prática, uma por página.
+///
+/// O `runtime_api` não fala S3: a assinatura é do `data_storage`, via RPC.
+/// O `mimetype` vai como `content_type` para o R2 responder com o
+/// `Content-Type` certo (a chave da mídia recebida não tem extensão).
+///
+/// Devolve `false` quando não conseguiu assinar (storage fora do ar ou não
+/// configurado). Os blocos ficam sem URL e [`midia_do_item`] os descarta: a
+/// mensagem sai só com o texto e a leitura não falha por causa da mídia.
+///
+/// `skip_all`: chaves, nomes e URLs nunca entram no span — só a quantidade.
+#[tracing::instrument(
+    skip_all,
+    name = "runtime.presign_midias",
+    fields(tenant_id = %tenant_uuid, qtd = blocos.len(), ttl = TTL_URL_MIDIA_S)
+)]
+async fn assinar_midias_da_pagina(
+    storage: Option<&transport::MuxClient>,
+    tenant_uuid: Uuid,
+    traceparent: &str,
+    mut blocos: Vec<&mut serde_json::Value>,
+) -> bool {
+    // Chaves únicas, na ordem em que aparecem (a mesma mídia reenviada é a mesma
+    // chave content-addressable: assina uma vez só).
+    let mut vistas = std::collections::HashSet::new();
+    let itens: Vec<serde_json::Value> = blocos
+        .iter()
+        .filter_map(|b| {
+            let chave = b.get("chave").and_then(|v| v.as_str())?.trim();
+            if chave.is_empty() || !vistas.insert(chave.to_string()) {
+                return None;
+            }
+            let content_type = b
+                .get("mimetype")
+                .and_then(|v| v.as_str())
+                .filter(|m| !m.trim().is_empty());
+            Some(serde_json::json!({ "file_name": chave, "content_type": content_type }))
+        })
+        .collect();
+    if itens.is_empty() {
+        return true;
+    }
+    let Some(storage) = storage else {
+        tracing::warn!("storage não configurado; mídias da página saem sem URL");
+        return false;
+    };
+
+    let mut urls: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for lote in itens.chunks(TETO_PRESIGN_LOTE) {
+        let env_presign = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "PresignFiles".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "itens": lote,
+                "expires_in": TTL_URL_MIDIA_S,
+            }))
+            .unwrap_or_default(),
+            ..Default::default()
+        };
+        let resp = match storage
+            .call(env_presign, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(r) if r.kind != MessageKind::Error as i32 => r,
+            // Sem detalhe do erro: a mensagem do storage pode carregar a chave.
+            _ => {
+                tracing::warn!("falha ao assinar as mídias da página");
+                return false;
+            }
+        };
+        let corpo: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
+        for u in corpo
+            .get("urls")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+        {
+            if let (Some(chave), Some(url)) = (
+                u.get("file_name").and_then(|v| v.as_str()),
+                u.get("url").and_then(|v| v.as_str()),
+            ) {
+                urls.insert(chave.to_string(), url.to_string());
+            }
+        }
+    }
+
+    for bloco in blocos.iter_mut() {
+        let url = bloco
+            .get("chave")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .and_then(|c| urls.get(c))
+            .cloned();
+        if let (Some(url), Some(obj)) = (url, bloco.as_object_mut()) {
+            obj.insert("url_assinada".to_string(), serde_json::Value::String(url));
+        }
+    }
+    true
 }
 
 /// Header com que o `mcp_server` declara a tool e o consentimento de cada chamada.
@@ -8251,7 +8369,12 @@ impl AdminService for AdminFacade {
 
     #[tracing::instrument(
         skip_all,
-        fields(service = "runtime_api", rpc = "GetThread", traceparent)
+        fields(
+            service = "runtime_api",
+            rpc = "GetThread",
+            traceparent,
+            error_code = tracing::field::Empty
+        )
     )]
     async fn get_thread(
         &self,
@@ -8300,8 +8423,26 @@ impl AdminService for AdminFacade {
                     return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
                 }
 
-                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                let mut val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
+
+                // P2a: assina as mídias da página numa chamada só. Falha do
+                // storage não derruba a thread: as mensagens saem sem `midia`.
+                let blocos: Vec<&mut serde_json::Value> = val
+                    .get_mut("mensagens")
+                    .and_then(|v| v.as_array_mut())
+                    .map(|arr| arr.iter_mut().filter_map(|i| i.get_mut("midia")).collect())
+                    .unwrap_or_default();
+                if !assinar_midias_da_pagina(
+                    self.deps.storage.as_ref(),
+                    tenant_uuid,
+                    &traceparent,
+                    blocos,
+                )
+                .await
+                {
+                    tracing::Span::current().record("error_code", "presign_falhou");
+                }
 
                 let mut mensagens = Vec::new();
                 if let Some(arr) = val.get("mensagens").and_then(|v| v.as_array()) {
@@ -8349,8 +8490,8 @@ impl AdminService for AdminFacade {
                                 .get("resumo_midia")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string()),
-                            // N9/E2: o `data_postgres` já devolve a mídia com a
-                            // URL assinada na hora da leitura (TTL curto).
+                            // N9/E2 + P2a: ponteiro/metadados vêm do
+                            // `data_postgres`; a URL foi assinada acima, em lote.
                             midia: midia_do_item(item),
                             // N9/E7: ticks. As colunas existem desde a 0006 e
                             // nunca foram expostas — sem elas a bolha não
@@ -8621,7 +8762,12 @@ impl AdminService for AdminFacade {
     /// N9/E2 — galeria da ficha: as mídias do atendimento, com URL assinada.
     #[tracing::instrument(
         skip_all,
-        fields(service = "runtime_api", rpc = "ListarMidiasAtendimento", traceparent)
+        fields(
+            service = "runtime_api",
+            rpc = "ListarMidiasAtendimento",
+            traceparent,
+            error_code = tracing::field::Empty
+        )
     )]
     async fn listar_midias_atendimento(
         &self,
@@ -8674,8 +8820,26 @@ impl AdminService for AdminFacade {
             let msg = resp.error.map(|e| e.message).unwrap_or_default();
             return Err(Status::internal(format!("Erro no banco: {msg}")));
         }
-        let corpo: serde_json::Value =
+        let mut corpo: serde_json::Value =
             serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        // P2a: assinatura em lote da página da galeria (o `data_postgres` já
+        // filtra as purgadas). Falha do storage → galeria vazia, não erro.
+        let blocos: Vec<&mut serde_json::Value> = corpo
+            .get_mut("midias")
+            .and_then(|v| v.as_array_mut())
+            .map(|arr| arr.iter_mut().collect())
+            .unwrap_or_default();
+        if !assinar_midias_da_pagina(
+            self.deps.storage.as_ref(),
+            tenant_uuid,
+            &traceparent,
+            blocos,
+        )
+        .await
+        {
+            tracing::Span::current().record("error_code", "presign_falhou");
+        }
 
         let midias = corpo
             .get("midias")
@@ -8683,7 +8847,7 @@ impl AdminService for AdminFacade {
             .map(|arr| {
                 arr.iter()
                     // Reaproveita o mesmo montador da thread: a mídia sem URL
-                    // (purgada pela retenção) simplesmente não entra na galeria.
+                    // (presign falhou) simplesmente não entra na galeria.
                     .filter_map(|item| midia_do_item(&serde_json::json!({ "midia": item })))
                     .collect()
             })

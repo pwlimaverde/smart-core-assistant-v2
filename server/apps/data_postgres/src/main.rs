@@ -2147,13 +2147,90 @@ async fn handler_get_thread(store: &dyn ports::AtendimentoStore, env: Envelope) 
         .listar_mensagens(&ctx, atendimento_id, limit, offset, before_id)
         .await
     {
-        Ok(mensagens) => ok_reply(
-            &env,
-            "GetThreadReply",
-            serde_json::json!({ "atendimento_id": atendimento_id, "mensagens": mensagens }),
-        ),
+        Ok(mensagens) => {
+            // P2a: cada mensagem com anexo vivo ganha o bloco `midia`. A URL
+            // assinada NÃO nasce aqui — o dono do banco não fala S3; quem assina
+            // é o `data_storage`, chamado em lote pela borda (`runtime_api`).
+            let itens: Vec<serde_json::Value> = mensagens
+                .iter()
+                .map(|m| {
+                    let mut item = serde_json::to_value(m).unwrap_or_default();
+                    if let (Some(bloco), Some(obj)) = (bloco_midia(m), item.as_object_mut()) {
+                        obj.insert("midia".to_string(), bloco);
+                    }
+                    item
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "GetThreadReply",
+                serde_json::json!({ "atendimento_id": atendimento_id, "mensagens": itens }),
+            )
+        }
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
+}
+
+/// P2a — categoria da mídia que a bolha usa para escolher o widget.
+///
+/// O mimetype manda (é o conferido por magic bytes no envio, ou o que o WhatsApp
+/// declarou na entrada). Sem ele — mensagens antigas, anteriores à 0029 —, cai
+/// no `tipo` da mensagem, que tem dois vocabulários: o da ingestão
+/// (`imagem`, `audio`, …) e o do WhatsApp usado no envio (`imageMessage`, …).
+fn kind_da_midia(mimetype: Option<&str>, tipo: &str) -> &'static str {
+    let mime = mimetype.unwrap_or_default().trim().to_ascii_lowercase();
+    if mime.starts_with("image/") {
+        return "image";
+    }
+    if mime.starts_with("audio/") {
+        return "audio";
+    }
+    if mime.starts_with("video/") {
+        return "video";
+    }
+    if !mime.is_empty() {
+        return "document";
+    }
+    match tipo {
+        "imagem" | "image" | "imageMessage" | "sticker" | "stickerMessage" => "image",
+        "audio" | "audioMessage" | "pttMessage" => "audio",
+        "video" | "videoMessage" | "ptvMessage" => "video",
+        _ => "document",
+    }
+}
+
+/// P2a — bloco `midia` de uma mensagem da thread, ou `None` quando não há anexo
+/// vivo (sem `arquivo_midia`, ou purgado pela retenção — assinar uma URL para
+/// objeto apagado daria um player quebrado).
+///
+/// Formato: `{ chave, kind, mimetype, filename, size_bytes, is_ptt }`. A
+/// `url_assinada` é acrescentada pelo `runtime_api`. `filename` é PII: viaja ao
+/// cliente, nunca a log.
+fn bloco_midia(
+    m: &infrastructure_postgres::atendimentos::mensagens::Mensagem,
+) -> Option<serde_json::Value> {
+    if m.midia_purgada_em.is_some() {
+        return None;
+    }
+    let chave = m
+        .arquivo_midia
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty())?;
+    let kind = kind_da_midia(m.mimetype_midia.as_deref(), &m.tipo);
+    let is_ptt = m
+        .metadados
+        .get("ptt")
+        .and_then(|v| v.as_bool())
+        .or_else(|| (m.tipo == "pttMessage").then_some(true));
+    Some(serde_json::json!({
+        "chave": chave,
+        "kind": kind,
+        "mimetype": m.mimetype_midia,
+        "filename": m.nome_arquivo_midia,
+        "size_bytes": m.tamanho_midia,
+        "is_ptt": is_ptt,
+    }))
 }
 
 /// Lista atendimentos por status (snapshot de realtime), respeitando o RLS do tenant.
@@ -4894,6 +4971,8 @@ async fn handler_listar_midias_atendimento(
                     serde_json::json!({
                         "mensagem_id": m.id,
                         "chave": m.arquivo_midia,
+                        // P2a: o `kind` decide o widget da galeria (mesma regra da thread).
+                        "kind": kind_da_midia(m.mimetype_midia.as_deref(), &m.tipo),
                         "mimetype": m.mimetype_midia,
                         "filename": m.nome_arquivo_midia,
                         "size_bytes": m.tamanho_midia,
@@ -5099,30 +5178,35 @@ async fn handler_anexar_analise_midia(
             )
         }
     };
-    let arquivo_midia = payload_json
-        .get("arquivo_midia")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let analise_midia = payload_json
-        .get("analise")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let resumo_midia = payload_json
-        .get("resumo")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    // String vazia (ou ausente) = campo não informado: não sobrescreve. É o que
+    // permite ao worker gravar ponteiro + metadados logo após o upload e a
+    // análise da IA numa segunda chamada (P2a).
+    let texto = |chave: &str| {
+        payload_json
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    };
+    let anexo = infrastructure_postgres::atendimentos::mensagens::AnexoMidia {
+        arquivo_midia: texto("arquivo_midia"),
+        analise_midia: texto("analise"),
+        resumo_midia: texto("resumo"),
+        // Limites das colunas da 0029 (VARCHAR(120)/VARCHAR(255)): truncar aqui
+        // evita que um valor fora do padrão derrube a gravação do ponteiro.
+        mimetype_midia: texto("mimetype").map(|m| m.chars().take(120).collect()),
+        // Tamanho zero ou negativo é ausência de informação, não um arquivo vazio.
+        tamanho_midia: payload_json
+            .get("tamanho")
+            .and_then(|v| v.as_i64())
+            .filter(|t| *t > 0),
+        nome_arquivo_midia: texto("nome_arquivo").map(|n| n.chars().take(255).collect()),
+        is_ptt: payload_json.get("is_ptt").and_then(|v| v.as_bool()),
+    };
 
     let ctx = contexto_do_envelope(&env);
-    match store
-        .anexar_analise_midia(
-            &ctx,
-            mensagem_id,
-            arquivo_midia,
-            analise_midia,
-            resumo_midia,
-        )
-        .await
-    {
+    match store.anexar_analise_midia(&ctx, mensagem_id, anexo).await {
         Ok(()) => ok_reply(
             &env,
             "AnexarAnaliseMidiaReply",
@@ -12685,6 +12769,7 @@ mod tests_atendimento_cliente_unit {
             status_envio: "enviado".to_string(),
             data_entregue: None,
             data_lida: None,
+            midia_purgada_em: None,
         }
     }
 
@@ -12955,13 +13040,14 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_anexar_analise_midia()
             .times(1)
-            .withf(|_, mensagem_id, arquivo, analise, resumo| {
+            .withf(|_, mensagem_id, anexo| {
                 *mensagem_id == 7
-                    && arquivo == "media/t/1/audio/hash"
-                    && analise.is_empty()
-                    && resumo == "resumo do áudio"
+                    && anexo.arquivo_midia.as_deref() == Some("media/t/1/audio/hash")
+                    && anexo.analise_midia.is_none()
+                    && anexo.resumo_midia.as_deref() == Some("resumo do áudio")
+                    && anexo.mimetype_midia.is_none()
             })
-            .returning(|_, _, _, _, _| Ok(()));
+            .returning(|_, _, _| Ok(()));
         let env = envelope_com_payload(
             "AnexarAnaliseMidia",
             serde_json::json!({
@@ -12978,6 +13064,114 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["status"].as_str(), Some("ok"));
+    }
+
+    /// P2a: a primeira chamada do worker (logo após o upload) leva ponteiro e
+    /// metadados do anexo, sem análise — e nada disso pode virar string vazia
+    /// gravada por cima.
+    #[tokio::test]
+    async fn anexar_analise_midia_repassa_metadados_do_anexo() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_anexar_analise_midia()
+            .times(1)
+            .withf(|_, mensagem_id, anexo| {
+                *mensagem_id == 9
+                    && anexo.arquivo_midia.as_deref() == Some("media/t/1/document/h")
+                    && anexo.mimetype_midia.as_deref() == Some("application/pdf")
+                    && anexo.tamanho_midia == Some(2048)
+                    && anexo.nome_arquivo_midia.as_deref() == Some("contrato.pdf")
+                    && anexo.is_ptt.is_none()
+                    && anexo.analise_midia.is_none()
+                    && anexo.resumo_midia.is_none()
+            })
+            .returning(|_, _, _| Ok(()));
+        let env = envelope_com_payload(
+            "AnexarAnaliseMidia",
+            serde_json::json!({
+                "mensagem_id": 9,
+                "arquivo_midia": "media/t/1/document/h",
+                "mimetype": "application/pdf",
+                "tamanho": 2048,
+                "nome_arquivo": "contrato.pdf",
+                "analise": "",
+            }),
+        );
+
+        let resp = handler_anexar_analise_midia(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// P2a: a thread monta o bloco `midia` para o anexo vivo e o omite quando a
+    /// retenção já purgou o objeto (ou quando não há anexo).
+    #[tokio::test]
+    async fn get_thread_monta_midia_e_omite_purgada() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_listar_mensagens()
+            .times(1)
+            .returning(|_, _, _, _, _| {
+                let mut viva = mensagem_fake(1);
+                viva.tipo = "audio".to_string();
+                viva.arquivo_midia = Some("media/t/1/audio/abc".to_string());
+                viva.mimetype_midia = Some("audio/ogg; codecs=opus".to_string());
+                viva.tamanho_midia = Some(1234);
+                viva.metadados = serde_json::json!({ "ptt": true });
+
+                let mut purgada = mensagem_fake(2);
+                purgada.tipo = "imagem".to_string();
+                purgada.arquivo_midia = Some("media/t/1/image/def".to_string());
+                purgada.midia_purgada_em = Some(chrono::Utc::now());
+
+                // Mensagem antiga, sem mimetype: o `kind` sai do `tipo`.
+                let mut antiga = mensagem_fake(3);
+                antiga.tipo = "documento".to_string();
+                antiga.arquivo_midia = Some("media/t/1/document/ghi".to_string());
+                antiga.nome_arquivo_midia = Some("nota.pdf".to_string());
+
+                Ok(vec![viva, purgada, antiga, mensagem_fake(4)])
+            });
+        let env = envelope_com_payload("GetThread", serde_json::json!({ "atendimento_id": 1 }));
+
+        let resp = handler_get_thread(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        let msgs = body["mensagens"].as_array().unwrap();
+        assert_eq!(msgs.len(), 4);
+
+        let midia = &msgs[0]["midia"];
+        assert_eq!(midia["chave"], "media/t/1/audio/abc");
+        assert_eq!(midia["kind"], "audio");
+        assert_eq!(midia["mimetype"], "audio/ogg; codecs=opus");
+        assert_eq!(midia["size_bytes"], 1234);
+        assert_eq!(midia["is_ptt"], true);
+        assert!(midia.get("url_assinada").is_none());
+
+        assert!(
+            msgs[1].get("midia").is_none(),
+            "mídia purgada não ganha bloco"
+        );
+
+        assert_eq!(msgs[2]["midia"]["kind"], "document");
+        assert_eq!(msgs[2]["midia"]["filename"], "nota.pdf");
+
+        assert!(
+            msgs[3].get("midia").is_none(),
+            "mensagem de texto não tem mídia"
+        );
+    }
+
+    #[test]
+    fn kind_da_midia_prefere_mimetype_e_cai_no_tipo() {
+        assert_eq!(kind_da_midia(Some("image/webp"), "documento"), "image");
+        assert_eq!(kind_da_midia(Some("VIDEO/mp4"), "texto"), "video");
+        assert_eq!(kind_da_midia(Some("application/pdf"), "imagem"), "document");
+        assert_eq!(kind_da_midia(None, "imageMessage"), "image");
+        assert_eq!(kind_da_midia(Some(""), "audio"), "audio");
+        assert_eq!(kind_da_midia(None, "videoMessage"), "video");
+        assert_eq!(kind_da_midia(None, "qualquer"), "document");
     }
 
     /// FAIL-CLOSED: mensagem_id ausente vira erro de validação.

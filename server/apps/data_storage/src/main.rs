@@ -142,6 +142,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_put = state_clone2.clone();
     let state_for_get = state_clone2.clone();
     let state_for_presign = state_clone2.clone();
+    let state_for_presign_files = state_clone2.clone();
     let state_for_presign_upload = state_clone2.clone();
     let state_for_inspecionar = state_clone2;
 
@@ -157,6 +158,12 @@ async fn main() -> anyhow::Result<()> {
         .route("PresignFile", move |env| {
             let state = state_for_presign.clone();
             Box::pin(async move { handler_presign_file(state.client, env).await })
+        })
+        // P2a: assinatura de leitura em lote (uma chamada por página da thread
+        // ou da galeria). Rota interna; não é exposta por gRPC-Web.
+        .route("PresignFiles", move |env| {
+            let state = state_for_presign_files.clone();
+            Box::pin(async move { handler_presign_files(state.client, env).await })
         })
         // N9/E1: assinatura de PUT (upload do cliente direto ao R2). Separada da
         // de GET porque o método HTTP faz parte da assinatura.
@@ -246,6 +253,93 @@ fn extrair_file_name(payload_json: &serde_json::Value) -> Option<String> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(String::from)
+}
+
+/// P2a — teto de itens por chamada de `PresignFiles`. Uma página da thread tem
+/// 50 mensagens e a galeria até 200 com paginação; 100 cobre a página sem deixar
+/// uma única chamada virar trabalho ilimitado.
+const TETO_PRESIGN_LOTE: usize = 100;
+
+/// P2a — TTL padrão (s) da URL de leitura assinada em lote: 15 minutos, o tempo
+/// de a pessoa ver a conversa. O cliente recarrega quando a URL vence.
+const TTL_PADRAO_PRESIGN_LOTE: u64 = 900;
+
+/// P2a — TTL máximo (s) aceito em `PresignFiles`: a URL é credencial de leitura,
+/// não deve sobreviver ao expediente.
+const TTL_MAXIMO_PRESIGN_LOTE: u64 = 3600;
+
+/// P2a — a chave pode virar caminho no bucket: recusa o que escaparia do prefixo
+/// do tenant (`..`, barra inicial, contrabarra) ou carregaria caracteres de
+/// controle. O tamanho segue o limite de chave do S3 (1024 bytes).
+fn file_name_valido(file_name: &str) -> bool {
+    !file_name.is_empty()
+        && file_name.len() <= 1024
+        && !file_name.starts_with('/')
+        && !file_name.contains('\\')
+        && !file_name.split('/').any(|seg| seg == "..")
+        && !file_name.chars().any(char::is_control)
+}
+
+/// P2a — `content_type` opcional do payload. Valor fora do formato `tipo/subtipo`
+/// (ou com caractere que quebraria o cabeçalho) é ignorado, não recusado: sem
+/// ele o objeto só perde o `Content-Type`, o que não justifica falhar o upload.
+fn content_type_do(valor: Option<&serde_json::Value>) -> Option<String> {
+    let ct = valor?.as_str()?.trim();
+    let valido = !ct.is_empty()
+        && ct.len() <= 255
+        && ct.contains('/')
+        && ct
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "!#$&^_.+-/;= ".contains(c));
+    valido.then(|| ct.to_string())
+}
+
+/// P2a — um item de `PresignFiles` já validado.
+#[derive(Debug, Clone, PartialEq)]
+struct ItemPresign {
+    file_name: String,
+    content_type: Option<String>,
+}
+
+/// P2a — valida o payload de `PresignFiles` inteiro antes de assinar qualquer
+/// URL. Erro = `AppError::Validation` com o índice do item, **nunca** o nome
+/// (a chave pode carregar PII em rotas que não são de mídia).
+fn validar_lote_presign(
+    payload_json: &serde_json::Value,
+) -> Result<(Vec<ItemPresign>, u64), error_core::AppError> {
+    let itens = payload_json
+        .get("itens")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| error_core::AppError::Validation("itens obrigatório no payload".into()))?;
+    if itens.len() > TETO_PRESIGN_LOTE {
+        return Err(error_core::AppError::Validation(format!(
+            "no máximo {TETO_PRESIGN_LOTE} itens por chamada (recebidos {})",
+            itens.len()
+        )));
+    }
+    let mut validados = Vec::with_capacity(itens.len());
+    for (i, item) in itens.iter().enumerate() {
+        let file_name = item
+            .get("file_name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .unwrap_or_default();
+        if !file_name_valido(file_name) {
+            return Err(error_core::AppError::Validation(format!(
+                "file_name inválido no item {i}"
+            )));
+        }
+        validados.push(ItemPresign {
+            file_name: file_name.to_string(),
+            content_type: content_type_do(item.get("content_type")),
+        });
+    }
+    let ttl = payload_json
+        .get("expires_in")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(TTL_PADRAO_PRESIGN_LOTE)
+        .clamp(60, TTL_MAXIMO_PRESIGN_LOTE);
+    Ok((validados, ttl))
 }
 
 async fn chamar_data_postgres(
@@ -448,7 +542,13 @@ async fn handler_put_file(client: StorageClient, env: Envelope) -> Envelope {
         return responder_erro(e, env, "PutFileReply");
     }
 
-    match client.put(tenant_id, &file_name, &conteudo).await {
+    // P2a: `content_type` opcional vira metadado do objeto (ver `StorageClient::put`).
+    let content_type = content_type_do(payload_json.get("content_type"));
+
+    match client
+        .put(tenant_id, &file_name, &conteudo, content_type.as_deref())
+        .await
+    {
         Ok(uri) => {
             // N4.2: contador agregado de arquivos (sem PII/nome de arquivo).
             observability::usage_metrics::registrar_midia_armazenada(&env.tenant_id);
@@ -518,8 +618,13 @@ async fn handler_presign_file(client: StorageClient, env: Envelope) -> Envelope 
         .get("expires_in")
         .and_then(|v| v.as_u64())
         .unwrap_or(3600);
+    // P2a: `content_type` opcional vira `response-content-type` assinado.
+    let content_type = content_type_do(payload_json.get("content_type"));
 
-    match client.presign(tenant_id, &file_name, expires_in).await {
+    match client
+        .presign(tenant_id, &file_name, expires_in, content_type.as_deref())
+        .await
+    {
         Ok(url) => {
             let res = serde_json::json!({ "url": url });
             Envelope {
@@ -535,6 +640,76 @@ async fn handler_presign_file(client: StorageClient, env: Envelope) -> Envelope 
             env,
             "PresignFileReply",
         ),
+    }
+}
+
+/// P2a — assina em lote as URLs de **leitura** de uma página de mídias.
+///
+/// Existe para o `runtime_api` montar a thread e a galeria com uma chamada por
+/// página, e não uma por mensagem. Rota interna de envelope: não vai para o
+/// `AdminService`/gRPC-Web.
+///
+/// Payload: `{ itens: [{ file_name, content_type? }], expires_in? }`.
+/// Resposta: `{ urls: [{ file_name, url }] }`, na ordem dos itens.
+///
+/// O lote é validado inteiro antes de assinar (teto e `file_name`); a assinatura
+/// é local (SigV4), não faz I/O com o R2, então um item não falha sozinho.
+/// **Nenhuma URL nem `file_name` vai para span ou log** — só a quantidade e o TTL.
+#[tracing::instrument(
+    skip_all,
+    name = "storage.presign_lote",
+    fields(
+        tenant_id = %env.tenant_id,
+        qtd = tracing::field::Empty,
+        ttl = tracing::field::Empty,
+        error_code = tracing::field::Empty,
+    )
+)]
+async fn handler_presign_files(client: StorageClient, env: Envelope) -> Envelope {
+    let span = tracing::Span::current();
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let (itens, ttl) = match validar_lote_presign(&payload_json) {
+        Ok(v) => v,
+        Err(e) => {
+            span.record("error_code", "validacao");
+            return responder_erro(e, env, "PresignFilesReply");
+        }
+    };
+    span.record("qtd", itens.len());
+    span.record("ttl", ttl);
+
+    let mut urls = Vec::with_capacity(itens.len());
+    for item in &itens {
+        match client
+            .presign(
+                tenant_id,
+                &item.file_name,
+                ttl,
+                item.content_type.as_deref(),
+            )
+            .await
+        {
+            Ok(url) => urls.push(serde_json::json!({ "file_name": item.file_name, "url": url })),
+            Err(e) => {
+                span.record("error_code", "presign_falhou");
+                return responder_erro(
+                    error_core::AppError::Storage(e.to_string()),
+                    env,
+                    "PresignFilesReply",
+                );
+            }
+        }
+    }
+
+    Envelope {
+        kind: MessageKind::Reply as i32,
+        method: "PresignFilesReply".to_string(),
+        payload: serde_json::to_vec(&serde_json::json!({ "urls": urls })).unwrap_or_default(),
+        error: None,
+        ..env
     }
 }
 
@@ -866,6 +1041,106 @@ mod tests {
         let resp = handler_presign_file(client, env).await;
         assert_eq!(resp.kind, MessageKind::Error as i32);
         assert_eq!(resp.method, "PresignFileReply");
+    }
+
+    // ------------------------------------------------------------------
+    // P2a — PresignFiles (assinatura de leitura em lote).
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn file_name_valido_recusa_fuga_do_prefixo_e_controle() {
+        assert!(file_name_valido("media/t/1/image/abc123"));
+        assert!(!file_name_valido(""));
+        assert!(!file_name_valido("/media/x"));
+        assert!(!file_name_valido("media/../outro-tenant/x"));
+        assert!(!file_name_valido(".."));
+        assert!(!file_name_valido("media\\x"));
+        assert!(!file_name_valido("media/x\ny"));
+        assert!(!file_name_valido(&"a".repeat(1025)));
+    }
+
+    #[test]
+    fn content_type_do_ignora_valor_fora_do_formato() {
+        let v = |s: &str| serde_json::json!(s);
+        assert_eq!(
+            content_type_do(Some(&v("audio/ogg; codecs=opus"))),
+            Some("audio/ogg; codecs=opus".to_string())
+        );
+        assert_eq!(content_type_do(Some(&v("semBarra"))), None);
+        assert_eq!(content_type_do(Some(&v("text/html\r\nX: y"))), None);
+        assert_eq!(content_type_do(None), None);
+    }
+
+    #[tokio::test]
+    async fn handler_presign_files_acima_do_teto_responde_validation() {
+        let client = dummy_storage_client();
+        let itens: Vec<serde_json::Value> = (0..=TETO_PRESIGN_LOTE)
+            .map(|i| serde_json::json!({ "file_name": format!("media/t/1/image/{i}") }))
+            .collect();
+        let env = env_com_payload(serde_json::json!({ "itens": itens, "expires_in": 900 }));
+        let resp = handler_presign_files(client, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "PresignFilesReply");
+    }
+
+    #[tokio::test]
+    async fn handler_presign_files_file_name_invalido_responde_validation() {
+        let client = dummy_storage_client();
+        let env = env_com_payload(serde_json::json!({
+            "itens": [
+                { "file_name": "media/t/1/image/ok" },
+                { "file_name": "../fora" },
+            ],
+        }));
+        let resp = handler_presign_files(client, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "PresignFilesReply");
+    }
+
+    #[tokio::test]
+    async fn handler_presign_files_sem_itens_responde_validation() {
+        let client = dummy_storage_client();
+        let resp = handler_presign_files(client, env_com_payload(serde_json::json!({}))).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// A assinatura SigV4 é local (sem I/O com o R2): o caminho feliz roda com o
+    /// cliente fictício e devolve uma URL por item, na ordem pedida.
+    #[tokio::test]
+    async fn handler_presign_files_assina_cada_item_na_ordem() {
+        let client = dummy_storage_client();
+        let env = env_com_payload(serde_json::json!({
+            "itens": [
+                { "file_name": "media/t/1/image/a", "content_type": "image/jpeg" },
+                { "file_name": "media/t/1/audio/b" },
+            ],
+            "expires_in": 900,
+        }));
+        let resp = handler_presign_files(client, env).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let corpo: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        let urls = corpo["urls"].as_array().unwrap();
+        assert_eq!(urls.len(), 2);
+        assert_eq!(urls[0]["file_name"], "media/t/1/image/a");
+        assert_eq!(urls[1]["file_name"], "media/t/1/audio/b");
+        let primeira = urls[0]["url"].as_str().unwrap();
+        assert!(primeira.contains("response-content-type"));
+        assert!(!urls[1]["url"]
+            .as_str()
+            .unwrap()
+            .contains("response-content-type"));
+    }
+
+    #[test]
+    fn validar_lote_presign_limita_o_ttl() {
+        let (_, ttl) = validar_lote_presign(&serde_json::json!({
+            "itens": [],
+            "expires_in": 999_999,
+        }))
+        .unwrap();
+        assert_eq!(ttl, TTL_MAXIMO_PRESIGN_LOTE);
+        let (_, ttl) = validar_lote_presign(&serde_json::json!({ "itens": [] })).unwrap();
+        assert_eq!(ttl, TTL_PADRAO_PRESIGN_LOTE);
     }
 
     #[tokio::test]

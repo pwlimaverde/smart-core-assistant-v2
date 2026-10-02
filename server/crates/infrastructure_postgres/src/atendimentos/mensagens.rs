@@ -46,6 +46,34 @@ pub struct Mensagem {
     pub status_envio: String,
     pub data_entregue: Option<DateTime<Utc>>,
     pub data_lida: Option<DateTime<Utc>>,
+    /// P2a — quando a retenção apagou o objeto do bucket. O ponteiro
+    /// (`arquivo_midia`) continua na linha, mas assinar uma URL para ele daria
+    /// um player quebrado: a leitura da thread usa este campo para omitir a mídia.
+    /// `sqlx(default)`: consultas que não selecionam a coluna ficam com `None`.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub midia_purgada_em: Option<DateTime<Utc>>,
+}
+
+/// P2a — o que o pipeline de mídia grava numa mensagem já persistida.
+///
+/// Struct (e não lista de parâmetros) porque são seis campos opcionais do mesmo
+/// tipo — posicionalmente seria fácil trocar `analise` por `resumo`. `None` não
+/// sobrescreve o valor atual (atualização parcial: o worker grava o ponteiro
+/// primeiro e a análise da IA depois).
+///
+/// `nome_arquivo_midia` e `analise`/`resumo` são PII: nunca em log ou span.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AnexoMidia {
+    pub arquivo_midia: Option<String>,
+    pub analise_midia: Option<String>,
+    pub resumo_midia: Option<String>,
+    pub mimetype_midia: Option<String>,
+    pub tamanho_midia: Option<i64>,
+    pub nome_arquivo_midia: Option<String>,
+    /// Nota de voz (PTT) do WhatsApp. Não tem coluna própria: vai para
+    /// `metadados.ptt`, de onde a leitura da thread monta o `is_ptt` da mídia.
+    pub is_ptt: Option<bool>,
 }
 
 /// Dados de criação de uma mensagem no thread de um atendimento.
@@ -210,16 +238,15 @@ pub trait MensagemRepository: Send + Sync {
         mensagem_id: i32,
     ) -> Result<(), DbError>;
 
-    /// Anexa a análise de mídia (ponteiro do arquivo no storage + resumo/análise
-    /// da IA) a uma mensagem já persistida (N6.1). Campos `None` não são sobrescritos.
+    /// Anexa a análise de mídia (ponteiro do arquivo no storage, metadados do
+    /// anexo e resumo/análise da IA) a uma mensagem já persistida (N6.1/P2a).
+    /// Campos `None` não são sobrescritos.
     async fn anexar_analise_midia(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
         mensagem_id: i32,
-        arquivo_midia: Option<&str>,
-        analise_midia: Option<&str>,
-        resumo_midia: Option<&str>,
+        anexo: &AnexoMidia,
     ) -> Result<(), DbError>;
 
     /// Reprocessamento manual de um dead-letter (N7.2): se agora existe
@@ -283,7 +310,7 @@ impl MensagemRepository for PostgresMensagemRepository {
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
                          arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
                          quoted_preview, status_envio, data_entregue, data_lida,
-                         mimetype_midia, nome_arquivo_midia, tamanho_midia"#,
+                         mimetype_midia, nome_arquivo_midia, tamanho_midia, midia_purgada_em"#,
         )
         .bind(ctx.tenant_id)
         .bind(nova.atendimento_id)
@@ -315,7 +342,7 @@ impl MensagemRepository for PostgresMensagemRepository {
                       resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
                       arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
                       quoted_preview, status_envio, data_entregue, data_lida,
-                      mimetype_midia, nome_arquivo_midia, tamanho_midia
+                      mimetype_midia, nome_arquivo_midia, tamanho_midia, midia_purgada_em
                FROM oraculo_mensagem
                WHERE tenant_id = $1 AND message_id_whatsapp = $2
                ORDER BY id DESC
@@ -345,7 +372,7 @@ impl MensagemRepository for PostgresMensagemRepository {
                       resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
                       arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
                       quoted_preview, status_envio, data_entregue, data_lida,
-                      mimetype_midia, nome_arquivo_midia, tamanho_midia
+                      mimetype_midia, nome_arquivo_midia, tamanho_midia, midia_purgada_em
                FROM oraculo_mensagem
                WHERE tenant_id = $1 AND atendimento_id = $2
                ORDER BY timestamp ASC, id ASC
@@ -727,24 +754,34 @@ impl MensagemRepository for PostgresMensagemRepository {
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
         mensagem_id: i32,
-        arquivo_midia: Option<&str>,
-        analise_midia: Option<&str>,
-        resumo_midia: Option<&str>,
+        anexo: &AnexoMidia,
     ) -> Result<(), DbError> {
         // COALESCE preserva o valor atual quando o parâmetro chega `NULL`, para
-        // atualização parcial (ex.: áudio grava resumo/transcrição, sem análise de visão).
+        // atualização parcial (ex.: o worker grava ponteiro + metadados assim que
+        // o objeto sobe ao R2, e a análise da IA numa segunda chamada).
         sqlx::query(
             r#"UPDATE oraculo_mensagem
-               SET arquivo_midia = COALESCE($3, arquivo_midia),
-                   analise_midia = COALESCE($4, analise_midia),
-                   resumo_midia  = COALESCE($5, resumo_midia)
+               SET arquivo_midia      = COALESCE($3, arquivo_midia),
+                   analise_midia      = COALESCE($4, analise_midia),
+                   resumo_midia       = COALESCE($5, resumo_midia),
+                   mimetype_midia     = COALESCE($6, mimetype_midia),
+                   tamanho_midia      = COALESCE($7, tamanho_midia),
+                   nome_arquivo_midia = COALESCE($8, nome_arquivo_midia),
+                   metadados = CASE
+                       WHEN $9::boolean IS NULL THEN metadados
+                       ELSE jsonb_set(COALESCE(metadados, '{}'::jsonb), '{ptt}', to_jsonb($9::boolean))
+                   END
                WHERE tenant_id = $1 AND id = $2"#,
         )
         .bind(ctx.tenant_id)
         .bind(mensagem_id)
-        .bind(arquivo_midia)
-        .bind(analise_midia)
-        .bind(resumo_midia)
+        .bind(anexo.arquivo_midia.as_deref())
+        .bind(anexo.analise_midia.as_deref())
+        .bind(anexo.resumo_midia.as_deref())
+        .bind(anexo.mimetype_midia.as_deref())
+        .bind(anexo.tamanho_midia)
+        .bind(anexo.nome_arquivo_midia.as_deref())
+        .bind(anexo.is_ptt)
         .execute(&mut **tx)
         .await?;
         Ok(())
@@ -915,7 +952,7 @@ pub async fn listar_anteriores_a(
                       resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
                       arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
                       quoted_preview, status_envio, data_entregue, data_lida,
-                      mimetype_midia, nome_arquivo_midia, tamanho_midia
+                      mimetype_midia, nome_arquivo_midia, tamanho_midia, midia_purgada_em
                  FROM oraculo_mensagem
                 WHERE tenant_id = $1 AND atendimento_id = $2 AND id < $3
                 ORDER BY timestamp DESC, id DESC

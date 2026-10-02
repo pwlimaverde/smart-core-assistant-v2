@@ -75,20 +75,33 @@ impl StorageClient {
     }
 
     /// Envia (upload) os bytes de um arquivo do inquilino para o bucket.
-    #[tracing::instrument(skip(self, data), fields(tenant_id = %tenant_id, file_name = %file_name, bytes = data.len()), err)]
+    ///
+    /// `content_type` (P2a): gravado como metadado do objeto. Sem ele o R2
+    /// devolve `application/octet-stream` e o player/navegador não sabe o que
+    /// fazer com o áudio ou a imagem lidos pela URL assinada.
+    #[tracing::instrument(
+        skip(self, data),
+        fields(tenant_id = %tenant_id, file_name = %file_name, bytes = data.len()),
+        err
+    )]
     pub async fn put(
         &self,
         tenant_id: Uuid,
         file_name: &str,
         data: &[u8],
+        content_type: Option<&str>,
     ) -> Result<String, StorageError> {
         let key = Self::chave(tenant_id, file_name);
-        self.client
+        let mut req = self
+            .client
             .put_object()
             .bucket(&self.bucket)
             .key(&key)
-            .body(ByteStream::from(data.to_vec()))
-            .send()
+            .body(ByteStream::from(data.to_vec()));
+        if let Some(ct) = content_type {
+            req = req.content_type(ct);
+        }
+        req.send()
             .await
             .map_err(|e| StorageError::Upload(e.to_string()))?;
 
@@ -203,25 +216,39 @@ impl StorageClient {
     }
 
     /// Gera uma URL pré-assinada (presigned GET) para download direto pelo cliente.
-    #[tracing::instrument(skip(self), fields(tenant_id = %tenant_id, file_name = %file_name, ttl_segundos), err)]
+    ///
+    /// `response_content_type` (P2a): vira `response-content-type` na query
+    /// assinada, e o R2 responde com esse `Content-Type` — o player e o navegador
+    /// decidem pelo cabeçalho da resposta, não pela extensão (a chave da mídia
+    /// recebida nem tem extensão). Cobre também objetos antigos gravados sem
+    /// `Content-Type`.
+    ///
+    /// **Nunca `ret` no `instrument`**: a URL devolvida é credencial de leitura
+    /// do objeto até o TTL e não pode ir para span, log ou erro.
+    #[tracing::instrument(
+        skip(self, response_content_type),
+        fields(tenant_id = %tenant_id, file_name = %file_name, ttl = ttl_segundos),
+        err
+    )]
     pub async fn presign(
         &self,
         tenant_id: Uuid,
         file_name: &str,
         ttl_segundos: u64,
+        response_content_type: Option<&str>,
     ) -> Result<String, StorageError> {
         let key = Self::chave(tenant_id, file_name);
         let cfg = PresigningConfig::expires_in(Duration::from_secs(ttl_segundos))
             .map_err(|e| StorageError::ConfigError(e.to_string()))?;
-        let req = self
-            .client
-            .get_object()
-            .bucket(&self.bucket)
-            .key(&key)
+        let mut req = self.client.get_object().bucket(&self.bucket).key(&key);
+        if let Some(ct) = response_content_type {
+            req = req.response_content_type(ct);
+        }
+        let assinada = req
             .presigned(cfg)
             .await
             .map_err(|e| StorageError::S3(e.to_string()))?;
-        Ok(req.uri().to_string())
+        Ok(assinada.uri().to_string())
     }
 
     /// N9/E1 — URL pré-assinada de **PUT**, para o cliente subir o binário direto

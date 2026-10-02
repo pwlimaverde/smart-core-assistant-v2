@@ -19,7 +19,7 @@ async fn put_get_delete_fluxo_real() {
 
     // put
     let uri = client
-        .put(tenant, file, conteudo)
+        .put(tenant, file, conteudo, Some("text/plain"))
         .await
         .expect("put deve enviar o objeto");
     assert!(uri.contains(file), "URI deve conter o nome do arquivo");
@@ -52,19 +52,23 @@ async fn presign_gera_url_baixavel() {
     let conteudo = b"bytes para presign";
 
     client
-        .put(tenant, file, conteudo)
+        .put(tenant, file, conteudo, None)
         .await
         .expect("put deve enviar o objeto");
 
-    // presign → URL assinada
+    // presign → URL assinada (com o Content-Type da resposta embutido).
     let url = client
-        .presign(tenant, file, 60)
+        .presign(tenant, file, 60, Some("audio/ogg"))
         .await
         .expect("presign deve gerar URL");
-    assert!(url.starts_with("http"), "URL deve ser http(s): {url}");
+    assert!(url.starts_with("http"), "URL deve ser http(s)");
     assert!(
         url.contains("X-Amz-Signature") || url.contains("x-amz-signature"),
-        "URL deve conter assinatura SigV4: {url}"
+        "URL deve conter assinatura SigV4"
+    );
+    assert!(
+        url.contains("response-content-type"),
+        "URL deve carregar o response-content-type assinado"
     );
 
     // limpeza
