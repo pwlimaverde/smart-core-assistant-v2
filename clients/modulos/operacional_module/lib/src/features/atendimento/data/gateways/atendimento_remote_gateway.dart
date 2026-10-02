@@ -496,6 +496,9 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
     tamanhoBytes: m.sizeBytes.toInt(),
     segundos: m.hasSeconds() ? m.seconds : null,
     ehPtt: m.hasIsPtt() && m.isPtt,
+    // P1.1-A (C17) — idade da URL assinada, para o chat não trocar a mídia
+    // já exibida enquanto a URL antiga ainda vale.
+    obtidaEm: DateTime.now(),
   );
 
   static AtendimentoEvento _paraAtendimentoEvento(proto.AtendimentoEvent e) {

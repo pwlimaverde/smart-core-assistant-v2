@@ -1,8 +1,11 @@
 import 'package:api_client/api_client.dart' show GrpcError;
 import 'package:bloc_test/bloc_test.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:operacional_module/src/features/atendimento/domain/errors/atendimento_errors.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_evento.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/mensagem_thread.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/midia_mensagem.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/chat_controller.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/chat_state.dart';
 import 'package:presentation_module/presentation_module.dart';
@@ -138,20 +141,29 @@ void main() {
   });
 
   group('enviar', () {
-    test('sucesso recarrega o thread e não devolve erro', () async {
-      final gateway = FakeAtendimentoGateway(
-        thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
-      );
-      final controller = _controller(gateway);
-      await controller.abrir(1);
-      final leiturasAntes = gateway.chamadasThread;
+    test('sucesso agenda UMA recarga do thread e não devolve erro', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = _controller(gateway);
+        controller.abrir(1);
+        async.flushMicrotasks();
+        final leiturasAntes = gateway.chamadasThread;
 
-      final erro = await controller.enviar('nova mensagem');
+        SendOutboundMessageError? erro;
+        controller.enviar('nova mensagem').then((e) => erro = e);
+        async.flushMicrotasks();
 
-      expect(erro, isNull);
-      expect(gateway.chamadasSend, 1);
-      expect(gateway.chamadasThread, greaterThan(leiturasAntes));
-      await controller.close();
+        expect(erro, isNull);
+        expect(gateway.chamadasSend, 1);
+        // P1.1-A — a recarga espera a janela, para juntar os eventos do envio.
+        expect(gateway.chamadasThread, leiturasAntes);
+        async.elapse(const Duration(milliseconds: 300));
+        expect(gateway.chamadasThread, leiturasAntes + 1);
+        controller.close();
+        async.flushMicrotasks();
+      });
     });
 
     test('erro devolve o caso concreto sem recarregar o thread', () async {
@@ -219,7 +231,8 @@ void main() {
             payload: {'atendimento_id': 7},
           ),
         );
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        // P1.1-A — passa a janela de coalescência (300 ms).
+        await Future<void>.delayed(const Duration(milliseconds: 400));
 
         expect(gateway.chamadasThread, greaterThan(leiturasAntes));
         final estado = controller.state as SuccessState<ChatViewModel>;
@@ -350,6 +363,8 @@ void main() {
         mensagemDeTeste(id: 11, timestamp: DateTime(2026, 1, 3)),
       ];
       await controller.enviar('oi');
+      // P1.1-A — a recarga do envio sai depois da janela de coalescência.
+      await Future<void>.delayed(const Duration(milliseconds: 400));
 
       final vm = (controller.state as SuccessState<ChatViewModel>).data;
       expect(vm.mensagens.map((m) => m.id), [10, 11]);
@@ -365,6 +380,7 @@ void main() {
       await controller.carregarAntigas();
 
       await controller.enviar('oi');
+      await Future<void>.delayed(const Duration(milliseconds: 400));
 
       final vm = (controller.state as SuccessState<ChatViewModel>).data;
       expect(vm.mensagens.map((m) => m.id), containsAll([9, 10]));
@@ -495,6 +511,311 @@ void main() {
       expect(controller.camposAtualizados.value, 1);
       expect(gateway.chamadasThread, recargas);
       await controller.close();
+    });
+  });
+  // ─── P1.1-A: coalescência das recargas ────────────────────────────────────
+  group('coalescência das recargas (P1.1-A)', () {
+    /// Abre a conversa [atendimentoId] dentro do relógio falso e devolve o
+    /// controller pronto, com a carga inicial já feita.
+    ChatController abrirNoRelogio(
+      FakeAsync async,
+      FakeAtendimentoGateway gateway, {
+      int atendimentoId = 5,
+    }) {
+      final controller = _controller(gateway);
+      controller.abrir(atendimentoId);
+      async.flushMicrotasks();
+      return controller;
+    }
+
+    AtendimentoEvento evento(String tipo, Map<String, Object?> payload) =>
+        AtendimentoEvento(tipo: tipo, tenantId: 't', payload: payload);
+
+    ChatViewModel vmDe(ChatController c) =>
+        (c.state as SuccessState<ChatViewModel>).data;
+
+    test('rajada de 5 eventos da conversa vira 1 chamada ao GetThread', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+        final antes = gateway.chamadasThread;
+
+        for (var i = 0; i < 5; i++) {
+          gateway.eventos.add(
+            evento('mensagem.recebida', {'atendimento_id': 5}),
+          );
+          async.elapse(const Duration(milliseconds: 50));
+        }
+        async.elapse(const Duration(seconds: 2));
+
+        expect(gateway.chamadasThread, antes + 1);
+        controller.close();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('envio e os ecos dele (motor local + servidor) recarregam 1 vez', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+        final antes = gateway.chamadasThread;
+
+        controller.enviar('oi');
+        async.flushMicrotasks();
+        gateway.eventos
+          ..add(evento('mensagem.enviada', {'atendimento_id': 5}))
+          ..add(evento('mensagem.enviada', {'atendimento_id': 5}));
+        async.elapse(const Duration(seconds: 2));
+
+        expect(gateway.chamadasThread, antes + 1);
+        controller.close();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('o teto recarrega mesmo sob fluxo contínuo de eventos', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+        final antes = gateway.chamadasThread;
+
+        // Um evento a cada 200 ms: a janela de 300 ms nunca vence sozinha.
+        for (var i = 0; i < 5; i++) {
+          gateway.eventos.add(
+            evento('mensagem.recebida', {'atendimento_id': 5}),
+          );
+          async.elapse(const Duration(milliseconds: 200));
+        }
+        // t = 1000 ms desde o primeiro pedido: o teto disparou.
+        expect(gateway.chamadasThread, antes + 1);
+        // A janela que estava armada foi desarmada junto.
+        async.elapse(const Duration(seconds: 1));
+        expect(gateway.chamadasThread, antes + 1);
+        controller.close();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('status com mensagem_id atualiza o tick sem chamar o GetThread', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [
+            mensagemDeTeste(
+              id: 1,
+              timestamp: DateTime(2026, 1, 1),
+              remetente: 'atendente',
+            ),
+          ],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+        final antes = gateway.chamadasThread;
+
+        gateway.eventos.add(
+          evento('mensagem.status_atualizado', {
+            'atendimento_id': 5,
+            'mensagem_id': 1,
+            'status': 'delivered',
+            'message_id_whatsapp': 'ABC',
+          }),
+        );
+        async.elapse(const Duration(seconds: 2));
+
+        expect(gateway.chamadasThread, antes);
+        final mensagem = vmDe(controller).mensagens.single;
+        expect(mensagem.statusEntrega, StatusEntrega.entregue);
+        expect(mensagem.entregueEm, isNotNull);
+
+        // E o "lido" depois: também local.
+        gateway.eventos.add(
+          evento('mensagem.status_atualizado', {
+            'atendimento_id': 5,
+            'mensagem_id': 1,
+            'status': 'read',
+          }),
+        );
+        async.elapse(const Duration(seconds: 2));
+        expect(gateway.chamadasThread, antes);
+        expect(
+          vmDe(controller).mensagens.single.statusEntrega,
+          StatusEntrega.lida,
+        );
+        controller.close();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('status atrasado não faz o tick regredir', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [
+            MensagemThread(
+              id: 1,
+              atendimentoId: 5,
+              tipo: 'texto',
+              conteudo: 'oi',
+              remetente: 'atendente',
+              timestamp: DateTime(2026, 1, 1),
+              statusEnvio: 'read',
+              lidaEm: DateTime(2026, 1, 1, 0, 1),
+            ),
+          ],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+        final antes = gateway.chamadasThread;
+
+        gateway.eventos.add(
+          evento('mensagem.status_atualizado', {
+            'atendimento_id': 5,
+            'mensagem_id': 1,
+            'status': 'delivered',
+          }),
+        );
+        async.elapse(const Duration(seconds: 2));
+
+        expect(gateway.chamadasThread, antes);
+        expect(
+          vmDe(controller).mensagens.single.statusEntrega,
+          StatusEntrega.lida,
+        );
+        controller.close();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('status sem mensagem_id (formato antigo) cai na recarga agendada', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+        final antes = gateway.chamadasThread;
+
+        gateway.eventos.add(
+          evento('mensagem.status_atualizado', {
+            'atendimento_id': 5,
+            'status': 'delivered',
+          }),
+        );
+        async.elapse(const Duration(seconds: 2));
+
+        expect(gateway.chamadasThread, antes + 1);
+        controller.close();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('stream.defasado pede 1 recarga, mesmo sem atendimento_id', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+        final antes = gateway.chamadasThread;
+
+        gateway.eventos
+          ..add(evento('stream.defasado', {'perdidos': 12}))
+          ..add(evento('stream.defasado', {'perdidos': 3}));
+        async.elapse(const Duration(seconds: 2));
+
+        expect(gateway.chamadasThread, antes + 1);
+        controller.close();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('recarregar() não passa pelo spinner de tela cheia', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+        final estados = <ViewState<ChatViewModel>>[];
+        final sub = controller.stream.listen(estados.add);
+        gateway.thread = [
+          mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1)),
+          mensagemDeTeste(id: 2, timestamp: DateTime(2026, 1, 2)),
+        ];
+
+        controller.recarregar(motivo: 'envio_midia');
+        async.elapse(const Duration(seconds: 1));
+
+        expect(estados, isNot(contains(isA<LoadingState<ChatViewModel>>())));
+        expect(vmDe(controller).mensagens.map((m) => m.id), [1, 2]);
+        sub.cancel();
+        controller.close();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('fechar com recarga agendada não chama o servidor nem emite', () {
+      fakeAsync((async) {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+        final antes = gateway.chamadasThread;
+
+        gateway.eventos.add(evento('mensagem.recebida', {'atendimento_id': 5}));
+        async.flushMicrotasks();
+        controller.close();
+        async.elapse(const Duration(seconds: 2));
+
+        expect(gateway.chamadasThread, antes);
+        expect(controller.isClosed, isTrue);
+      });
+    });
+
+    test('a mídia já exibida mantém a URL enquanto fresca (C17)', () {
+      fakeAsync((async) {
+        MensagemThread comMidia(int id, String url) => MensagemThread(
+          id: id,
+          atendimentoId: 5,
+          tipo: 'imagem',
+          conteudo: '',
+          remetente: 'cliente',
+          timestamp: DateTime(2026, 1, 1),
+          statusEnvio: 'sent',
+          midia: MidiaMensagem(
+            tipo: TipoMidia.imagem,
+            urlAssinada: url,
+            mimetype: 'image/jpeg',
+            nomeArquivo: 'foto.jpg',
+            tamanhoBytes: 10,
+            obtidaEm: DateTime.now(),
+          ),
+        );
+        final gateway = FakeAtendimentoGateway(
+          thread: [
+            comMidia(1, 'https://r2.exemplo/t/obj-1.jpg?sig=a'),
+            comMidia(2, 'https://r2.exemplo/t/obj-2.jpg?sig=a'),
+          ],
+        );
+        final controller = abrirNoRelogio(async, gateway);
+
+        // Mesma mídia com assinatura nova, e uma mídia trocada de objeto.
+        gateway.thread = [
+          comMidia(1, 'https://r2.exemplo/t/obj-1.jpg?sig=b'),
+          comMidia(2, 'https://r2.exemplo/t/obj-9.jpg?sig=b'),
+        ];
+        controller.recarregar();
+        async.elapse(const Duration(seconds: 1));
+
+        final urls = vmDe(
+          controller,
+        ).mensagens.map((m) => m.midia!.urlAssinada).toList();
+        expect(urls, [
+          'https://r2.exemplo/t/obj-1.jpg?sig=a',
+          'https://r2.exemplo/t/obj-9.jpg?sig=b',
+        ]);
+        controller.close();
+        async.flushMicrotasks();
+      });
     });
   });
 }

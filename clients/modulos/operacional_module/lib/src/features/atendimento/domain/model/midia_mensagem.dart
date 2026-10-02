@@ -53,6 +53,15 @@ final class MidiaMensagem {
   /// arquivo de áudio anexado, e a conversa aqui faz o mesmo.
   final bool ehPtt;
 
+  /// P1.1-A (C17) — quando o gateway converteu esta mídia, ou seja, quando a
+  /// [urlAssinada] foi emitida (a menos da latência da chamada).
+  ///
+  /// Serve só para o chat decidir se a URL antiga ainda está fresca e pode ser
+  /// mantida numa recarga — URL nova é download novo, e a imagem pisca. Não é
+  /// dado do servidor e não é serializado. `null` = idade desconhecida, que o
+  /// chat trata como vencida (troca pela URL nova).
+  final DateTime? obtidaEm;
+
   const MidiaMensagem({
     required this.tipo,
     required this.urlAssinada,
@@ -61,6 +70,7 @@ final class MidiaMensagem {
     required this.tamanhoBytes,
     this.segundos,
     this.ehPtt = false,
+    this.obtidaEm,
   });
 
   /// Tamanho legível para a bolha ("2,4 MB"). Vírgula decimal: o app é pt-br.

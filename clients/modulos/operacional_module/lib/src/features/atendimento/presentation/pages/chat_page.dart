@@ -430,7 +430,9 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       ).showSnackBar(SnackBar(content: Text(error.message)));
       return;
     }
-    await _controller.abrir(widget.atendimentoId);
+    // P1.1-A — recarga agendada, e não `abrir()`: abrir troca a conversa
+    // inteira pelo spinner de tela cheia só para mostrar uma bolha nova.
+    _controller.recarregar(motivo: 'envio_midia');
   }
 
   /// O servidor decide o que aceita pelo mimetype; o picker devolve só a

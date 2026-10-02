@@ -9,6 +9,7 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 import '../../domain/errors/atendimento_errors.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/mensagem_thread.dart';
+import '../../domain/model/midia_mensagem.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
 import '../../domain/parameters/presenca_parameters.dart';
@@ -82,11 +83,50 @@ final class ChatController extends BaseController<ChatViewModel> {
   /// sempre manda o evento de parada.
   static const _validadeDaPresenca = Duration(seconds: 8);
 
+  /// P1.1-A — pedidos de recarga dentro desta janela viram uma recarga só.
+  ///
+  /// Um envio gera vários eventos em sequência (`mensagem.enviada` do motor
+  /// local e do servidor, os ticks, a resposta do bot); cada um recarregava a
+  /// conversa inteira — 4 a 6 `GetThread` por mensagem.
+  static const _janelaDeRecarga = Duration(milliseconds: 300);
+
+  /// P1.1-A — sob fluxo contínuo de eventos a janela seria adiada para sempre;
+  /// o teto, contado do primeiro pedido, garante que a conversa se atualiza.
+  static const _tetoDeRecarga = Duration(seconds: 1);
+
+  /// P1.1-A — quanto tempo depois de um envio as recargas ainda contam para
+  /// ele no contador [_recargasPorEnvio] (o instrumento do aceite).
+  static const _janelaDeMedicao = Duration(seconds: 5);
+
+  /// P1.1-A (C17) — a URL assinada vale 15 min; acima de 80% disso a mídia
+  /// antiga é trocada pela nova mesmo sendo o mesmo objeto.
+  static const _frescorDaMidia = Duration(minutes: 12);
+
+  /// P1.1-A — o agendador de recarga: o timer da janela (reiniciado a cada
+  /// pedido) e o do teto (armado no primeiro pedido). O que vencer primeiro
+  /// dispara a recarga e desarma o outro.
+  ///
+  /// Dois timers no lugar de `DateTime.now()`: o teto fica testável com
+  /// `fakeAsync`, que adianta timers mas não o relógio de parede.
+  Timer? _recargaAgendada;
+  Timer? _tetoDaRecarga;
+  String _motivoDaRecarga = '';
+
+  /// P1.1-A — recargas efetivas desde o último envio; `null` fora da janela
+  /// de medição.
+  int? _recargasPorEnvio;
+  Timer? _medicaoDoEnvio;
+
   /// Abre o chat de um atendimento: carrega o histórico e conecta o stream.
   Future<void> abrir(int atendimentoId) async {
     _atendimentoId = atendimentoId;
     _tentativa = 0;
     _ultimaMarcada = null;
+    // A carga completa abaixo cobre qualquer recarga que estava agendada.
+    _recargaAgendada?.cancel();
+    _recargaAgendada = null;
+    _tetoDaRecarga?.cancel();
+    _tetoDaRecarga = null;
     await execute(() async {
       final res = await _getThreadUsecase(
         GetThreadParameters(atendimentoId: atendimentoId),
@@ -107,8 +147,18 @@ final class ChatController extends BaseController<ChatViewModel> {
     _conectarStream();
   }
 
-  /// Envia uma mensagem outbound e recarrega o thread em caso de sucesso.
-  /// [conteudo] é PII — nunca logado pelo controller.
+  /// P1.1-A — pede uma recarga da conversa sem trocar a tela pelo spinner.
+  ///
+  /// Para quem muda a conversa por fora do controller (o envio de anexo da
+  /// página): passa pelo mesmo agendador dos eventos, então o
+  /// `mensagem.enviada` que chega logo depois não custa outra recarga.
+  void recarregar({String motivo = 'manual'}) {
+    if (motivo.startsWith('envio')) _iniciarMedicaoDoEnvio();
+    _agendarRecarga(motivo);
+  }
+
+  /// Envia uma mensagem outbound e agenda a recarga do thread em caso de
+  /// sucesso. [conteudo] é PII — nunca logado pelo controller.
   Future<SendOutboundMessageError?> enviar(String conteudo) async {
     final atendimentoId = _atendimentoId;
     if (atendimentoId == null) return null;
@@ -129,7 +179,10 @@ final class ChatController extends BaseController<ChatViewModel> {
     // A citação vale para UMA resposta: mantê-la faria a próxima mensagem
     // responder a mesma bolha sem que ninguém tenha pedido.
     cancelarCitacao();
-    await _recarregarThread();
+    // P1.1-A — agenda em vez de recarregar já: os eventos do próprio envio
+    // chegam em seguida e entram na mesma recarga.
+    _iniciarMedicaoDoEnvio();
+    _agendarRecarga('envio');
     return null;
   }
 
@@ -209,6 +262,7 @@ final class ChatController extends BaseController<ChatViewModel> {
         beforeId: vm.mensagens.first.id,
       ),
     );
+    if (isClosed) return;
     final depois = state;
     if (depois is! SuccessState<ChatViewModel>) return;
     switch (res) {
@@ -276,6 +330,13 @@ final class ChatController extends BaseController<ChatViewModel> {
   void _aoReceberEvento(AtendimentoEvento evento) {
     _tentativa = 0;
     _atualizarStatus(ChatConnectionStatus.conectado);
+    // P1.1-B/C18 — o servidor descartou eventos porque este assinante atrasou.
+    // Não traz `atendimento_id`: não dá para saber se algum era desta
+    // conversa, então recarrega uma vez (pelo agendador) por garantia.
+    if (evento.tipo == 'stream.defasado') {
+      _agendarRecarga('defasado');
+      return;
+    }
     // P3 — presença não é mensagem: muda uma linha do cabeçalho e não custa
     // uma recarga da conversa inteira.
     if (evento.tipo == 'whatsapp.presenca') {
@@ -294,9 +355,114 @@ final class ChatController extends BaseController<ChatViewModel> {
     }
     // Só recarrega o thread quando o evento é do atendimento aberto — evita
     // I/O desnecessário para eventos de outros atendimentos da fila.
-    if (evento.atendimentoId == _atendimentoId) {
-      unawaited(_recarregarThread());
+    if (evento.atendimentoId != _atendimentoId) return;
+    // P1.1-A (C16) — tick novo é uma bolha só: com o `mensagem_id` no payload
+    // o status é aplicado no lugar, sem ir ao servidor. Sem ele (formato
+    // antigo) ou sem a bolha na tela, cai na recarga agendada.
+    if (evento.tipo == 'mensagem.status_atualizado' &&
+        _aplicarStatusDeEntrega(evento.payload)) {
+      return;
     }
+    _agendarRecarga(evento.tipo);
+  }
+
+  /// P1.1-A — aplica o `mensagem.status_atualizado` na bolha correspondente.
+  ///
+  /// Devolve `false` quando não deu para aplicar localmente (sem
+  /// `mensagem_id`, status desconhecido, bolha fora da tela) — quem chama
+  /// recarrega. Status que regride (um `delivered` atrasado depois do `read`)
+  /// é ignorado: os eventos não chegam necessariamente em ordem.
+  bool _aplicarStatusDeEntrega(Map<String, Object?> payload) {
+    final mensagemId = switch (payload['mensagem_id']) {
+      final num n => n.toInt(),
+      _ => null,
+    };
+    final status = payload['status'];
+    if (mensagemId == null || status is! String) return false;
+    final novo = StatusEntrega.derivar(statusEnvio: status);
+    // Vocabulário que o cliente não conhece: a recarga traz o estado real.
+    if (novo == StatusEntrega.pendente) return false;
+    final atual = state;
+    if (atual is! SuccessState<ChatViewModel>) return false;
+    final mensagens = atual.data.mensagens;
+    final i = mensagens.indexWhere((m) => m.id == mensagemId);
+    if (i < 0) return false;
+
+    final mensagem = mensagens[i];
+    final antes = mensagem.statusEntrega;
+    final avanca = novo == StatusEntrega.falhou
+        // Falha só faz sentido antes de o provedor confirmar a entrega.
+        ? antes.index <= StatusEntrega.enviada.index
+        // Um recibo depois de "falhou" é o provedor corrigindo a si mesmo.
+        : antes == StatusEntrega.falhou || novo.index > antes.index;
+    if (!avanca) return true;
+
+    final agora = DateTime.now();
+    final chegou = novo == StatusEntrega.entregue || novo == StatusEntrega.lida;
+    final atualizada = mensagem.copyWith(
+      statusEnvio: status,
+      entregueEm: chegou ? (mensagem.entregueEm ?? agora) : null,
+      lidaEm: novo == StatusEntrega.lida ? (mensagem.lidaEm ?? agora) : null,
+    );
+    emit(
+      SuccessState(
+        atual.data.copyWith(mensagens: [...mensagens]..[i] = atualizada),
+      ),
+    );
+    return true;
+  }
+
+  /// P1.1-A — junta pedidos de recarga em rajada numa recarga só.
+  ///
+  /// Cada pedido reinicia a janela de [_janelaDeRecarga]; o teto de
+  /// [_tetoDeRecarga], armado no primeiro pedido, evita adiar para sempre
+  /// sob fluxo contínuo. [motivo] é o tipo do evento (ou `envio`), nunca
+  /// conteúdo.
+  void _agendarRecarga(String motivo) {
+    if (_encerrado || isClosed) return;
+    _motivoDaRecarga = motivo;
+    _recargaAgendada?.cancel();
+    _recargaAgendada = Timer(_janelaDeRecarga, _dispararRecarga);
+    _tetoDaRecarga ??= Timer(_tetoDeRecarga, _dispararRecarga);
+  }
+
+  void _dispararRecarga() {
+    _recargaAgendada?.cancel();
+    _recargaAgendada = null;
+    _tetoDaRecarga?.cancel();
+    _tetoDaRecarga = null;
+    if (_encerrado || isClosed) return;
+    final contagem = _recargasPorEnvio;
+    if (contagem != null) _recargasPorEnvio = contagem + 1;
+    developer.log(
+      'recarga da thread',
+      name: 'operacional_module.chat',
+      level: 500,
+      error: 'motivo=$_motivoDaRecarga',
+    );
+    unawaited(_recarregarThread());
+  }
+
+  /// P1.1-A — abre a janela de medição de recargas de um envio. Um envio
+  /// novo antes do fim da janela fecha (e loga) a medição anterior.
+  void _iniciarMedicaoDoEnvio() {
+    if (_medicaoDoEnvio != null) _encerrarMedicaoDoEnvio();
+    _recargasPorEnvio = 0;
+    _medicaoDoEnvio = Timer(_janelaDeMedicao, _encerrarMedicaoDoEnvio);
+  }
+
+  void _encerrarMedicaoDoEnvio() {
+    _medicaoDoEnvio?.cancel();
+    _medicaoDoEnvio = null;
+    final contagem = _recargasPorEnvio;
+    _recargasPorEnvio = null;
+    if (contagem == null) return;
+    developer.log(
+      'recargas por envio',
+      name: 'operacional_module.chat',
+      level: 500,
+      error: 'recargasPorEnvio=$contagem',
+    );
   }
 
   void _aplicarPresencaDoContato(String situacao) {
@@ -313,6 +479,7 @@ final class ChatController extends BaseController<ChatViewModel> {
     _limpezaDaPresenca?.cancel();
     if (exibivel.isEmpty) return;
     _limpezaDaPresenca = Timer(_validadeDaPresenca, () {
+      if (isClosed) return;
       final agora = state;
       if (agora is SuccessState<ChatViewModel> &&
           agora.data.presencaDoContato.isNotEmpty) {
@@ -364,12 +531,17 @@ final class ChatController extends BaseController<ChatViewModel> {
     final res = await _getThreadUsecase(
       GetThreadParameters(atendimentoId: atendimentoId),
     );
-    if (res case Success(:final value)) {
-      final atual = state;
-      if (atual is SuccessState<ChatViewModel>) {
+    // A tela pode ter fechado (ou trocado de conversa) durante a ida ao
+    // servidor: emitir agora seria erro, ou a conversa errada na tela.
+    if (isClosed || atendimentoId != _atendimentoId) return;
+    switch (res) {
+      case Success(:final value):
+        final atual = state;
+        if (atual is! SuccessState<ChatViewModel>) return;
         // A recarga traz só a última página. Quem já tinha rolado para cima
         // perderia o histórico carregado se a lista fosse trocada inteira.
         final novos = {for (final m in value) m.id};
+        final naTela = {for (final m in atual.data.mensagens) m.id: m};
         // A cópia local de uma mensagem ainda não sincronizada (id negativo)
         // não é histórico: o gateway a devolve enquanto estiver pendente.
         // Guardá-la aqui deixava a mensagem repetida no topo da conversa depois
@@ -377,11 +549,52 @@ final class ChatController extends BaseController<ChatViewModel> {
         final antigas = atual.data.mensagens.where(
           (m) => m.id > 0 && !novos.contains(m.id),
         );
-        final unidas = [...antigas, ...value]
+        final recarregadas = [
+          for (final m in value) _comMidiaEstavel(naTela[m.id], m),
+        ];
+        final unidas = [...antigas, ...recarregadas]
           ..sort((a, b) => a.id.compareTo(b.id));
         emit(SuccessState(atual.data.copyWith(mensagens: unidas)));
-      }
+      case Failure(:final error):
+        // A conversa na tela continua valendo; o próximo evento tenta de
+        // novo. Só o tipo do erro: a mensagem pode citar dados da conversa.
+        developer.log(
+          'falha ao recarregar a thread',
+          name: 'operacional_module.chat',
+          level: 900,
+          error: 'erro=${error.runtimeType}',
+        );
     }
+  }
+
+  /// P1.1-A (C17) — a versão recarregada de [nova], mas com a mídia que já
+  /// estava na tela quando ela ainda serve.
+  static MensagemThread _comMidiaEstavel(
+    MensagemThread? naTela,
+    MensagemThread nova,
+  ) {
+    final midia = _midiaEstavel(naTela?.midia, nova.midia);
+    return identical(midia, nova.midia) ? nova : nova.copyWith(midia: midia);
+  }
+
+  /// Mantém a URL antiga enquanto válida: URL nova = download novo = imagem
+  /// piscando. "Mesmo objeto" = mesmo caminho no storage (a assinatura muda
+  /// só na query string).
+  static MidiaMensagem? _midiaEstavel(
+    MidiaMensagem? antiga,
+    MidiaMensagem? nova,
+  ) {
+    if (antiga == null || nova == null) return nova;
+    final obtidaEm = antiga.obtidaEm;
+    if (obtidaEm == null) return nova;
+    final caminhoAntigo = Uri.tryParse(antiga.urlAssinada)?.path;
+    final caminhoNovo = Uri.tryParse(nova.urlAssinada)?.path;
+    final mesmoObjeto =
+        caminhoAntigo != null &&
+        caminhoAntigo.isNotEmpty &&
+        caminhoAntigo == caminhoNovo;
+    final fresca = DateTime.now().difference(obtidaEm) < _frescorDaMidia;
+    return mesmoObjeto && fresca ? antiga : nova;
   }
 
   void _atualizarStatus(ChatConnectionStatus status) {
@@ -394,6 +607,10 @@ final class ChatController extends BaseController<ChatViewModel> {
   @override
   Future<void> close() {
     _encerrado = true;
+    _recargaAgendada?.cancel();
+    _tetoDaRecarga?.cancel();
+    // Fecha a medição em aberto: o número sai no log mesmo saindo da conversa.
+    _encerrarMedicaoDoEnvio();
     _limpezaDaPresenca?.cancel();
     _reconnectTimer?.cancel();
     _subscription?.cancel();

@@ -162,6 +162,35 @@ final class MensagemThread {
           .toList() ??
       const [];
 
+  /// P1.1-A — cópia com o estado de entrega ou a mídia trocados.
+  ///
+  /// Existe para o chat aplicar o `mensagem.status_atualizado` na bolha sem
+  /// recarregar a conversa inteira, e para manter a mídia já exibida numa
+  /// recarga. `null` = manter o valor atual (não há como "apagar" um carimbo,
+  /// e nenhum caso de uso precisa disso).
+  MensagemThread copyWith({
+    String? statusEnvio,
+    DateTime? entregueEm,
+    DateTime? lidaEm,
+    MidiaMensagem? midia,
+  }) => MensagemThread(
+    id: id,
+    atendimentoId: atendimentoId,
+    tipo: tipo,
+    conteudo: conteudo,
+    remetente: remetente,
+    timestamp: timestamp,
+    statusEnvio: statusEnvio ?? this.statusEnvio,
+    geradoPorIa: geradoPorIa,
+    resumoMidia: resumoMidia,
+    midia: midia ?? this.midia,
+    entregueEm: entregueEm ?? this.entregueEm,
+    lidaEm: lidaEm ?? this.lidaEm,
+    citacao: citacao,
+    reacoes: reacoes,
+    metadados: metadados,
+  );
+
   /// Estado de entrega para desenhar os ticks. Só faz sentido em mensagem que
   /// SAIU (atendente ou bot); na mensagem do contato a UI não mostra tick.
   StatusEntrega get statusEntrega => StatusEntrega.derivar(
