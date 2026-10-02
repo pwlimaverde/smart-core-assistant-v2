@@ -87,7 +87,7 @@ pub(crate) fn janela() -> Duration {
 
 /// P1.1-B — Hash do sender para dedupe sem PII: sha256 truncado a 16 hex.
 /// Telefone no nome de chave aparece em SLOWLOG/MONITOR do Redis.
-fn hash_sender(sender: &str) -> String {
+pub(crate) fn hash_sender(sender: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(sender.as_bytes());
     let resultado = hasher.finalize();

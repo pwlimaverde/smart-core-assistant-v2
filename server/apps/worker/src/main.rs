@@ -4421,7 +4421,14 @@ async fn processar_mensagem_persistida(
         .await?;
         // A conversa aberta troca o relógio pelo ✓ sem precisar reabrir.
         if let Some(atendimento_id) = atendimento_do_destino {
-            publicar_status_na_conversa(state, &tenant_id, atendimento_id, "sent").await;
+            publicar_status_na_conversa(
+                state,
+                envelope.tenant_id,
+                mensagem_id,
+                atendimento_id,
+                "sent",
+            )
+            .await;
         }
         return Ok(());
     }
@@ -4454,7 +4461,14 @@ async fn processar_mensagem_persistida(
         Some(causation_id),
     );
     if let Some(atendimento_id) = atendimento_do_destino {
-        publicar_status_na_conversa(state, &tenant_id, atendimento_id, "failed").await;
+        publicar_status_na_conversa(
+            state,
+            envelope.tenant_id,
+            mensagem_id,
+            atendimento_id,
+            "failed",
+        )
+        .await;
     }
 
     anyhow::bail!(
@@ -6102,7 +6116,6 @@ mod tests {
     #[tokio::test]
     async fn buffer_chave_hash_sem_telefone() {
         // O módulo buffer_mensagens usa sha256 truncado: a chave não expõe PII.
-        let tenant = Uuid::nil();
         let sender = "5511999998888";
 
         use crate::buffer_mensagens;
