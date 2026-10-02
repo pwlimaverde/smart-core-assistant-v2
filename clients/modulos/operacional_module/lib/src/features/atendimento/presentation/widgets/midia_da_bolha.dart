@@ -331,14 +331,17 @@ class _PlayerDeAudioState extends State<PlayerDeAudio> {
                   ),
           ),
           const SizedBox(width: AppSpacing.xs),
-          Text(
-            _player == null || _posicao == Duration.zero
-                ? total
-                : _mmss(_posicao),
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.7)),
-          ),
+          // Sem duração conhecida (antes do primeiro play) não desenha rótulo vazio.
+          if ((_player != null && _posicao != Duration.zero) ||
+              total.isNotEmpty)
+            Text(
+              _player == null || _posicao == Duration.zero
+                  ? total
+                  : _mmss(_posicao),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: fg.withValues(alpha: 0.7),
+              ),
+            ),
         ],
       ),
     );

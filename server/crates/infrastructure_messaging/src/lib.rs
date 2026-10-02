@@ -119,6 +119,9 @@ pub trait InstanceManager: Send + Sync {
     async fn list_all_instances(&self) -> Result<Vec<String>, MessagingProviderError>;
 }
 
+// P2b: `send_media` passou a levar o nome do arquivo; a assinatura espelha o
+// corpo do `/send/media` do provedor, por isso a lista larga de argumentos.
+#[allow(clippy::too_many_arguments)]
 #[async_trait]
 pub trait MessageSender: Send + Sync {
     async fn send_text(
