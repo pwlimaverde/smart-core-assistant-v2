@@ -22,11 +22,6 @@ services:
       start_period: 10s
     networks:
       - shared_network
-    security_opt:
-      - no-new-privileges:true
-    read_only_root_filesystem: true
-    tmpfs:
-      - /tmp
 
 networks:
   shared_network:
