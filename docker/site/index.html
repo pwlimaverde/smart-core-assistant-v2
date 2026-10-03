@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Core Tenant — Atendimento Inteligente</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0066CC;
+            --primary-dark: #003D7A;
+            --text-dark: #333333;
+            --text-gray: #666666;
+            --white: #FFFFFF;
+            --bg-light: #F5F5F5;
+            --success: #27AE60;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'SF Pro Text', Helvetica, Arial, sans-serif;
+            color: var(--text-dark);
+            background-color: var(--white);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+            color: var(--white);
+            padding: 20px 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        nav a {
+            color: var(--white);
+            text-decoration: none;
+            margin-left: 30px;
+            opacity: 0.9;
+            transition: opacity 0.3s;
+        }
+
+        nav a:hover {
+            opacity: 1;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 80px 20px;
+            text-align: center;
+            background: linear-gradient(180deg, var(--white) 0%, var(--bg-light) 100%);
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+
+        .hero h1 span {
+            display: block;
+            color: var(--text-dark);
+            font-size: 32px;
+            margin-top: 10px;
+        }
+
+        .tagline {
+            font-size: 24px;
+            color: var(--text-gray);
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .description {
+            font-size: 16px;
+            color: var(--text-gray);
+            margin-bottom: 50px;
+            line-height: 1.8;
+        }
+
+        /* CTA Buttons */
+        .cta-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 60px;
+        }
+
+        .btn {
+            padding: 14px 40px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: var(--white);
+            box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            box-shadow: 0 6px 16px rgba(0, 102, 204, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--primary);
+            color: var(--white);
+        }
+
+        .btn-icon::before {
+            content: '↓';
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .version-info {
+            font-size: 12px;
+            color: var(--text-gray);
+            margin-top: 10px;
+        }
+
+        /* Features Section */
+        .features {
+            padding: 60px 20px;
+            background: var(--white);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .feature {
+            text-align: center;
+            padding: 30px;
+            border-radius: 12px;
+            background: var(--bg-light);
+            transition: transform 0.3s;
+        }
+
+        .feature:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 102, 204, 0.1);
+        }
+
+        .feature h3 {
+            color: var(--primary);
+            margin-bottom: 12px;
+            font-size: 18px;
+        }
+
+        .feature p {
+            color: var(--text-gray);
+            font-size: 14px;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--primary-dark);
+            color: var(--white);
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .footer-links {
+            margin-bottom: 20px;
+        }
+
+        .footer-links a {
+            color: var(--white);
+            text-decoration: none;
+            margin: 0 20px;
+            opacity: 0.8;
+            font-size: 14px;
+        }
+
+        .footer-links a:hover {
+            opacity: 1;
+        }
+
+        .footer-info {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        /* Admin Link */
+        .admin-link {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 61, 122, 0.8);
+            color: var(--white);
+            padding: 10px 15px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 12px;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+
+        .admin-link:hover {
+            opacity: 1;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .hero h1 span {
+                font-size: 24px;
+            }
+
+            .tagline {
+                font-size: 18px;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 300px;
+                justify-content: center;
+            }
+
+            .header-content {
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            nav a {
+                margin-left: 15px;
+                font-size: 14px;
+            }
+        }
+
+        /* Loading State */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .download-status {
+            font-size: 13px;
+            color: var(--success);
+            margin-top: 8px;
+            display: none;
+        }
+
+        .download-status.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">ST</div>
+                    <span>Smart Core</span>
+                </div>
+                <nav>
+                    <a href="#download">Download</a>
+                    <a href="#features">Recursos</a>
+                    <a href="https://smartcoreassistant.com.br" target="_blank">Painel</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>
+                Smart Core
+                <span>Tenant</span>
+            </h1>
+            <p class="tagline">Atendimento Inteligente. Sempre Disponível.</p>
+
+            <p class="description">
+                Solução completa de atendimento automático e inteligente para sua empresa.
+                Oferece atendimento 24/7, sem interrupções, com assistente alimentado por IA.
+            </p>
+
+            <!-- Download Buttons -->
+            <div class="cta-buttons">
+                <button id="downloadBtn" class="btn btn-primary btn-icon">
+                    Baixar para Windows
+                </button>
+                <a href="#features" class="btn btn-secondary">
+                    Saiba Mais
+                </a>
+            </div>
+
+            <div class="version-info">
+                <p id="versionText">Carregando versão...</p>
+                <p class="download-status" id="downloadStatus">✓ Pronto para download</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2 style="text-align: center; margin-bottom: 50px; color: var(--primary); font-size: 32px;">
+                Recursos Principais
+            </h2>
+
+            <div class="features-grid">
+                <div class="feature">
+                    <h3>⚡ Rápido</h3>
+                    <p>Atendimento instantâneo, sem filas ou esperas. Responde em milissegundos.</p>
+                </div>
+
+                <div class="feature">
+                    <h3>🤖 Inteligente</h3>
+                    <p>Alimentado por IA, aprende com cada atendimento para melhorar respostas.</p>
+                </div>
+
+                <div class="feature">
+                    <h3>🔄 Automático</h3>
+                    <p>Atualizações automáticas garantem sempre a versão mais recente.</p>
+                </div>
+
+                <div class="feature">
+                    <h3>📊 Analítico</h3>
+                    <p>Relatórios detalhados de todos os atendimentos e métricas em tempo real.</p>
+                </div>
+
+                <div class="feature">
+                    <h3>🔒 Seguro</h3>
+                    <p>Criptografia de ponta a ponta, conformidade com LGPD e ISO 27001.</p>
+                </div>
+
+                <div class="feature">
+                    <h3>📱 Multi-canal</h3>
+                    <p>WhatsApp, e-mail, chat, telefone — tudo integrado em um painel.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-links">
+            <a href="#download">Download</a>
+            <a href="https://docs.smartcoreassistant.com.br" target="_blank">Documentação</a>
+            <a href="https://smartcoreassistant.com.br/painel" target="_blank">Painel Admin</a>
+            <a href="mailto:suporte@smartcoreassistant.com.br">Suporte</a>
+        </div>
+        <div class="footer-info">
+            <p>&copy; 2026 Smart Core Inc. Todos os direitos reservados.</p>
+            <p>v<span id="footerVersion">0.1.0</span> — Atualização automática ativada</p>
+        </div>
+    </footer>
+
+    <!-- Admin Link (subtle) -->
+    <a href="/admin" class="admin-link" title="Admin Dashboard">Dev/Beta</a>
+
+    <!-- Script -->
+    <script>
+        const RELEASES_API = 'https://releases.smartcoreassistant.com.br/api/releases';
+
+        // Fetch e exibir versão estável
+        async function loadLatestVersion() {
+            try {
+                const response = await fetch(RELEASES_API);
+                if (!response.ok) throw new Error('Falha ao carregar versão');
+
+                const data = await response.json();
+                const version = data.version;
+                const url = data.url;
+
+                // Update version display
+                document.getElementById('versionText').textContent =
+                    `Versão estável: ${version}`;
+                document.getElementById('footerVersion').textContent = version;
+
+                // Setup download button
+                const downloadBtn = document.getElementById('downloadBtn');
+                downloadBtn.onclick = () => downloadApp(url, version);
+                downloadBtn.classList.remove('loading');
+
+                // Show status
+                document.getElementById('downloadStatus').classList.add('show');
+
+            } catch (error) {
+                console.error('Erro ao carregar versão:', error);
+                document.getElementById('versionText').textContent =
+                    'Versão estável: 0.1.0 (acesso offline)';
+                document.getElementById('downloadBtn').onclick = () => {
+                    alert('Por favor, entre em contato com suporte@smartcoreassistant.com.br');
+                };
+            }
+        }
+
+        // Download handler
+        function downloadApp(url, version) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `SmartCoreTenant-${version}-Setup.exe`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Track download
+            fetch('/api/analytics/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ version, timestamp: new Date().toISOString() })
+            }).catch(() => {});
+        }
+
+        // Load on page load
+        document.addEventListener('DOMContentLoaded', loadLatestVersion);
+    </script>
+</body>
+</html>
