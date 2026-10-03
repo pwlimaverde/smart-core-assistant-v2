@@ -1,94 +1,220 @@
-name: Release Windows App
+name: Release Windows (Velopack)
+
+# Único workflow do instalador Windows (decisões D1 e D6 do plano
+# windows-releases-v01-beta): o Setup.exe é o do Velopack — sem NSIS — e a tag
+# define versão e canal.
+#
+#   win-v0.2.0-beta.2  → versão 0.2.0-beta.2, canal beta,   build DEV  (main_dev)
+#   win-v1.0.0         → versão 1.0.0,        canal stable, build PROD (main_prod)
+#
+# Saídas:
+#   - artefato `windows-installer-<versão>` (Setup.exe + feed do Velopack);
+#   - GitHub Release da tag com os mesmos arquivos (pré-release no beta);
+#   - POST /upload no releases_server, quando o secret RELEASES_UPLOAD_TOKEN
+#     existe e o servidor responde no /health (sem ele, só avisa);
+#   - imagem ghcr.io/<repo>-releases do releases_server.
 
 on:
   push:
-    tags:
-      - 'win-v*'
+    tags: ['win-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versão (ex.: 0.2.0-beta.2). Cria a tag win-v<versão> no commit escolhido.'
+        required: true
+
+concurrency:
+  group: release-windows-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-releases
+  VPK_VERSION: '1.2.161'
+  PACK_ID: SmartCoreTenant
+  RELEASES_URL: https://releases.smartcoreassistant.com.br
 
 jobs:
-  build-docker:
+  instalador:
+    name: Build + vpk pack (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Versão, canal e ambiente
+        id: v
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          $versao = if ($env:INPUT_VERSION) { $env:INPUT_VERSION.Trim() } else { "${{ github.ref_name }}" -replace '^win-v', '' }
+          if ($versao -notmatch '^\d+\.\d+\.\d+(-beta\.\d+)?$') {
+            Write-Error "Versão '$versao' fora do padrão X.Y.Z ou X.Y.Z-beta.N"
+            exit 1
+          }
+          if ($versao -match '-beta\.') { $canal = 'beta'; $amb = 'dev' } else { $canal = 'stable'; $amb = 'prod' }
+          $cfg = @{
+            dev  = @{ api = 'https://dev.smartcoreassistant.com.br'; mcp = 'https://mcp.dev.smartcoreassistant.com.br/mcp'; app = 'https://dev.smartcoreassistant.com.br/v2/tenant' }
+            prod = @{ api = 'https://smartcoreassistant.com.br';     mcp = 'https://mcp.smartcoreassistant.com.br/mcp';     app = 'https://smartcoreassistant.com.br/v2/tenant' }
+          }
+          # Número de build = data do commit (mesma regra do infra/build-windows.ps1).
+          $build = git log -1 --format=%cd --date=format:%Y%m%d%H%M
+          "versao=$versao"         >> $env:GITHUB_OUTPUT
+          "canal=$canal"           >> $env:GITHUB_OUTPUT
+          "ambiente=$amb"          >> $env:GITHUB_OUTPUT
+          "api=$($cfg[$amb].api)"  >> $env:GITHUB_OUTPUT
+          "mcp=$($cfg[$amb].mcp)"  >> $env:GITHUB_OUTPUT
+          "app=$($cfg[$amb].app)"  >> $env:GITHUB_OUTPUT
+          "build=$build"           >> $env:GITHUB_OUTPUT
+          "tag=win-v$versao"       >> $env:GITHUB_OUTPUT
+          Write-Host "versão=$versao canal=$canal ambiente=$amb build=$build"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: stable
+          cache: true
+
+      # cargokit do local_engine_ffi compila o crate Rust no build do Windows.
+      - uses: dtolnay/rust-toolchain@stable
+
+      # vpk 1.2.x roda sobre o .NET 10.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: flutter pub get (workspace)
+        working-directory: clients
+        run: flutter pub get
+
+      - name: flutter build windows
+        working-directory: clients/apps/smart-core-tenant
+        run: |
+          flutter build windows --release `
+            --target "lib/main_${{ steps.v.outputs.ambiente }}.dart" `
+            --build-name "${{ steps.v.outputs.versao }}" `
+            --dart-define=SMARTCORE_API_ENDPOINT=${{ steps.v.outputs.api }} `
+            --dart-define=SMARTCORE_MCP_ENDPOINT=${{ steps.v.outputs.mcp }} `
+            --dart-define=SMARTCORE_APP_PUBLIC_URL=${{ steps.v.outputs.app }} `
+            --dart-define=SMARTCORE_APP_BUILD=${{ steps.v.outputs.build }}
+
+      # Um --dart-define esquecido não falha o build: gera um app que aponta para
+      # outro lugar. A prova é a string dentro do snapshot AOT.
+      - name: Confere os endereços dentro do binário
+        run: |
+          $snap = "clients/apps/smart-core-tenant/build/windows/x64/runner/Release/data/app.so"
+          if (-not (Test-Path $snap)) { Write-Error "snapshot $snap ausente"; exit 1 }
+          $texto = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($snap))
+          foreach ($e in @('${{ steps.v.outputs.api }}', '${{ steps.v.outputs.mcp }}', '${{ steps.v.outputs.app }}')) {
+            if (-not $texto.Contains($e)) { Write-Error "endereço ausente no binário: $e"; exit 1 }
+            Write-Host "ok $e"
+          }
+
+      - name: Instala vpk
+        run: dotnet tool install -g vpk --version $env:VPK_VERSION
+
+      # --skipVeloAppCheck: o app ainda não chama o SDK do Velopack (o
+      # velopack_flutter fica para a etapa de auto-update). O instalador e o feed
+      # funcionam; a atualização automática dentro do app ainda não.
+      - name: vpk pack
+        run: |
+          $notas = "release-notes.md"
+          "Smart Core Tenant ${{ steps.v.outputs.versao }} (canal ${{ steps.v.outputs.canal }})" | Out-File -Encoding utf8 $notas
+          vpk pack `
+            --packId $env:PACK_ID `
+            --packVersion ${{ steps.v.outputs.versao }} `
+            --packDir clients/apps/smart-core-tenant/build/windows/x64/runner/Release `
+            --mainExe smart_core_tenant.exe `
+            --channel ${{ steps.v.outputs.canal }} `
+            --packTitle "Smart Core Tenant" `
+            --packAuthors "Smart Core" `
+            --icon infra/branding/assets/app_icon.ico `
+            --splashImage infra/branding/assets/logo_full.png `
+            --releaseNotes $notas `
+            --noPortable `
+            --skipVeloAppCheck `
+            --outputDir releases
+          Get-ChildItem releases | Format-Table Name, Length
+          $setup = "releases/$($env:PACK_ID)-${{ steps.v.outputs.canal }}-Setup.exe"
+          if (-not (Test-Path $setup)) { Write-Error "Setup.exe não gerado"; exit 1 }
+          (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() | Out-File -Encoding ascii "$setup.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-${{ steps.v.outputs.versao }}
+          path: releases/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Smart Core Tenant ${{ steps.v.outputs.versao }}
+          prerelease: ${{ steps.v.outputs.canal == 'beta' }}
+          files: releases/*
+          body: |
+            Instalador Windows do Smart Core Tenant — canal `${{ steps.v.outputs.canal }}`.
+
+            - Baixe `${{ env.PACK_ID }}-${{ steps.v.outputs.canal }}-Setup.exe` e confira o SHA-256 no `.sha256` ao lado.
+            - Instala por usuário, sem pedir administrador.
+            - Sem assinatura de código nesta fase (D5): o SmartScreen avisa na primeira execução.
+
+      # Publicação no releases_server. Fica de fora (com aviso) enquanto o
+      # servidor não está no ar ou o secret não existe — o instalador já saiu
+      # como artefato e Release acima.
+      - name: Publica no releases_server
+        env:
+          UPLOAD_TOKEN: ${{ secrets.RELEASES_UPLOAD_TOKEN }}
+        run: |
+          if (-not $env:UPLOAD_TOKEN) {
+            Write-Host "::warning::RELEASES_UPLOAD_TOKEN não configurado — upload ao releases_server pulado"
+            exit 0
+          }
+          curl.exe -fsS --max-time 15 "$env:RELEASES_URL/health" | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::warning::$env:RELEASES_URL/health não respondeu — upload pulado"
+            exit 0
+          }
+          $curlArgs = @('-fsS', '--max-time', '900', '-X', 'POST',
+                    '-H', "Authorization: Bearer $env:UPLOAD_TOKEN",
+                    '-F', "channel=${{ steps.v.outputs.canal }}",
+                    '-F', "version=${{ steps.v.outputs.versao }}",
+                    '-F', "notes=<release-notes.md")
+          # Só o que o servidor aceita: Setup.exe, .nupkg e os índices do canal.
+          Get-ChildItem releases -File | Where-Object { $_.Name -notlike '*.sha256' } | ForEach-Object {
+            $curlArgs += @('-F', "file=@$($_.FullName);filename=$($_.Name)")
+          }
+          curl.exe @curlArgs "$env:RELEASES_URL/upload"
+          if ($LASTEXITCODE -ne 0) { Write-Error "upload falhou ($LASTEXITCODE)"; exit 1 }
+
+  imagem-releases-server:
+    name: Imagem do releases_server
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag
-            type=semver,pattern={{version}},value=${{ github.ref_name }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }}
-            type=raw,value=latest
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/releases/Dockerfile
+          file: docker/releases/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  publish-release:
-    needs: build-docker
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Extract version from tag
-        id: extract
-        run: |
-          VERSION=${GITHUB_REF_NAME#win-v}
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Upload release files to server
-        env:
-          UPLOAD_TOKEN: ${{ secrets.RELEASES_UPLOAD_TOKEN }}
-        run: |
-          # Download latest releases.win.json to compute deltas
-          curl -f -s -o releases.win.json \
-            https://releases.smartcoreassistant.com.br/api/releases || true
-
-          # vpk pack would run here (on Windows runner in full setup)
-          # For now, placeholder:
-          echo "Placeholder: vpk pack --packId SmartCoreTenant --packVersion ${{ steps.extract.outputs.version }}"
-
-          # POST metadata to releases server
-          curl -X POST https://releases.smartcoreassistant.com.br/upload \
-            -H "Authorization: Bearer ${UPLOAD_TOKEN}" \
-            -F "version=${{ steps.extract.outputs.version }}" \
-            -F "release_notes=Release ${{ steps.extract.outputs.version }}"
-
-  notify:
-    needs: publish-release
-    runs-on: ubuntu-latest
-    if: always()
-
-    steps:
-      - name: Notify on success
-        if: success()
-        run: echo "✅ Windows release ${{ github.ref_name }} published successfully"
-
-      - name: Notify on failure
-        if: failure()
-        run: echo "❌ Windows release ${{ github.ref_name }} failed"
+          tags: |
+            ghcr.io/${{ github.repository }}-releases:latest
+            ghcr.io/${{ github.repository }}-releases:${{ github.sha }}
+          cache-from: type=gha,scope=releases-server
+          cache-to: type=gha,mode=max,scope=releases-server

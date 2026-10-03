@@ -277,10 +277,12 @@ mcp.smartcoreassistant.com.br {
 	}
 }
 
-# ----- Releases server (Velopack feed + downloads) -----
+# ----- Releases server (feed Velopack + instalador com ticket) -----
+# docker/releases/compose.yml publica a porta só na ponte do Docker
+# (HOST_BRIDGE_IP), como os demais upstreams. `127.0.0.1` aqui apontaria para o
+# próprio container da borda. Sem `encode`: o grosso do tráfego é .exe/.nupkg,
+# que já vem comprimido.
 releases.smartcoreassistant.com.br {
-	encode gzip zstd
-
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
@@ -288,16 +290,10 @@ releases.smartcoreassistant.com.br {
 		-Server
 	}
 
-	reverse_proxy 127.0.0.1:8086 {
+	reverse_proxy host.docker.internal:{$RELEASES_HOST_PORT:8086} {
 		transport http {
 			read_timeout 300s
 			write_timeout 300s
 		}
 	}
-}
-
-# ----- Mock Releases Server (para teste)  -----
-releases-test.localhost:8086 {
-	root /opt/smartcore/releases
-	file_server
 }
