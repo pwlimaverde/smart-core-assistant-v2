@@ -15,6 +15,7 @@ phases:
     name: "Planning — Requisitos, segurança e contrato"
     prevc: "P"
     summary: "Fixar requisitos funcionais, modelo de ameaça, formato do ticket, catálogo de eventos de auditoria, nomes de métricas e as decisões D1–D6."
+    required_sensors: ["approval"]
     required_artifacts:
       - "windows-releases-v01-beta/plano_completo_windows-releases-v01-beta.md"
       - "windows-releases-v01-beta/info_aux_windows-releases-v01-beta.md"
@@ -30,6 +31,7 @@ phases:
     prevc: "R"
     summary: "Revisar releases_server, workflows e compose contra os achados G1–G16; auditoria de segurança do desenho do ticket; orçamento de recursos em 2 vCPU."
     required_sensors: ["security_review", "approval"]
+    required_artifacts: ["code_review_findings", "security_audit_report"]
     deliverables:
       - "Lista de correções do releases_server aceita (bloqueadores G1–G8)"
       - "Security review do ticket + ServeDir + upload aprovado"
@@ -40,6 +42,7 @@ phases:
     prevc: "E"
     summary: "E1 releases_server; E2 control_plane (ticket + auditoria); E3 runtime_api (AdminService); E4 admin Flutter; E5 CI Velopack canal beta; E6 Caddy + compose."
     required_sensors: ["tests", "build_status"]
+    required_artifacts: ["releases_server", "control_plane_rpc", "runtime_api_admin_service", "admin_ui_screen", "ci_velopack_beta", "caddy_compose"]
     deliverables:
       - "releases_server no workspace, compilando no CI, sem stubs"
       - "IssueReleaseDownloadTicket no control_plane com auditoria"
@@ -53,6 +56,7 @@ phases:
     prevc: "V"
     summary: "Testes de unidade/integração, negativos de segurança, verificação ponta a ponta da trilha de auditoria e do rate limit, instalação e auto-update reais numa VM Windows."
     required_sensors: ["integration_tests", "security_audit"]
+    required_artifacts: ["test_matrix_evidence", "audit_trail_evidence", "e2e_windows_evidence"]
     deliverables:
       - "Matriz de testes V1–V12 verde"
       - "Evidência: audit_log com release_download_link_issued + traceparent correlacionado no Tempo"
@@ -62,6 +66,8 @@ phases:
     name: "Complete — Deploy, docs e runbook"
     prevc: "C"
     summary: "Deploy DEV via CI, dashboard e alertas, runbook de publicar/reverter/revogar, limpeza dos artefatos placeholder e da doc incorreta."
+    required_sensors: ["deployment_success"]
+    required_artifacts: ["runbook_deploy", "grafana_dashboard", "cleanup_completed"]
     deliverables:
       - "Stack releases no ar em DEV atrás do Caddy"
       - "Painel Grafana + 3 alertas"
