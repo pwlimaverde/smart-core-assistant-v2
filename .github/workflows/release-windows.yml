@@ -1,0 +1,94 @@
+name: Release Windows App
+
+on:
+  push:
+    tags:
+      - 'win-v*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-releases
+
+jobs:
+  build-docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}},value=${{ github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.ref_name }}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/releases/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  publish-release:
+    needs: build-docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: extract
+        run: |
+          VERSION=${GITHUB_REF_NAME#win-v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Upload release files to server
+        env:
+          UPLOAD_TOKEN: ${{ secrets.RELEASES_UPLOAD_TOKEN }}
+        run: |
+          # Download latest releases.win.json to compute deltas
+          curl -f -s -o releases.win.json \
+            https://releases.smartcoreassistant.com.br/api/releases || true
+
+          # vpk pack would run here (on Windows runner in full setup)
+          # For now, placeholder:
+          echo "Placeholder: vpk pack --packId SmartCoreTenant --packVersion ${{ steps.extract.outputs.version }}"
+
+          # POST metadata to releases server
+          curl -X POST https://releases.smartcoreassistant.com.br/upload \
+            -H "Authorization: Bearer ${UPLOAD_TOKEN}" \
+            -F "version=${{ steps.extract.outputs.version }}" \
+            -F "release_notes=Release ${{ steps.extract.outputs.version }}"
+
+  notify:
+    needs: publish-release
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Notify on success
+        if: success()
+        run: echo "✅ Windows release ${{ github.ref_name }} published successfully"
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "❌ Windows release ${{ github.ref_name }} failed"

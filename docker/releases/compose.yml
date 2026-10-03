@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  releases-server:
+    image: ghcr.io/pwlimaverde/smart-core-releases:latest
+    container_name: smart-core-v2-releases
+    restart: unless-stopped
+    environment:
+      RELEASES_DIR: /data/releases
+      UPLOAD_TOKEN: ${RELEASES_UPLOAD_TOKEN}
+      RUST_LOG: releases_server=info,tower_http=debug
+    ports:
+      - "127.0.0.1:8086:8086"
+    volumes:
+      - releases-data:/data/releases
+      - /opt/smartcore/releases:/data/releases
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-s", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - otel
+
+  # Optional: reverse proxy via Caddy (via main docker/edge)
+  # Caddy routes releases.smartcoreassistant.com.br → localhost:8086
+
+volumes:
+  releases-data:
+    driver: local
+
+networks:
+  otel:
+    external: true
+    name: smart-core-v2-observability_otel
+
+# Usage:
+# docker compose --env-file .env up -d
+#
+# Environment variables (.env):
+# RELEASES_UPLOAD_TOKEN=<secure-token>
