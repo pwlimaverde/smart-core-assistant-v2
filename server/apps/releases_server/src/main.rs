@@ -382,7 +382,7 @@ async fn upload_release(
 
     info!(ip = %ip, "Upload authorized");
 
-    // TODO: Implementar extração de versão, arquivo do multipart
+    // TODO(E1.2): de versão, arquivo do multipart
     // TODO: Validar padrão de nome
     // TODO: Stream para disco, verificar SHA256
     // TODO: Atualizar releases.win.json atomicamente
