@@ -30,7 +30,10 @@ dependencies:
     path: ../../modulos/tenant_module
   treinamento_module:
     path: ../../modulos/treinamento_module
+  admin_module:
+    path: ../../modulos/admin_module
   cupertino_icons: ^1.0.8
+  velopack_flutter: ^0.7.1
   # P2a — `MediaKit.ensureInitialized()` nos entrypoints.
   media_kit: ^1.2.6
   # P2a — libmpv empacotado no build CMake do Windows (o app nativo é só
