@@ -7,13 +7,13 @@ services:
     restart: unless-stopped
     environment:
       RELEASES_DIR: /data/releases
-      UPLOAD_TOKEN: ${RELEASES_UPLOAD_TOKEN}
+      RELEASES_UPLOAD_TOKEN: ${RELEASES_UPLOAD_TOKEN}
+      RELEASES_DOWNLOAD_SECRET: ${RELEASES_DOWNLOAD_SECRET}
       RUST_LOG: releases_server=info,tower_http=debug
     ports:
       - "127.0.0.1:8086:8086"
     volumes:
-      - releases-data:/data/releases
-      - /opt/smartcore/releases:/data/releases
+      - /opt/smartcore/releases:/data/releases:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "-s", "http://localhost:8086/health"]
       interval: 30s
@@ -21,22 +21,21 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - otel
-
-  # Optional: reverse proxy via Caddy (via main docker/edge)
-  # Caddy routes releases.smartcoreassistant.com.br → localhost:8086
-
-volumes:
-  releases-data:
-    driver: local
+      - shared_network
+    security_opt:
+      - no-new-privileges:true
+    read_only_root_filesystem: true
+    tmpfs:
+      - /tmp
 
 networks:
-  otel:
+  shared_network:
     external: true
-    name: smart-core-v2-observability_otel
+    name: smart-core-v2-edge_shared
 
 # Usage:
 # docker compose --env-file .env up -d
 #
 # Environment variables (.env):
-# RELEASES_UPLOAD_TOKEN=<secure-token>
+# RELEASES_UPLOAD_TOKEN=<secure-token-openssl-rand-hex-32>
+# RELEASES_DOWNLOAD_SECRET=<secure-token-for-hmac-rotation>

@@ -276,3 +276,22 @@ mcp.smartcoreassistant.com.br {
 		}
 	}
 }
+
+# ----- Releases server (Velopack feed + downloads) -----
+releases.smartcoreassistant.com.br {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	reverse_proxy 127.0.0.1:8086 {
+		transport http {
+			read_timeout 300s
+			write_timeout 300s
+		}
+	}
+}
