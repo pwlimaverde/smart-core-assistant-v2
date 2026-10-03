@@ -67,65 +67,16 @@
             font-weight: bold;
         }
 
-        nav {
-            display: flex;
-            align-items: center;
-            gap: 30px;
-        }
-
         nav a {
             color: var(--white);
             text-decoration: none;
+            margin-left: 30px;
             opacity: 0.9;
             transition: opacity 0.3s;
         }
 
         nav a:hover {
             opacity: 1;
-        }
-
-        .nav-download {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .nav-download:hover {
-            background: var(--white);
-            color: var(--primary) !important;
-        }
-
-        /* Mobile Menu */
-        .menu-toggle {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--white);
-            font-size: 24px;
-            cursor: pointer;
-        }
-
-        .menu-toggle.active span:nth-child(1) {
-            transform: rotate(45deg) translate(8px, 8px);
-        }
-
-        .menu-toggle.active span:nth-child(2) {
-            opacity: 0;
-        }
-
-        .menu-toggle.active span:nth-child(3) {
-            transform: rotate(-45deg) translate(7px, -7px);
-        }
-
-        .menu-toggle span {
-            display: block;
-            width: 25px;
-            height: 3px;
-            background: var(--white);
-            margin: 5px 0;
-            transition: all 0.3s;
         }
 
         /* Hero Section */
@@ -314,44 +265,6 @@
 
         /* Responsive */
         @media (max-width: 768px) {
-            .menu-toggle {
-                display: block;
-            }
-
-            nav {
-                position: absolute;
-                top: 70px;
-                left: 0;
-                right: 0;
-                background: var(--primary-dark);
-                flex-direction: column;
-                gap: 0;
-                padding: 20px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                max-height: 0;
-                overflow: hidden;
-                transition: max-height 0.3s ease;
-            }
-
-            nav.active {
-                max-height: 300px;
-            }
-
-            nav a {
-                padding: 12px 0;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                display: block;
-            }
-
-            nav a:last-child {
-                border-bottom: none;
-            }
-
-            .nav-download {
-                background: var(--primary);
-                margin-top: 10px;
-            }
-
             .hero h1 {
                 font-size: 32px;
             }
@@ -376,8 +289,13 @@
             }
 
             .header-content {
-                flex-direction: row;
-                gap: 0;
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            nav a {
+                margin-left: 15px;
+                font-size: 14px;
             }
         }
 
@@ -408,16 +326,10 @@
                     <div class="logo-icon">ST</div>
                     <span>Smart Core</span>
                 </div>
-                <button class="menu-toggle" id="menuToggle" onclick="toggleMenu()">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </button>
-                <nav id="navMenu">
+                <nav>
                     <a href="#download">Download</a>
                     <a href="#features">Recursos</a>
                     <a href="https://smartcoreassistant.com.br" target="_blank">Painel</a>
-                    <a href="#download" class="nav-download">↓ BAIXAR v0.1.0</a>
                 </nav>
             </div>
         </div>
@@ -514,26 +426,6 @@
 
     <!-- Script -->
     <script>
-        // Mobile menu toggle
-        function toggleMenu() {
-            const navMenu = document.getElementById('navMenu');
-            const menuToggle = document.getElementById('menuToggle');
-
-            navMenu.classList.toggle('active');
-            menuToggle.classList.toggle('active');
-        }
-
-        // Close menu when link is clicked
-        document.addEventListener('DOMContentLoaded', () => {
-            const navLinks = document.querySelectorAll('#navMenu a');
-            navLinks.forEach(link => {
-                link.addEventListener('click', () => {
-                    document.getElementById('navMenu').classList.remove('active');
-                    document.getElementById('menuToggle').classList.remove('active');
-                });
-            });
-        });
-
         const RELEASES_API = 'https://releases.smartcoreassistant.com.br/api/releases';
 
         // Fetch e exibir versão estável
