@@ -1,0 +1,75 @@
+{
+  "brand": "Smart Core Tenant",
+  "version": "1.0",
+  "lastUpdated": "2026-10-03",
+
+  "primary": {
+    "blue": "#0066CC",
+    "blueDark": "#003D7A",
+    "white": "#FFFFFF",
+    "textDark": "#333333",
+    "textGray": "#666666",
+    "bgLight": "#F5F5F5"
+  },
+
+  "secondary": {
+    "success": "#27AE60",
+    "warning": "#E67E22",
+    "error": "#E74C3C",
+    "info": "#3498DB"
+  },
+
+  "gradients": {
+    "installer": {
+      "from": "#003D7A",
+      "to": "#0066CC",
+      "direction": "top-to-bottom"
+    },
+    "button": {
+      "from": "#0066CC",
+      "to": "#003D7A",
+      "direction": "top-to-bottom"
+    }
+  },
+
+  "typography": {
+    "heading": {
+      "fontFamily": "Segoe UI, SF Pro Display, Arial, sans-serif",
+      "fontWeight": 700,
+      "lineHeight": 1.2
+    },
+    "body": {
+      "fontFamily": "Segoe UI, SF Pro Text, Helvetica, sans-serif",
+      "fontWeight": 400,
+      "lineHeight": 1.5
+    },
+    "mono": {
+      "fontFamily": "Consolas, Monaco, monospace",
+      "fontWeight": 400,
+      "lineHeight": 1.4
+    }
+  },
+
+  "darkMode": {
+    "background": "#1E1E1E",
+    "textPrimary": "#FFFFFF",
+    "textSecondary": "#CCCCCC",
+    "accentPrimary": "#4D9FFF",
+    "success": "#4CAF50",
+    "warning": "#FF9800",
+    "error": "#F44336"
+  },
+
+  "print": {
+    "cmyk": {
+      "primary": "100, 55, 0, 0",
+      "primaryDark": "100, 75, 25, 15",
+      "success": "75, 0, 55, 0"
+    },
+    "pantone": {
+      "primary": "279 C",
+      "primaryDark": "533 C",
+      "success": "347 C"
+    }
+  }
+}

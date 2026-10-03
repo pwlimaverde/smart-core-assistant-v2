@@ -1,0 +1,29 @@
+<svg viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="400" height="120" fill="none"/>
+
+  <!-- Smart Core Logo (Blue Diamond Pattern) -->
+  <g id="logo">
+    <!-- Diamond Pattern -->
+    <polygon points="30,30 50,10 70,30 50,50" fill="#0066CC" opacity="0.9"/>
+    <polygon points="50,30 70,10 90,30 70,50" fill="#0066CC" opacity="0.7"/>
+    <polygon points="30,50 50,30 70,50 50,70" fill="#0066CC" opacity="0.8"/>
+    <polygon points="50,50 70,30 90,50 70,70" fill="#0066CC" opacity="0.6"/>
+
+    <!-- ST Badge -->
+    <rect x="30" y="70" width="60" height="40" rx="4" fill="#003D7A"/>
+    <text x="60" y="95" font-family="Segoe UI, Arial" font-size="20" font-weight="bold" fill="#FFFFFF" text-anchor="middle">ST</text>
+  </g>
+
+  <!-- Text -->
+  <g id="text">
+    <!-- Smart Core -->
+    <text x="120" y="45" font-family="Segoe UI, Arial" font-size="28" font-weight="bold" fill="#333333">Smart Core</text>
+
+    <!-- Tenant -->
+    <text x="120" y="75" font-family="Segoe UI, Arial" font-size="20" font-weight="500" fill="#0066CC">Tenant</text>
+
+    <!-- Tagline -->
+    <text x="120" y="105" font-family="Segoe UI, Arial" font-size="10" fill="#666666" font-style="italic">Atendimento Inteligente. Sempre Disponível.</text>
+  </g>
+</svg>
