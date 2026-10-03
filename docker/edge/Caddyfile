@@ -295,3 +295,9 @@ releases.smartcoreassistant.com.br {
 		}
 	}
 }
+
+# ----- Mock Releases Server (para teste)  -----
+releases-test.localhost:8086 {
+	root /opt/smartcore/releases
+	file_server
+}
