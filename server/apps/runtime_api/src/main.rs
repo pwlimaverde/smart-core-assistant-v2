@@ -342,6 +342,8 @@ fn registrar_rotas_admin(
         "ListFeatureFlags",
         "SetFeatureFlag",
         "SetFeatureFlagOverride",
+        // E3: Releases (Windows)
+        "GetWindowsDownloadLink",
     ];
 
     for metodo in ROTAS_ADMIN {

@@ -25,6 +25,7 @@ members = [
     "apps/data_whatsapp",
     "apps/healthcheck",
     "apps/watchdog",
+    "apps/releases_server",
     "crates/local_engine",
 ]
 

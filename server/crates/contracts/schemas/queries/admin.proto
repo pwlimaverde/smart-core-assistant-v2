@@ -1507,6 +1507,8 @@ service AdminService {
   // e ninguém sabia que estava numa versão velha até um bug já corrigido
   // aparecer de novo.
   rpc GetVersaoDoApp(GetVersaoDoAppRequest) returns (GetVersaoDoAppResponse);
+  // P11 — download seguro do instalador Windows (apenas superusuário, beta).
+  rpc GetWindowsDownloadLink(GetWindowsDownloadLinkRequest) returns (GetWindowsDownloadLinkResponse);
   rpc DefinirDepartamentoDaConexao(DefinirDepartamentoDaConexaoRequest) returns (SimpleOkResponse);
   rpc DetalheDaConexao(DetalheDaConexaoRequest) returns (DetalheDaConexaoResponse);
   // P9 — mensagens que o atendente mandou e que não tinham para onde ir. O
@@ -1589,6 +1591,27 @@ service AdminService {
   // Superusuário: o motor das decisões da IA de um tenant (llm | sombra | jev;
   // vazio herda o global MOTOR_ANALISE). Auditado como tenant_config.motor_alterado.
   rpc DefinirMotorTenant(DefinirMotorTenantRequest) returns (DefinirMotorTenantResponse);
+
+  // E3: Download de releases (Windows) — apenas superusuário.
+  // Emite ticket HMAC-SHA256 para download de aplicativo de um canal específico.
+  rpc GetWindowsDownloadLink(GetWindowsDownloadLinkRequest) returns (GetWindowsDownloadLinkResponse);
+}
+
+// E3: Download de releases
+message GetWindowsDownloadLinkRequest {
+  string channel = 1;   // ex: "beta", "stable"
+  string version = 2;   // ex: "0.1.0"
+}
+
+message GetWindowsDownloadLinkResponse {
+  string ticket = 1;                    // Token HMAC-SHA256 para validação de download
+  string url = 2;                       // URL completa com ticket: /download/{version}/{filename}?t={ticket}
+  string version = 3;                   // Versão solicitada
+  string file_name = 4;                 // Nome do arquivo (ex: Setup-0.1.0.exe)
+  int64 size_bytes = 5;                 // Tamanho em bytes
+  string sha256 = 6;                    // Hash SHA256 do arquivo
+  optional string release_notes_md = 7; // Notas de release (Markdown)
+  int64 expires_at_ms = 8;              // Timestamp Unix em ms: quando o ticket expira (5 min)
 }
 
 // --- Fluxos de atendimento ---
@@ -2217,6 +2240,23 @@ message GetVersaoDoAppResponse {
   int64 build_atual = 1;
   string url_download = 2;
   string notas = 3;
+}
+
+// --- P11: download do instalador Windows (apenas superusuário) ---
+
+message GetWindowsDownloadLinkRequest {
+  string channel = 1;   // "beta" nesta entrega; "stable" é recusado até v1.0.0
+  string version = 2;   // vazio = a mais recente do canal
+}
+
+message GetWindowsDownloadLinkResponse {
+  string url = 1;            // https://releases.../download/{v}/{file}?t=...
+  string version = 2;
+  string file_name = 3;
+  int64  size_bytes = 4;
+  string sha256 = 5;
+  string release_notes_md = 6;
+  int64  expires_at_ms = 7;
 }
 
 // --- P9: teste do provedor de IA ---
