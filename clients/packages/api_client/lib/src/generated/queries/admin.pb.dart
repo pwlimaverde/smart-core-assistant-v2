@@ -21441,6 +21441,206 @@ class GetVersaoDoAppResponse extends $pb.GeneratedMessage {
   void clearNotas() => $_clearField(3);
 }
 
+class GetWindowsDownloadLinkRequest extends $pb.GeneratedMessage {
+  factory GetWindowsDownloadLinkRequest({
+    $core.String? channel,
+    $core.String? version,
+  }) {
+    final result = create();
+    if (channel != null) result.channel = channel;
+    if (version != null) result.version = version;
+    return result;
+  }
+
+  GetWindowsDownloadLinkRequest._();
+
+  factory GetWindowsDownloadLinkRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetWindowsDownloadLinkRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetWindowsDownloadLinkRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'channel')
+    ..aOS(2, _omitFieldNames ? '' : 'version')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetWindowsDownloadLinkRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetWindowsDownloadLinkRequest copyWith(
+          void Function(GetWindowsDownloadLinkRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as GetWindowsDownloadLinkRequest))
+          as GetWindowsDownloadLinkRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetWindowsDownloadLinkRequest create() =>
+      GetWindowsDownloadLinkRequest._();
+  @$core.override
+  GetWindowsDownloadLinkRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetWindowsDownloadLinkRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetWindowsDownloadLinkRequest>(create);
+  static GetWindowsDownloadLinkRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get channel => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set channel($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasChannel() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearChannel() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get version => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set version($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasVersion() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearVersion() => $_clearField(2);
+}
+
+class GetWindowsDownloadLinkResponse extends $pb.GeneratedMessage {
+  factory GetWindowsDownloadLinkResponse({
+    $core.String? url,
+    $core.String? version,
+    $core.String? fileName,
+    $fixnum.Int64? sizeBytes,
+    $core.String? sha256,
+    $core.String? releaseNotesMd,
+    $fixnum.Int64? expiresAtMs,
+  }) {
+    final result = create();
+    if (url != null) result.url = url;
+    if (version != null) result.version = version;
+    if (fileName != null) result.fileName = fileName;
+    if (sizeBytes != null) result.sizeBytes = sizeBytes;
+    if (sha256 != null) result.sha256 = sha256;
+    if (releaseNotesMd != null) result.releaseNotesMd = releaseNotesMd;
+    if (expiresAtMs != null) result.expiresAtMs = expiresAtMs;
+    return result;
+  }
+
+  GetWindowsDownloadLinkResponse._();
+
+  factory GetWindowsDownloadLinkResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetWindowsDownloadLinkResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetWindowsDownloadLinkResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'url')
+    ..aOS(2, _omitFieldNames ? '' : 'version')
+    ..aOS(3, _omitFieldNames ? '' : 'fileName')
+    ..aInt64(4, _omitFieldNames ? '' : 'sizeBytes')
+    ..aOS(5, _omitFieldNames ? '' : 'sha256')
+    ..aOS(6, _omitFieldNames ? '' : 'releaseNotesMd')
+    ..aInt64(7, _omitFieldNames ? '' : 'expiresAtMs')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetWindowsDownloadLinkResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetWindowsDownloadLinkResponse copyWith(
+          void Function(GetWindowsDownloadLinkResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as GetWindowsDownloadLinkResponse))
+          as GetWindowsDownloadLinkResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetWindowsDownloadLinkResponse create() =>
+      GetWindowsDownloadLinkResponse._();
+  @$core.override
+  GetWindowsDownloadLinkResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetWindowsDownloadLinkResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetWindowsDownloadLinkResponse>(create);
+  static GetWindowsDownloadLinkResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get url => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set url($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasUrl() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearUrl() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get version => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set version($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasVersion() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearVersion() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get fileName => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set fileName($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasFileName() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearFileName() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $fixnum.Int64 get sizeBytes => $_getI64(3);
+  @$pb.TagNumber(4)
+  set sizeBytes($fixnum.Int64 value) => $_setInt64(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasSizeBytes() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearSizeBytes() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get sha256 => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set sha256($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasSha256() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearSha256() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get releaseNotesMd => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set releaseNotesMd($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasReleaseNotesMd() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearReleaseNotesMd() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get expiresAtMs => $_getI64(6);
+  @$pb.TagNumber(7)
+  set expiresAtMs($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasExpiresAtMs() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearExpiresAtMs() => $_clearField(7);
+}
+
 class TestarProvedorIaRequest extends $pb.GeneratedMessage {
   factory TestarProvedorIaRequest({
     $core.String? tenantId,

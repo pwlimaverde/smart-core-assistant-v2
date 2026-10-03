@@ -853,6 +853,16 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$getVersaoDoApp, request, options: options);
   }
 
+  /// P11 — download seguro do instalador Windows (apenas superusuário, beta).
+  $grpc.ResponseFuture<$0.GetWindowsDownloadLinkResponse>
+      getWindowsDownloadLink(
+    $0.GetWindowsDownloadLinkRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getWindowsDownloadLink, request,
+        options: options);
+  }
+
   $grpc.ResponseFuture<$0.SimpleOkResponse> definirDepartamentoDaConexao(
     $0.DefinirDepartamentoDaConexaoRequest request, {
     $grpc.CallOptions? options,
@@ -1796,6 +1806,11 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/GetVersaoDoApp',
           ($0.GetVersaoDoAppRequest value) => value.writeToBuffer(),
           $0.GetVersaoDoAppResponse.fromBuffer);
+  static final _$getWindowsDownloadLink = $grpc.ClientMethod<
+          $0.GetWindowsDownloadLinkRequest, $0.GetWindowsDownloadLinkResponse>(
+      '/smartcore.contracts.queries.AdminService/GetWindowsDownloadLink',
+      ($0.GetWindowsDownloadLinkRequest value) => value.writeToBuffer(),
+      $0.GetWindowsDownloadLinkResponse.fromBuffer);
   static final _$definirDepartamentoDaConexao = $grpc.ClientMethod<
           $0.DefinirDepartamentoDaConexaoRequest, $0.SimpleOkResponse>(
       '/smartcore.contracts.queries.AdminService/DefinirDepartamentoDaConexao',
@@ -2984,6 +2999,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.GetVersaoDoAppRequest.fromBuffer(value),
         ($0.GetVersaoDoAppResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetWindowsDownloadLinkRequest,
+            $0.GetWindowsDownloadLinkResponse>(
+        'GetWindowsDownloadLink',
+        getWindowsDownloadLink_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetWindowsDownloadLinkRequest.fromBuffer(value),
+        ($0.GetWindowsDownloadLinkResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.DefinirDepartamentoDaConexaoRequest,
             $0.SimpleOkResponse>(
         'DefinirDepartamentoDaConexao',
@@ -4369,6 +4393,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.GetVersaoDoAppResponse> getVersaoDoApp(
       $grpc.ServiceCall call, $0.GetVersaoDoAppRequest request);
+
+  $async.Future<$0.GetWindowsDownloadLinkResponse> getWindowsDownloadLink_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetWindowsDownloadLinkRequest> $request) async {
+    return getWindowsDownloadLink($call, await $request);
+  }
+
+  $async.Future<$0.GetWindowsDownloadLinkResponse> getWindowsDownloadLink(
+      $grpc.ServiceCall call, $0.GetWindowsDownloadLinkRequest request);
 
   $async.Future<$0.SimpleOkResponse> definirDepartamentoDaConexao_Pre(
       $grpc.ServiceCall $call,
