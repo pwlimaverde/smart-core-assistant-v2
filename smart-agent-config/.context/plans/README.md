@@ -14,6 +14,7 @@ This directory contains plans for coordinating work across documentation and pla
 9. [Painel Crm E Campos Do Cartao](./painel-crm-e-campos-do-cartao.md)
 10. [Regras Do Bot E Permissoes](./regras-do-bot-e-permissoes.md)
 11. [Servidor Releases Windows](./servidor-releases-windows.md)
+12. [Windows Releases v0.1 Beta](./windows-releases-v01-beta.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.
