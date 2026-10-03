@@ -1,70 +1,36 @@
-import 'package:api_client/api_client.dart';
-import 'package:dependencies_module/dependencies_module.dart';
+import 'package:api_client/api_client.dart' as proto;
+import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/model/windows_download_link.dart';
-import '../../domain/errors/windows_downloads_errors.dart';
+import '../../domain/parameters/windows_downloads_parameters.dart';
 
-/// Datasource para requisições gRPC de download do Windows.
-class GetWindowsDownloadLinkDatasource {
-  final AdminServiceClient client;
+/// Datasource burro: I/O gRPC e conversão protobuf → domínio. Sem `try/catch` —
+/// a exceção sobe crua para o `mapError` do repositório.
+final class GetWindowsDownloadLinkDatasource
+    implements
+        Datasource<WindowsDownloadLink, GetWindowsDownloadLinkParameters> {
+  final proto.AdminServiceClient _client;
 
-  GetWindowsDownloadLinkDatasource({required this.client});
+  const GetWindowsDownloadLinkDatasource({required this._client});
 
-  /// Chama o RPC GetWindowsDownloadLink do admin service.
-  Future<Result<WindowsDownloadLink, AppException>> call({
-    required String channel,
-    required String version,
-  }) async {
-    try {
-      // Cria a requisição protobuf
-      final request = GetWindowsDownloadLinkRequest()
-        ..channel = channel
-        ..version = version;
-
-      // Chamada gRPC
-      final response = await client.getWindowsDownloadLink(request);
-
-      // Mapeia para o modelo de domínio
-      final downloadLink = WindowsDownloadLink(
-        url: response.url,
-        version: response.version,
-        fileName: response.fileName,
-        sizeBytes: response.sizeBytes.toInt(),
-        sha256: response.sha256,
-        releaseNotesMd: response.releaseNotesMd,
-        expiresAtMs: response.expiresAtMs,
-      );
-
-      return Success(downloadLink);
-    } on GrpcError catch (e) {
-      return Failure(_mapGrpcErrorToException(e));
-    } catch (e, stackTrace) {
-      return Failure(AppException(
-        message: 'Erro ao obter link de download: $e',
-        code: 'unknown_error',
-        stackTrace: stackTrace,
-      ));
-    }
-  }
-
-  /// Mapeia erros gRPC para exceções específicas do domínio.
-  AppException _mapGrpcErrorToException(GrpcError error) {
-    switch (error.code) {
-      case GrpcErrorCode.permissionDenied:
-      case GrpcErrorCode.unauthenticated:
-        return NotSuperuserError();
-      case GrpcErrorCode.invalidArgument:
-        return InvalidChannelError('beta');
-      case GrpcErrorCode.failedPrecondition:
-        return ReleasesNotConfiguredError();
-      case GrpcErrorCode.notFound:
-        return NoReleaseFoundError('beta');
-      default:
-        return AppException(
-          message: 'Erro ao obter link: ${error.message}',
-          code: 'grpc_error_${error.code}',
-          stackTrace: StackTrace.current,
-        );
-    }
+  @override
+  Future<WindowsDownloadLink> call(
+    GetWindowsDownloadLinkParameters parameters,
+  ) async {
+    final resp = await _client.getWindowsDownloadLink(
+      proto.GetWindowsDownloadLinkRequest(
+        channel: parameters.channel,
+        version: parameters.version,
+      ),
+    );
+    return WindowsDownloadLink(
+      url: resp.url,
+      version: resp.version,
+      fileName: resp.fileName,
+      sizeBytes: resp.sizeBytes.toInt(),
+      sha256: resp.sha256,
+      releaseNotesMd: resp.releaseNotesMd,
+      expiresAtMs: resp.expiresAtMs.toInt(),
+    );
   }
 }

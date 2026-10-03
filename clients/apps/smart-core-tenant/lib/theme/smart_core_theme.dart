@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 
 class SCColors {
   // Primary Colors
-  static const Color primary = Color(0xFF0066CC);      // Smart Core Blue
-  static const Color primaryDark = Color(0xFF003D7A);  // Smart Core Dark Blue
+  static const Color primary = Color(0xFF0066CC); // Smart Core Blue
+  static const Color primaryDark = Color(0xFF003D7A); // Smart Core Dark Blue
   static const Color primaryLight = Color(0xFF4D9FFF); // Light Blue (dark mode)
 
   // Neutral Colors

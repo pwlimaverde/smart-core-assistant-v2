@@ -38,13 +38,12 @@ import 'features/dashboard/domain/usecases/dashboard_usecases.dart';
 import 'features/dashboard/presentation/routes/dashboard_route.dart';
 import 'features/windows_downloads/data/datasources/windows_downloads_datasources.dart';
 import 'features/windows_downloads/data/repositories/windows_downloads_repositories.dart';
-import 'features/windows_downloads/domain/repositories/windows_downloads_repository.dart';
 import 'features/windows_downloads/domain/usecases/windows_downloads_usecases.dart';
 import 'features/windows_downloads/presentation/routes/windows_downloads_route.dart';
 
 /// Módulo de administração (painel do superusuário), em **nove features**:
 /// core_settings, tenants, usuarios, tenant_config, billing, feature_flags, audit,
-/// evolution e dashboard.
+/// evolution, dashboard e windows_downloads.
 ///
 /// Antes existia uma única feature `config` com tudo dentro, servida por um
 /// `AdminService` de 24 métodos, um `AdminServiceImpl` que repetia o mesmo
