@@ -341,8 +341,12 @@ async fn download_release(
     };
 
     let mut headers = axum::http::HeaderMap::new();
-    headers.insert(header::CONTENT_TYPE, content_type.parse().unwrap());
-    headers.insert(header::CONTENT_LENGTH, size.to_string().parse().unwrap());
+    if let Ok(ct) = content_type.parse() {
+        headers.insert(header::CONTENT_TYPE, ct);
+    }
+    if let Ok(cl) = size.to_string().parse() {
+        headers.insert(header::CONTENT_LENGTH, cl);
+    }
 
     let stream = ReaderStream::new(file);
     let body = axum::body::Body::from_stream(stream);
