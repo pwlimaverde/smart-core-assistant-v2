@@ -36,8 +36,13 @@ import 'features/dashboard/data/datasources/dashboard_datasources.dart';
 import 'features/dashboard/data/repositories/dashboard_repositories.dart';
 import 'features/dashboard/domain/usecases/dashboard_usecases.dart';
 import 'features/dashboard/presentation/routes/dashboard_route.dart';
+import 'features/windows_downloads/data/datasources/windows_downloads_datasources.dart';
+import 'features/windows_downloads/data/repositories/windows_downloads_repositories.dart';
+import 'features/windows_downloads/domain/repositories/windows_downloads_repository.dart';
+import 'features/windows_downloads/domain/usecases/windows_downloads_usecases.dart';
+import 'features/windows_downloads/presentation/routes/windows_downloads_route.dart';
 
-/// Módulo de administração (painel do superusuário), em **oito features**:
+/// Módulo de administração (painel do superusuário), em **nove features**:
 /// core_settings, tenants, usuarios, tenant_config, billing, feature_flags, audit,
 /// evolution e dashboard.
 ///
@@ -305,6 +310,15 @@ final class AdminModule extends AppModule {
         ),
       ),
     );
+
+    // ── windows_downloads (P11: download seguro do instalador) ───────────
+    i.lazySingleton<GetWindowsDownloadLinkUsecase>(
+      () => GetWindowsDownloadLinkUsecase(
+        repository: GetWindowsDownloadLinkRepository(
+          datasource: GetWindowsDownloadLinkDatasource(client: _adminClient()),
+        ),
+      ),
+    );
   }
 
   @override
@@ -318,6 +332,7 @@ final class AdminModule extends AppModule {
     AuditRoute(),
     EvolutionRoute(),
     DashboardRoute(),
+    WindowsDownloadsRoute(),
   ];
 
   /// Stub gRPC do admin, extraído do `ApiClient` global da plataforma.

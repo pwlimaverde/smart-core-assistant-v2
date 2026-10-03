@@ -107,6 +107,15 @@ class AdminDrawer extends StatelessWidget {
               context.go('/admin/audit');
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.download),
+            title: const Text('Instalador Windows'),
+            selected: location == '/admin/windows-downloads',
+            onTap: () {
+              Navigator.pop(context);
+              context.go('/admin/windows-downloads');
+            },
+          ),
           const Spacer(),
           const Divider(),
           ListTile(
