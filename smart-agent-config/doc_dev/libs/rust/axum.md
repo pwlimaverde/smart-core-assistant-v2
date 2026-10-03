@@ -21,18 +21,10 @@ As duas versões **não devem ser misturadas** dentro do mesmo binário.
 
 ## 2. Breaking Changes: 0.7.x → 0.8
 
-### 🔴 `Extension` removido — use `State`
+### 🔴 `axum::Server::bind` removido (foi em 0.7, com hyper 1.0)
+Descontinuado em 0.7, não relevante para código novo em 0.8. Use `axum::serve`:
 ```rust
-// ❌ 0.7 (não funciona em 0.8)
-async fn handler(Extension(state): Extension<AppState>) {}
-
-// ✅ 0.8
-async fn handler(State(state): State<AppState>) {}
-```
-
-### 🔴 `axum::Server::bind` descontinuado — use `axum::serve`
-```rust
-// ❌ 0.7 (descontinuado)
+// ❌ 0.7 (descontinuado e removido)
 axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
     .serve(app.into_make_service())
     .await?;
@@ -42,12 +34,28 @@ let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
 axum::serve(listener, app).await?;
 ```
 
-### 🔴 `.with_state()` obrigatório
-Em 0.8, todos os handlers com `State<T>` exigem `.with_state()` no router:
+### 🟡 `Extension` ainda existe, mas `State` é recomendado
+`Extension` **não foi removido** em 0.8 (está no trait `Extract`), mas a recomendação é usar `State` por tipagem em tempo de compilação:
+```rust
+// ✅ Ambos funcionam em 0.8:
+async fn handler_state(State(state): State<AppState>) {}
+async fn handler_ext(Extension(state): Extension<AppState>) {}
+
+// State é preferível (type-safe)
+```
+
+### 🔴 `.with_state()` obrigatório se usar `State<T>`
+Routers com handlers que extraem `State<T>` precisam chamar `.with_state()`:
 ```rust
 let app = Router::new()
     .route("/webhook/{provider}/{tenant_id}/{instance_id}", post(handle_webhook))
-    .with_state(state);  // ← obrigatório
+    .with_state(state);  // ← obrigatório para State<T>
+```
+
+### 🔴 Breaking changes de fato do 0.8
+1. **Rotas dinâmicas:** use `{param}`, não `:param` (que dá panic)
+2. **`FromRequestParts`/`FromRequest` sem `#[async_trait]`** — são traits nativos async agora
+3. **`Option<T>` como extrator:** antes engolia qualquer rejeição; agora rejeita se o valor existe mas é inválido — use `OptionalFromRequestParts` para recuperar o comportamento antigo
 ```
 
 ### ⚠️ Validação de rotas com `:` e `*`
