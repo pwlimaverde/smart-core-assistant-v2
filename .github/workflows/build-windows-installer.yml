@@ -1,0 +1,125 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - 'win-v*'
+
+env:
+  FLUTTER_VERSION: '3.24.0'
+  VELOPACK_VERSION: '0.0.520'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Get Flutter Dependencies
+        run: |
+          cd clients/apps/smart-core-tenant
+          flutter pub get
+
+      - name: Build Flutter Windows App
+        run: |
+          cd clients/apps/smart-core-tenant
+          flutter build windows --release
+
+      - name: Setup NSIS
+        uses: joncloud/nsis-action@v3
+        with:
+          script-file: "infra/windows/smartcore-installer.nsi"
+          nsis-version: '3.08'
+
+      - name: Install Velopack CLI
+        run: |
+          dotnet tool install -g Velopack.Cli --version ${{ env.VELOPACK_VERSION }}
+          vpk --version
+
+      - name: Extract Version from Tag
+        id: extract_version
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^win-v', ''
+          echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Pack with Velopack
+        run: |
+          vpk pack `
+            --packId SmartCoreTenant `
+            --packVersion ${{ steps.extract_version.outputs.version }} `
+            --packDir "clients/apps/smart-core-tenant/build/windows/x64/Release" `
+            --mainExe smart_core_tenant.exe `
+            --channel win `
+            --signParams "/td sha256 /fd sha256"
+        env:
+          VELOPACK_ASSET_DIR: "infra/windows/assets"
+
+      - name: Upload Release Artifacts to Server
+        run: |
+          $setupExe = "Setup.exe"
+          $token = "${{ secrets.RELEASES_UPLOAD_TOKEN }}"
+          $version = "${{ steps.extract_version.outputs.version }}"
+
+          if (Test-Path $setupExe) {
+            Write-Host "Uploading Setup.exe..."
+
+            # Upload Setup.exe
+            curl.exe -X POST `
+              -H "Authorization: Bearer $token" `
+              -F "version=$version" `
+              -F "file=@$setupExe" `
+              https://releases.smartcoreassistant.com.br/upload
+
+            Write-Host "✅ Setup.exe uploaded successfully"
+          } else {
+            Write-Host "❌ Setup.exe not found!"
+            exit 1
+          }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            Setup.exe
+            releases.win.json
+          draft: false
+          prerelease: false
+          body: |
+            # Smart Core Tenant v${{ steps.extract_version.outputs.version }}
+
+            **Download:** Setup.exe
+
+            ### Features
+            - ✅ Velopack auto-update infrastructure
+            - ✅ Flutter Windows build
+            - ✅ Professional installer with branding
+            - ✅ Automatic updates from releases.smartcoreassistant.com.br
+
+            ### Installation
+            1. Download `Setup.exe`
+            2. Run installer (no admin required)
+            3. App checks for updates automatically
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Success
+        if: success()
+        run: |
+          Write-Host "✅ Build completed successfully"
+          Write-Host "   Version: ${{ steps.extract_version.outputs.version }}"
+          Write-Host "   Setup: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Setup.exe"
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          Write-Host "❌ Build failed"
+          exit 1
