@@ -97,7 +97,7 @@ pub fn setup_releases_dir() -> anyhow::Result<(TempDir, PathBuf)> {
 /// - `claims_hash`: SHA256 hexadecimal do JSON das claims
 /// - `signature`: HMAC-SHA256 hexadecimal do mesmo JSON, usando TEST_DOWNLOAD_SECRET
 pub fn generate_valid_ticket(version: &str, filename: &str) -> String {
-    let jti = Uuid::new_v7().to_string();
+    let jti = Uuid::new_v4().to_string();
     let iat = Utc::now().timestamp();
     let exp = iat + 300; // 5 minutos no futuro
 
@@ -118,7 +118,7 @@ pub fn generate_valid_ticket(version: &str, filename: &str) -> String {
 
 /// Gera um ticket HMAC expirado (exp < now).
 pub fn generate_expired_ticket(version: &str, filename: &str) -> String {
-    let jti = Uuid::new_v7().to_string();
+    let jti = Uuid::new_v4().to_string();
     let iat = Utc::now().timestamp() - 600; // 10 minutos atrás
     let exp = iat + 300; // expirou 5 minutos atrás
 
@@ -139,7 +139,7 @@ pub fn generate_expired_ticket(version: &str, filename: &str) -> String {
 
 /// Gera um ticket com payload adulterado (signature inválida).
 pub fn generate_tampered_ticket(version: &str, filename: &str) -> String {
-    let jti = Uuid::new_v7().to_string();
+    let jti = Uuid::new_v4().to_string();
     let iat = Utc::now().timestamp();
     let exp = iat + 300;
 
@@ -161,6 +161,7 @@ pub fn generate_tampered_ticket(version: &str, filename: &str) -> String {
 }
 
 fn sha256_hex(data: &[u8]) -> String {
+    use sha2::Digest;
     let mut hasher = Sha256::new();
     hasher.update(data);
     hex::encode(hasher.finalize())

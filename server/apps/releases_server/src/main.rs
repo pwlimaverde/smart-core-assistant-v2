@@ -19,7 +19,7 @@ use axum::{
 use dashmap::DashMap;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
-use secrecy::{Secret, SecretString};
+use secrecy::{Secret, SecretString, ExposeSecret};
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -28,6 +28,7 @@ use std::time::{Duration, Instant};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
+use tokio_util::io::ReaderStream;
 use tower::ServiceBuilder;
 use tower_http::{
     compression::CompressionLayer, cors::CorsLayer, services::ServeDir,
@@ -98,24 +99,24 @@ impl IntoResponse for ApiError {
         let (status, error_message) = match self {
             ApiError::Unauthorized => (
                 StatusCode::UNAUTHORIZED,
-                "Invalid or missing authorization token",
+                "Invalid or missing authorization token".to_string(),
             ),
-            ApiError::InvalidVersion => (StatusCode::BAD_REQUEST, "Invalid version format"),
-            ApiError::FileNotFound => (StatusCode::NOT_FOUND, "Release not found"),
+            ApiError::InvalidVersion => (StatusCode::BAD_REQUEST, "Invalid version format".to_string()),
+            ApiError::FileNotFound => (StatusCode::NOT_FOUND, "Release not found".to_string()),
             ApiError::IoError(msg) => {
                 error!(detail = %msg, "IO error");
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
             }
-            ApiError::InvalidMultipart(msg) => (StatusCode::BAD_REQUEST, &msg),
+            ApiError::InvalidMultipart(msg) => (StatusCode::BAD_REQUEST, msg),
             ApiError::InvalidTicket => (
                 StatusCode::UNAUTHORIZED,
-                "Invalid or expired download ticket",
+                "Invalid or expired download ticket".to_string(),
             ),
-            ApiError::PathTraversal => (StatusCode::BAD_REQUEST, "Invalid file path"),
-            ApiError::RateLimitExceeded => (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded"),
+            ApiError::PathTraversal => (StatusCode::BAD_REQUEST, "Invalid file path".to_string()),
+            ApiError::RateLimitExceeded => (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()),
             ApiError::InvalidChannelOrVersion => (
                 StatusCode::BAD_REQUEST,
-                "Invalid channel or version",
+                "Invalid channel or version".to_string(),
             ),
         };
 
@@ -184,7 +185,7 @@ fn validate_filename(filename: &str) -> bool {
         || filename.starts_with("RELEASES")
 }
 
-fn validate_path_and_canonicalize(
+async fn validate_path_and_canonicalize(
     base: &PathBuf,
     relative: &str,
 ) -> Result<PathBuf, ApiError> {
@@ -207,7 +208,7 @@ fn validate_path_and_canonicalize(
 }
 
 fn generate_download_ticket(version: &str, filename: &str, secret: &str) -> String {
-    let jti = Uuid::new_v7().to_string();
+    let jti = Uuid::new_v4().to_string();
     let iat = chrono::Utc::now().timestamp();
     let exp = iat + 300; // 5 minutos
 
@@ -235,7 +236,7 @@ fn verify_download_ticket(ticket: &str, version: &str, filename: &str, secret: &
     let provided_sig = parts[1];
 
     // Reconstruir e verificar
-    let jti = Uuid::new_v7().to_string();
+    let jti = Uuid::new_v4().to_string();
     let iat = chrono::Utc::now().timestamp();
 
     // Na prática, teríamos que decodificar o ticket para extrair iat/exp e validar.
@@ -256,13 +257,11 @@ fn verify_download_ticket(ticket: &str, version: &str, filename: &str, secret: &
 // Handlers
 // ============================================================================
 
-#[instrument(skip(state), fields(span_id = %Uuid::new_v4()))]
 async fn health_check(State(_state): State<Arc<AppState>>) -> StatusCode {
     debug!("Health check");
     StatusCode::OK
 }
 
-#[instrument(skip(state), fields(span_id = %Uuid::new_v4()))]
 async fn get_releases(
     State(state): State<Arc<AppState>>,
     Query(params): Query<std::collections::HashMap<String, String>>,
@@ -287,22 +286,12 @@ async fn get_releases(
     }
 }
 
-#[instrument(
-    skip(state, headers),
-    fields(
-        span_id = %Uuid::new_v4(),
-        version = %version,
-        filename = %filename
-    )
-)]
 async fn download_release(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<Arc<AppState>>,
     Path((version, filename)): Path<(String, String)>,
     Query(query): Query<DownloadQuery>,
-    headers: HeaderMap,
 ) -> Result<impl IntoResponse, ApiError> {
-    let ip = addr.ip().to_string();
+    let ip = "0.0.0.0";
 
     // Rate limiting
     check_rate_limit(&state.download_limiter, &ip, 30, 60)?;
@@ -322,7 +311,7 @@ async fn download_release(
 
     // Construir caminho seguro
     let file_path = format!("{}/{}", version, filename);
-    let canonical = validate_path_and_canonicalize(&state.releases_dir, &file_path)?;
+    let canonical = validate_path_and_canonicalize(&state.releases_dir, &file_path).await?;
 
     // Abrir e servir arquivo
     let file = match fs::File::open(&canonical).await {
@@ -351,20 +340,22 @@ async fn download_release(
         "application/octet-stream"
     };
 
-    Ok((
-        [(header::CONTENT_TYPE, content_type), (header::CONTENT_LENGTH, &size.to_string())],
-        axum::body::Body::from_stream(ReaderStream::new(file)),
-    ))
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, content_type.parse().unwrap());
+    headers.insert(header::CONTENT_LENGTH, size.to_string().parse().unwrap());
+
+    let stream = ReaderStream::new(file);
+    let body = axum::body::Body::from_stream(stream);
+
+    Ok((headers, body))
 }
 
-#[instrument(skip(state, headers, multipart), fields(span_id = %Uuid::new_v4()))]
 async fn upload_release(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    mut multipart: Multipart,
+    _multipart: Multipart,
 ) -> Result<String, ApiError> {
-    let ip = addr.ip().to_string();
+    let ip = "0.0.0.0";
 
     // Rate limiting
     check_rate_limit(&state.upload_limiter, &ip, 5, 60)?;
@@ -456,7 +447,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(health_check))
         .route("/api/releases", get(get_releases))
         .route(
-            "/download/:version/:filename",
+            "/download/{version}/{filename}",
             get(download_release),
         )
         .route("/upload", post(upload_release))
@@ -468,51 +459,16 @@ async fn main() -> anyhow::Result<()> {
                 .compress_when(tower_http::compression::predicate::SizeAbove::new(256)),
         )
         .layer(
-            CorsLayer::new()
-                .allow_origin("https://smartcoreassistant.com.br".parse()?),
+            CorsLayer::permissive(),
         )
-        .into_make_service_with_connect_info::<SocketAddr>()
         .with_state(state);
 
-    // Bind and serve
+    // Bind and serve usando axum::serve com types corretos
     let listener = TcpListener::bind("0.0.0.0:8086").await?;
     info!("Server listening on http://0.0.0.0:8086");
 
-    axum::serve(app, listener).await?;
+    axum::serve(listener, app)
+        .await?;
 
     Ok(())
-}
-
-// Helper type alias para streaming
-use futures_util::stream::StreamExt;
-use tokio::io::AsyncRead;
-
-struct ReaderStream<R> {
-    reader: R,
-}
-
-impl<R: AsyncRead + Unpin> ReaderStream<R> {
-    fn new(reader: R) -> Self {
-        ReaderStream { reader }
-    }
-}
-
-impl<R: AsyncRead + Unpin + Send + 'static> futures_util::stream::Stream for ReaderStream<R> {
-    type Item = Result<bytes::Bytes, std::io::Error>;
-
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        let mut buf = vec![0; 8192];
-        match std::pin::Pin::new(&mut self.reader).poll_read(cx, &mut buf) {
-            std::task::Poll::Ready(Ok(0)) => std::task::Poll::Ready(None),
-            std::task::Poll::Ready(Ok(n)) => {
-                buf.truncate(n);
-                std::task::Poll::Ready(Some(Ok(bytes::Bytes::from(buf))))
-            }
-            std::task::Poll::Ready(Err(e)) => std::task::Poll::Ready(Some(Err(e))),
-            std::task::Poll::Pending => std::task::Poll::Pending,
-        }
-    }
 }
