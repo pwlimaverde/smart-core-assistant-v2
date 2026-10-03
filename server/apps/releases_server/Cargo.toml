@@ -1,34 +1,38 @@
 [package]
 name = "releases_server"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+license.workspace = true
 publish = false
 
+# lib + bin: o roteador mora na lib para os testes de integração exercitarem o
+# servidor REAL (antes os testes reimplementavam os handlers e testavam a cópia).
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "releases_server"
+path = "src/main.rs"
+
 [dependencies]
-axum = { version = "0.8", features = ["multipart"] }
-tokio = { version = "1", features = ["full"] }
-tower = { version = "0.5" }
-tower-http = { version = "0.6", features = ["fs", "cors", "compression-gzip", "compression-br", "trace"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-uuid = { version = "1.0", features = ["v4", "v7", "serde"] }
-sha2 = "0.10"
-hex = "0.4"
-secrecy = { version = "0.8", features = ["serde"] }
-tokio-util = { version = "0.7", features = ["codec"] }
-bytes = "1.5"
-hyper = { version = "1", features = ["full"] }
-http = "1"
-anyhow = "1.0"
-thiserror = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
-dashmap = "6.1"
-hmac = "0.12"
-futures-util = "0.3"
+axum               = { version = "0.8", features = ["multipart"] }
+tokio              = { workspace = true }
+tokio-util         = { version = "0.7", features = ["io"] }
+tower-http         = { version = "0.6", features = ["trace"] }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
+uuid               = { workspace = true }
+sha2               = { workspace = true }
+hex                = { workspace = true }
+secrecy            = { workspace = true }
+subtle             = { workspace = true }
+dashmap            = { workspace = true }
+anyhow             = { workspace = true }
+release_ticket     = { workspace = true }
 
 [dev-dependencies]
-reqwest = { version = "0.11", features = ["json"] }
-tempfile = "3"
-tokio-test = "0.4"
+tower          = { workspace = true, features = ["util"] }
+http-body-util = "0.1"
+tempfile       = "3"

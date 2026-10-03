@@ -1,0 +1,17 @@
+[package]
+name = "release_ticket"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# Ticket de download de release (HMAC-SHA256). Crate próprio porque o MESMO
+# formato é assinado pelo control_plane e verificado pelo releases_server: com o
+# código num lugar só, os dois lados não divergem.
+[dependencies]
+serde      = { workspace = true }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
+base64     = { workspace = true }
+hmac       = { workspace = true }
+sha2       = { workspace = true }

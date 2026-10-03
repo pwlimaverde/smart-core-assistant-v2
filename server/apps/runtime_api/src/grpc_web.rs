@@ -123,6 +123,8 @@ use contracts::grpc::queries::{
     GetThreadResponse,
     GetVersaoDoAppRequest,
     GetVersaoDoAppResponse,
+    GetWindowsDownloadLinkRequest,
+    GetWindowsDownloadLinkResponse,
     IniciarAtendimentoManualRequest,
     IniciarAtendimentoManualResponse,
     IntencaoDaConversa,
@@ -1281,6 +1283,21 @@ fn status_do_erro_interno(err: Option<contracts::ErrorEnvelope>) -> Status {
         "VALIDATION_FAILED" => Status::invalid_argument(err.message),
         "CONFLICT" | "DB_CONSTRAINT_VIOLATION" => Status::failed_precondition(err.message),
         _ => Status::internal(format!("Erro no banco: {}", err.message)),
+    }
+}
+
+/// Erros do `IssueReleaseDownloadTicket` → `Status` que a tela do instalador
+/// distingue: canal inválido, downloads não configurados e release inexistente.
+fn status_do_erro_de_release(err: Option<contracts::ErrorEnvelope>) -> Status {
+    let Some(err) = err else {
+        return Status::internal("Erro no control_plane");
+    };
+    match err.code.as_str() {
+        "VALIDATION_FAILED" => Status::invalid_argument(err.message),
+        "CONFLICT" => Status::failed_precondition(err.message),
+        "STORAGE_NOT_FOUND" => Status::not_found(err.message),
+        c if c.starts_with("AUTH_") => Status::permission_denied("errors.auth.forbidden"),
+        _ => Status::internal(format!("Erro no control_plane: {}", err.message)),
     }
 }
 
@@ -7497,6 +7514,72 @@ impl AdminService for AdminFacade {
         }
     }
 
+    // --- P11: instalador Windows ---
+
+    /// Link de download do instalador Windows (só superusuário). O ticket HMAC é
+    /// assinado no control_plane (`IssueReleaseDownloadTicket`), que também
+    /// audita `release_download_link_issued`; aqui fica só a guarda de borda.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetWindowsDownloadLink", traceparent)
+    )]
+    async fn get_windows_download_link(
+        &self,
+        req: Request<GetWindowsDownloadLinkRequest>,
+    ) -> Result<Response<GetWindowsDownloadLinkResponse>, Status> {
+        let claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let inner = req.into_inner();
+
+        let env_req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "IssueReleaseDownloadTicket".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "channel": inner.channel.trim(),
+                "version": inner.version.trim(),
+            }))
+            .map_err(|e| Status::internal(e.to_string()))?,
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: true,
+            ..Default::default()
+        };
+
+        let resp = self
+            .control
+            .call(env_req, std::time::Duration::from_secs(10))
+            .await
+            .map_err(|e| Status::unavailable(format!("Falha no control_plane: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_de_release(resp.error));
+        }
+        let val: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+        let texto = |campo: &str| {
+            val.get(campo)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        let inteiro = |campo: &str| val.get(campo).and_then(|v| v.as_i64()).unwrap_or(0);
+
+        Ok(Response::new(GetWindowsDownloadLinkResponse {
+            url: texto("url"),
+            version: texto("version"),
+            file_name: texto("file_name"),
+            size_bytes: inteiro("size_bytes"),
+            sha256: texto("sha256"),
+            release_notes_md: texto("release_notes_md"),
+            expires_at_ms: inteiro("expires_at_ms"),
+        }))
+    }
+
     // --- Fase 4: Feature Flags ---
 
     #[tracing::instrument(
@@ -12374,6 +12457,7 @@ mod tests {
             "RegisterPayment" => facade.register_payment(Request::new(RegisterPaymentRequest::default())).await,
             "ListPayments" => facade.list_payments(Request::new(ListPaymentsRequest::default())).await,
             "TestEvolutionConnection" => facade.test_evolution_connection(Request::new(TestEvolutionConnectionRequest::default())).await,
+            "GetWindowsDownloadLink" => facade.get_windows_download_link(Request::new(GetWindowsDownloadLinkRequest::default())).await,
             "ListFeatureFlags" => facade.list_feature_flags(Request::new(ListFeatureFlagsRequest::default())).await,
             "SetFeatureFlag" => facade.set_feature_flag(Request::new(SetFeatureFlagRequest::default())).await,
             "SetFeatureFlagOverride" => facade.set_feature_flag_override(Request::new(SetFeatureFlagOverrideRequest::default())).await,
