@@ -43,12 +43,15 @@ ShowUninstDetails show
 !define TAGLINE "Atendimento Inteligente. Sempre Disponível."
 
 ; Installer Images (from infra/branding/assets/)
+; ✅ Assets criados 2026-10-03 com identidade visual Smart Core
 !define MUI_WELCOMEFINISHPAGE_BITMAP "infra/branding/assets/installer-logo.bmp"        ; 164x314
-!define MUI_WELCOMEFINISHPAGE_BITMAP_NOSTRETCH ""                                      ; Don't stretch
-!define MUI_HEADERIMAGE ""                                                             ; Use our custom header
+!define MUI_WELCOMEFINISHPAGE_BITMAP_NOSTRETCH ""                                      ; Don't stretch (preserve aspect)
 !define MUI_HEADERIMAGE_BITMAP "infra/branding/assets/installer-side.bmp"             ; 96x482
-!define MUI_ICON "infra/branding/assets/icon.ico"                                     ; App icon
-!define MUI_UNICON "infra/branding/assets/icon.ico"                                   ; Uninstaller icon
+!define MUI_ICON "infra/branding/assets/app_icon.ico"                                 ; App icon (da aplicação)
+!define MUI_UNICON "infra/branding/assets/app_icon.ico"                               ; Uninstaller icon
+
+; Branding visual
+!define MUI_BRANDING "Smart Core Tenant v0.1.0"
 
 ; ============================================================================
 ; MUI Settings with Branding
