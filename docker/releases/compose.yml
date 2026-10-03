@@ -1,36 +1,25 @@
-version: '3.8'
-
+# Stack do releases_server (fora do deploy automático: sobe à mão no VPS).
+#   cd /opt/smartcore/releases-stack && docker compose --env-file .env up -d
+# O diretório de dados fica FORA da pasta do compose: nada de .env, logs ou
+# scripts dentro do que o servidor serve (achado G5).
 services:
   releases-server:
-    image: ghcr.io/pwlimaverde/smart-core-releases:latest
+    image: ${RELEASES_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2-releases:latest}
     container_name: smart-core-v2-releases
     restart: unless-stopped
     environment:
       RELEASES_DIR: /data/releases
-      RELEASES_UPLOAD_TOKEN: ${RELEASES_UPLOAD_TOKEN}
-      RELEASES_DOWNLOAD_SECRET: ${RELEASES_DOWNLOAD_SECRET}
-      RUST_LOG: releases_server=info,tower_http=debug
+      RELEASES_UPLOAD_TOKEN: ${RELEASES_UPLOAD_TOKEN:?defina RELEASES_UPLOAD_TOKEN no .env}
+      RELEASES_DOWNLOAD_SECRET: ${RELEASES_DOWNLOAD_SECRET:-}
+      RELEASES_MAX_UPLOAD_MB: ${RELEASES_MAX_UPLOAD_MB:-500}
+      RUST_LOG: releases_server=info,tower_http=info
     ports:
-      - "127.0.0.1:8086:8086"
+      # Só na ponte do Docker: a borda (Caddy em container) chega por
+      # host.docker.internal; a internet não, mesmo com UFW aberto.
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${RELEASES_HOST_PORT:-8086}:8086"
     volumes:
-      - /opt/smartcore/releases:/data/releases:ro
-    healthcheck:
-      test: ["CMD", "curl", "-f", "-s", "http://localhost:8086/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    networks:
-      - shared_network
-
-networks:
-  shared_network:
-    external: true
-    name: smart-core-v2-edge_shared
-
-# Usage:
-# docker compose --env-file .env up -d
-#
-# Environment variables (.env):
-# RELEASES_UPLOAD_TOKEN=<secure-token-openssl-rand-hex-32>
-# RELEASES_DOWNLOAD_SECRET=<secure-token-for-hmac-rotation>
+      # Leitura E escrita: o POST /upload grava feed, instaladores e manifesto.
+      # O dono precisa ser o uid 10001 (usuário da imagem):
+      #   sudo chown -R 10001 /opt/smartcore/releases-data
+      - /opt/smartcore/releases-data:/data/releases
+    mem_limit: 128m

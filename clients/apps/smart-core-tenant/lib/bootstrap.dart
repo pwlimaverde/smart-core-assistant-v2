@@ -1,4 +1,3 @@
-import 'package:admin_module/admin_module.dart';
 import 'package:dependencies_module/dependencies_module.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
 import 'package:login_module/login_module.dart';
@@ -57,7 +56,6 @@ Future<void> bootstrap(AppConfig config) async {
       podeEscrever: sessaoPodeAtender,
     ),
     TenantModule(),
-    AdminModule(),
     TreinamentoModule(
       drawerBuilder: TenantDrawer.new,
       // B2: o módulo não conhece a sessão; a pergunta vem pronta daqui.

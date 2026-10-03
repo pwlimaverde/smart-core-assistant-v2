@@ -26,6 +26,7 @@ members = [
     "apps/healthcheck",
     "apps/watchdog",
     "apps/releases_server",
+    "crates/release_ticket",
     "crates/local_engine",
 ]
 
@@ -104,5 +105,8 @@ aws-sdk-s3    = { version = "1", default-features = false, features = [
 ] }
 jsonwebtoken  = "9.3.0"
 sha2          = "0.10.8"
+hmac          = "0.12"
+hex           = "0.4"
+release_ticket = { path = "crates/release_ticket" }
 rand_core     = { version = "0.6", features = ["std"] }
 

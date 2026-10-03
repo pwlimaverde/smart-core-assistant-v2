@@ -5373,6 +5373,43 @@ final $typed_data.Uint8List getVersaoDoAppResponseDescriptor = $convert.base64De
     'FsEiEKDHVybF9kb3dubG9hZBgCIAEoCVILdXJsRG93bmxvYWQSFAoFbm90YXMYAyABKAlSBW5v'
     'dGFz');
 
+@$core.Deprecated('Use getWindowsDownloadLinkRequestDescriptor instead')
+const GetWindowsDownloadLinkRequest$json = {
+  '1': 'GetWindowsDownloadLinkRequest',
+  '2': [
+    {'1': 'channel', '3': 1, '4': 1, '5': 9, '10': 'channel'},
+    {'1': 'version', '3': 2, '4': 1, '5': 9, '10': 'version'},
+  ],
+};
+
+/// Descriptor for `GetWindowsDownloadLinkRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getWindowsDownloadLinkRequestDescriptor =
+    $convert.base64Decode(
+        'Ch1HZXRXaW5kb3dzRG93bmxvYWRMaW5rUmVxdWVzdBIYCgdjaGFubmVsGAEgASgJUgdjaGFubm'
+        'VsEhgKB3ZlcnNpb24YAiABKAlSB3ZlcnNpb24=');
+
+@$core.Deprecated('Use getWindowsDownloadLinkResponseDescriptor instead')
+const GetWindowsDownloadLinkResponse$json = {
+  '1': 'GetWindowsDownloadLinkResponse',
+  '2': [
+    {'1': 'url', '3': 1, '4': 1, '5': 9, '10': 'url'},
+    {'1': 'version', '3': 2, '4': 1, '5': 9, '10': 'version'},
+    {'1': 'file_name', '3': 3, '4': 1, '5': 9, '10': 'fileName'},
+    {'1': 'size_bytes', '3': 4, '4': 1, '5': 3, '10': 'sizeBytes'},
+    {'1': 'sha256', '3': 5, '4': 1, '5': 9, '10': 'sha256'},
+    {'1': 'release_notes_md', '3': 6, '4': 1, '5': 9, '10': 'releaseNotesMd'},
+    {'1': 'expires_at_ms', '3': 7, '4': 1, '5': 3, '10': 'expiresAtMs'},
+  ],
+};
+
+/// Descriptor for `GetWindowsDownloadLinkResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getWindowsDownloadLinkResponseDescriptor = $convert.base64Decode(
+    'Ch5HZXRXaW5kb3dzRG93bmxvYWRMaW5rUmVzcG9uc2USEAoDdXJsGAEgASgJUgN1cmwSGAoHdm'
+    'Vyc2lvbhgCIAEoCVIHdmVyc2lvbhIbCglmaWxlX25hbWUYAyABKAlSCGZpbGVOYW1lEh0KCnNp'
+    'emVfYnl0ZXMYBCABKANSCXNpemVCeXRlcxIWCgZzaGEyNTYYBSABKAlSBnNoYTI1NhIoChByZW'
+    'xlYXNlX25vdGVzX21kGAYgASgJUg5yZWxlYXNlTm90ZXNNZBIiCg1leHBpcmVzX2F0X21zGAcg'
+    'ASgDUgtleHBpcmVzQXRNcw==');
+
 @$core.Deprecated('Use testarProvedorIaRequestDescriptor instead')
 const TestarProvedorIaRequest$json = {
   '1': 'TestarProvedorIaRequest',

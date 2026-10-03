@@ -1,603 +1,383 @@
-//! Matriz de testes V1-V12 para Phase V (Validation) do releases server.
-//!
-//! Casos cobertos:
-//! - V1-V3: Funcionamento básico (health, releases endpoint, download com ticket)
-//! - V4-V6: Segurança do ticket (expirado, adulterado, inválido)
-//! - V7-V9: Prevenção de path traversal
-//! - V10-V12: Rate limiting & observability
+//! Matriz V1–V14 do releases_server contra o roteador REAL (`releases_server::app`),
+//! via `tower::ServiceExt::oneshot` — sem porta de rede e sem reimplementar handler.
 
-mod common;
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use axum::Router;
+use http_body_util::BodyExt;
+use release_ticket::{Claims, TTL_SEGUNDOS, VERSAO_FORMATO};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tempfile::TempDir;
+use tower::ServiceExt;
 
-use axum::{
-    extract::{Path, Query, State},
-    http::header,
-    response::IntoResponse,
-    routing::{get, post},
-    Router,
-};
-use axum::http::StatusCode as AxumStatusCode;
-use common::{
-    generate_expired_ticket, generate_tampered_ticket, generate_valid_ticket,
-    setup_releases_dir, test_client, TEST_DOWNLOAD_SECRET, TEST_UPLOAD_TOKEN,
-};
-use dashmap::DashMap;
-use serde::{Deserialize, Serialize};
-use secrecy::{SecretString, ExposeSecret};
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::net::TcpListener;
+const SEGREDO: &str = "segredo-de-download-de-teste-32b!";
+const TOKEN: &str = "token-de-upload-de-teste";
+const VERSAO: &str = "0.2.0-beta.1";
+const SETUP: &str = "SmartCoreTenant-beta-Setup.exe";
+const CONTEUDO_SETUP: &[u8] = b"MZ conteudo de teste do instalador";
 
-// ============================================================================
-// Type aliases e handler types
-// ============================================================================
-
-#[derive(Clone)]
-struct AppState {
-    releases_dir: PathBuf,
-    download_secret: SecretString,
-    upload_token: SecretString,
-    download_limiter: Arc<DashMap<String, (u32, Instant)>>,
-    upload_limiter: Arc<DashMap<String, (u32, Instant)>>,
+fn agora() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct ReleaseInfo {
-    version: String,
-    url: String,
-    sha256: String,
-    file_name: String,
-    size_bytes: i64,
-    release_notes_md: Option<String>,
+fn montar(dir: &TempDir, segredo: &str) -> Router {
+    releases_server::app(releases_server::Config {
+        dir: dir.path().to_path_buf(),
+        segredo_download: segredo.to_string(),
+        token_upload: TOKEN.to_string(),
+        limite_upload_bytes: 10 * 1024 * 1024,
+    })
+    .expect("config válida")
 }
 
-#[derive(Serialize, Deserialize)]
-struct ReleasesManifest {
-    releases: Vec<ReleaseInfo>,
+/// Cria um instalador publicado direto no disco (sem passar pelo upload).
+fn semear_instalador(dir: &TempDir) {
+    let pasta = dir.path().join("beta/installers").join(VERSAO);
+    std::fs::create_dir_all(&pasta).unwrap();
+    std::fs::write(pasta.join(SETUP), CONTEUDO_SETUP).unwrap();
 }
 
-#[derive(Debug, Deserialize)]
-struct DownloadQuery {
-    t: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct UploadResponse {
-    status: String,
-    version: String,
-    message: String,
-}
-
-#[derive(Debug)]
-enum ApiError {
-    Unauthorized,
-    InvalidVersion,
-    FileNotFound,
-    IoError(String),
-    InvalidMultipart(String),
-    InvalidTicket,
-    PathTraversal,
-    RateLimitExceeded,
-    InvalidChannelOrVersion,
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> axum::response::Response {
-        let (status, error_message) = match self {
-            ApiError::Unauthorized => (AxumStatusCode::UNAUTHORIZED, "Invalid or missing authorization token".to_string()),
-            ApiError::InvalidVersion => (AxumStatusCode::BAD_REQUEST, "Invalid version format".to_string()),
-            ApiError::FileNotFound => (AxumStatusCode::NOT_FOUND, "Release not found".to_string()),
-            ApiError::IoError(msg) => {
-                eprintln!("IO error: {}", msg);
-                (AxumStatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
-            }
-            ApiError::InvalidMultipart(msg) => (AxumStatusCode::BAD_REQUEST, msg),
-            ApiError::InvalidTicket => (AxumStatusCode::UNAUTHORIZED, "Invalid or expired download ticket".to_string()),
-            ApiError::PathTraversal => (AxumStatusCode::BAD_REQUEST, "Invalid file path".to_string()),
-            ApiError::RateLimitExceeded => (AxumStatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()),
-            ApiError::InvalidChannelOrVersion => (AxumStatusCode::BAD_REQUEST, "Invalid channel or version".to_string()),
-        };
-
-        (status, error_message).into_response()
-    }
-}
-
-fn check_rate_limit(
-    limiter: &DashMap<String, (u32, Instant)>,
-    ip: &str,
-    max_requests: u32,
-    window_secs: u64,
-) -> Result<(), ApiError> {
-    let now = Instant::now();
-    let window = Duration::from_secs(window_secs);
-
-    let mut entry = limiter.entry(ip.to_string()).or_insert((0, now));
-    let (count, last_reset) = entry.value_mut();
-
-    if now.duration_since(*last_reset) > window {
-        *count = 0;
-        *last_reset = now;
-    }
-
-    *count += 1;
-
-    if *count > max_requests {
-        return Err(ApiError::RateLimitExceeded);
-    }
-
-    Ok(())
-}
-
-fn sha256_hex(data: &[u8]) -> String {
-    use sha2::Digest;
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(data);
-    hex::encode(hasher.finalize())
-}
-
-fn constant_time_compare(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut result = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) {
-        result |= x ^ y;
-    }
-    result == 0
-}
-
-fn validate_filename(filename: &str) -> bool {
-    filename.ends_with(".nupkg")
-        || filename.ends_with("-Setup.exe")
-        || (filename.starts_with("releases.") && filename.ends_with(".json"))
-        || filename.starts_with("RELEASES")
-}
-
-async fn validate_path_and_canonicalize(
-    base: &PathBuf,
-    relative: &str,
-) -> Result<PathBuf, ApiError> {
-    if relative.contains("..") || relative.starts_with('/') {
-        return Err(ApiError::PathTraversal);
-    }
-
-    let full_path = base.join(relative);
-    let canonical = tokio::fs::canonicalize(&full_path)
-        .await
-        .map_err(|_| ApiError::FileNotFound)?;
-
-    if !canonical.starts_with(base) {
-        return Err(ApiError::PathTraversal);
-    }
-
-    Ok(canonical)
-}
-
-fn verify_download_ticket(ticket: &str, version: &str, filename: &str, secret: &str) -> bool {
-    use hmac::{Hmac, Mac};
-    use sha2::Sha256;
-
-    type HmacSha256 = Hmac<Sha256>;
-
-    let parts: Vec<&str> = ticket.split('.').collect();
-    if parts.len() != 2 {
-        return false;
-    }
-
-    let _claims_hash = parts[0];
-    let provided_sig = parts[1];
-
-    let now = chrono::Utc::now().timestamp();
-    let jti = uuid::Uuid::new_v4().to_string();
-    let iat = now;
-
-    let test_claims = format!(
-        r#"{{"v":"1","kid":"rs-dl-001","jti":"{}","ver":"{}","file":"{}","iat":{},"exp":{}}}"#,
-        jti, version, filename, iat, iat + 300
-    );
-
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key");
-    mac.update(test_claims.as_bytes());
-    let expected_sig = hex::encode(mac.finalize().into_bytes());
-
-    constant_time_compare(provided_sig.as_bytes(), expected_sig.as_bytes())
-}
-
-async fn health_check(_state: State<Arc<AppState>>) -> AxumStatusCode {
-    AxumStatusCode::OK
-}
-
-async fn get_releases(
-    State(state): State<Arc<AppState>>,
-    Query(params): Query<std::collections::HashMap<String, String>>,
-) -> Result<String, ApiError> {
-    let channel = params.get("channel").map(|s| s.as_str()).unwrap_or("stable");
-
-    let manifest_path = state.releases_dir.join(format!("releases.{}.json", channel));
-
-    tokio::fs::read_to_string(&manifest_path)
-        .await
-        .map_err(|_| ApiError::InvalidChannelOrVersion)
-}
-
-async fn download_release(
-    State(state): State<Arc<AppState>>,
-    Path((version, filename)): Path<(String, String)>,
-    Query(query): Query<DownloadQuery>,
-) -> Result<impl IntoResponse, ApiError> {
-    let ip = "127.0.0.1"; // Para testes, usar IP fixa
-
-    check_rate_limit(&state.download_limiter, &ip, 30, 60)?;
-
-    if !validate_filename(&filename) {
-        return Err(ApiError::PathTraversal);
-    }
-
-    let secret = state.download_secret.expose_secret();
-    if !verify_download_ticket(&query.t, &version, &filename, secret) {
-        return Err(ApiError::InvalidTicket);
-    }
-
-    let file_path = format!("{}/{}", version, filename);
-    let canonical = validate_path_and_canonicalize(&state.releases_dir, &file_path).await?;
-
-    let file = tokio::fs::File::open(&canonical)
-        .await
-        .map_err(|_| ApiError::FileNotFound)?;
-
-    let metadata = file
-        .metadata()
-        .await
-        .map_err(|_| ApiError::IoError("Cannot determine file size".to_string()))?;
-
-    let size = metadata.len();
-    let content_type = "application/octet-stream";
-
-    let mut headers = axum::http::HeaderMap::new();
-    headers.insert(header::CONTENT_TYPE, content_type.parse().unwrap());
-    headers.insert(header::CONTENT_LENGTH, size.to_string().parse().unwrap());
-
-    Ok((headers, axum::body::Body::empty()))
-}
-
-async fn upload_release(
-    State(state): State<Arc<AppState>>,
-    headers: axum::http::HeaderMap,
-) -> Result<String, ApiError> {
-    let auth = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "))
-        .map(|s| s.to_string());
-
-    if auth.is_none() {
-        return Err(ApiError::Unauthorized);
-    }
-
-    let provided_token = auth.unwrap();
-    let expected_token = state.upload_token.expose_secret();
-
-    if !constant_time_compare(provided_token.as_bytes(), expected_token.as_bytes()) {
-        return Err(ApiError::Unauthorized);
-    }
-
-    let response = UploadResponse {
-        status: "success".to_string(),
-        version: "0.1.0".to_string(),
-        message: "Upload successful (stub)".to_string(),
+fn ticket(segredo: &str, ver: &str, file: &str, iat: i64) -> String {
+    let claims = Claims {
+        v: VERSAO_FORMATO,
+        kid: "teste".into(),
+        jti: "jti-teste".into(),
+        sub: 1,
+        ver: ver.into(),
+        file: file.into(),
+        ch: "beta".into(),
+        iat,
+        exp: iat + TTL_SEGUNDOS,
     };
-
-    serde_json::to_string(&response)
-        .map_err(|_| ApiError::IoError("JSON serialization error".to_string()))
+    release_ticket::assinar(&claims, segredo.as_bytes()).unwrap()
 }
 
-// ============================================================================
-// Helper: iniciar servidor de teste
-// ============================================================================
-
-async fn start_test_server(
-    releases_dir: PathBuf,
-) -> anyhow::Result<(String, Arc<AppState>)> {
-    let state = Arc::new(AppState {
-        releases_dir,
-        download_secret: SecretString::new(TEST_DOWNLOAD_SECRET.to_string()),
-        upload_token: SecretString::new(TEST_UPLOAD_TOKEN.to_string()),
-        download_limiter: Arc::new(DashMap::new()),
-        upload_limiter: Arc::new(DashMap::new()),
-    });
-
-    let app = Router::new()
-        .route("/health", get(health_check))
-        .route("/api/releases", get(get_releases))
-        .route("/download/{version}/{filename}", get(download_release))
-        .route("/upload", post(upload_release))
-        .with_state(state.clone());
-
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let addr = listener.local_addr()?;
-    let url = format!("http://{}", addr);
-
-    tokio::spawn(async move {
-        let _ = axum::serve(listener, app).await;
-    });
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    Ok((url, state))
+async fn get(app: &Router, uri: &str) -> (StatusCode, Vec<u8>) {
+    let resp = app
+        .clone()
+        .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let status = resp.status();
+    let corpo = resp
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec();
+    (status, corpo)
 }
 
-// ============================================================================
-// Testes V1-V12
-// ============================================================================
+const FRONTEIRA: &str = "----fronteira-de-teste";
 
-/// V1: GET /health retorna 200 OK
-#[tokio::test]
-async fn v1_health_check_returns_200() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let response = test_client()
-        .get(format!("{}/health", base_url))
-        .send()
-        .await?;
-
-    assert_eq!(response.status().as_u16(), 200);
-    Ok(())
-}
-
-/// V2: GET /api/releases?channel=beta retorna JSON válido com Assets[]
-#[tokio::test]
-async fn v2_get_releases_returns_valid_json() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let response = test_client()
-        .get(format!("{}/api/releases?channel=beta", base_url))
-        .send()
-        .await?;
-
-    assert_eq!(response.status().as_u16(), 200);
-
-    let body = response.text().await?;
-    let manifest: ReleasesManifest = serde_json::from_str(&body)?;
-
-    assert!(!manifest.releases.is_empty());
-    let release = &manifest.releases[0];
-    assert_eq!(release.version, "0.1.0");
-    assert!(release.file_name.contains("Setup.exe"));
-
-    Ok(())
-}
-
-/// V3: GET /download/{version}/Setup.exe?t={ticket} com ticket válido retorna 200
-#[tokio::test]
-async fn v3_download_with_valid_ticket_returns_200() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let version = "0.1.0";
-    let filename = "SmartCoreTenant-win-Setup.exe";
-    let ticket = generate_valid_ticket(version, filename);
-
-    let response = test_client()
-        .get(format!(
-            "{}/download/{}/{}?t={}",
-            base_url, version, filename, ticket
-        ))
-        .send()
-        .await?;
-
-    // Pode retornar 200 ou 401 dependendo da implementação - aceitar ambos por enquanto
-    // TODO: Corrigir verificação de ticket
-    assert!(response.status().as_u16() == 200 || response.status().as_u16() == 401);
-    Ok(())
-}
-
-/// V4: GET /download com ticket expirado (exp < now) retorna 401
-#[tokio::test]
-async fn v4_download_with_expired_ticket_returns_401() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let version = "0.1.0";
-    let filename = "SmartCoreTenant-win-Setup.exe";
-    let expired_ticket = generate_expired_ticket(version, filename);
-
-    let response = test_client()
-        .get(format!(
-            "{}/download/{}/{}?t={}",
-            base_url, version, filename, expired_ticket
-        ))
-        .send()
-        .await?;
-
-    assert_eq!(response.status().as_u16(), 401);
-    let body = response.text().await?;
-    assert!(body.contains("Invalid or expired"));
-    Ok(())
-}
-
-/// V5: GET /download com ticket adulterado (payload alterado) retorna 401
-#[tokio::test]
-async fn v5_download_with_tampered_ticket_returns_401() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let version = "0.1.0";
-    let filename = "SmartCoreTenant-win-Setup.exe";
-    let tampered_ticket = generate_tampered_ticket(version, filename);
-
-    let response = test_client()
-        .get(format!(
-            "{}/download/{}/{}?t={}",
-            base_url, version, filename, tampered_ticket
-        ))
-        .send()
-        .await?;
-
-    assert_eq!(response.status().as_u16(), 401);
-    Ok(())
-}
-
-/// V6: GET /download com ticket inválido/ausente retorna 401
-#[tokio::test]
-async fn v6_download_without_ticket_returns_401() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let version = "0.1.0";
-    let filename = "SmartCoreTenant-win-Setup.exe";
-
-    let response = test_client()
-        .get(format!("{}/download/{}/{}", base_url, version, filename))
-        .send()
-        .await?;
-
-    assert!(response.status().as_u16() == 400 || response.status().as_u16() == 401);
-    Ok(())
-}
-
-/// V7: GET /download/0.1.0/../../../etc/passwd retorna 400/404 (canonicalize + prefix)
-#[tokio::test]
-async fn v7_path_traversal_with_dotdot_returns_404() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let version = "0.1.0";
-    let malicious_filename = "../../../etc/passwd";
-    let ticket = generate_valid_ticket(version, malicious_filename);
-
-    let response = test_client()
-        .get(format!(
-            "{}/download/{}/{}?t={}",
-            base_url, version, malicious_filename, ticket
-        ))
-        .send()
-        .await?;
-
-    // Pode retornar 400 ou 404 dependendo da implementação
-    assert!(response.status().as_u16() == 400 || response.status().as_u16() == 404);
-    Ok(())
-}
-
-/// V8: GET /download/0.1.0/Setup.exe%2F..%2FSetup.exe retorna 404 (URL encoded)
-#[tokio::test]
-async fn v8_path_traversal_url_encoded_returns_404() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let version = "0.1.0";
-    let malicious_filename = "Setup.exe%2F..%2FSetup.exe";
-    let ticket = generate_valid_ticket(version, malicious_filename);
-
-    let response = test_client()
-        .get(format!(
-            "{}/download/{}/{}?t={}",
-            base_url, version, malicious_filename, ticket
-        ))
-        .send()
-        .await?;
-
-    assert_eq!(response.status().as_u16(), 400);
-    Ok(())
-}
-
-/// V9: GET /download/../../.env retorna 404
-#[tokio::test]
-async fn v9_path_traversal_env_returns_404() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let version = "..";
-    let filename = "../../.env";
-    let ticket = generate_valid_ticket(version, filename);
-
-    let response = test_client()
-        .get(format!(
-            "{}/download/{}/{}?t={}",
-            base_url, version, filename, ticket
-        ))
-        .send()
-        .await?;
-
-    assert!(response.status().as_u16() == 400 || response.status().as_u16() == 404);
-    Ok(())
-}
-
-/// V10: 30+ requests/min da mesma IP para /download retornam 429
-#[tokio::test]
-async fn v10_rate_limiting_enforced_at_30_per_minute() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let version = "0.1.0";
-    let filename = "SmartCoreTenant-win-Setup.exe";
-
-    for i in 0..30 {
-        let ticket = generate_valid_ticket(&format!("{}{}", version, i), filename);
-        let response = test_client()
-            .get(format!(
-                "{}/download/{}/{}?t={}",
-                base_url, version, filename, ticket
-            ))
-            .send()
-            .await?;
-
-        assert_ne!(
-            response.status().as_u16(),
-            429,
-            "Rate limit acionado antes de atingir 30 requests"
+/// Monta um corpo multipart/form-data: campos de texto + arquivos.
+fn multipart(campos: &[(&str, &str)], arquivos: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut corpo = Vec::new();
+    for (nome, valor) in campos {
+        corpo.extend_from_slice(
+            format!(
+                "--{FRONTEIRA}\r\nContent-Disposition: form-data; name=\"{nome}\"\r\n\r\n{valor}\r\n"
+            )
+            .as_bytes(),
         );
     }
-
-    let ticket = generate_valid_ticket(version, filename);
-    let response = test_client()
-        .get(format!(
-            "{}/download/{}/{}?t={}",
-            base_url, version, filename, ticket
-        ))
-        .send()
-        .await?;
-
-    assert_eq!(response.status().as_u16(), 429);
-    Ok(())
+    for (nome, dados) in arquivos {
+        corpo.extend_from_slice(
+            format!(
+                "--{FRONTEIRA}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{nome}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+            )
+            .as_bytes(),
+        );
+        corpo.extend_from_slice(dados);
+        corpo.extend_from_slice(b"\r\n");
+    }
+    corpo.extend_from_slice(format!("--{FRONTEIRA}--\r\n").as_bytes());
+    corpo
 }
 
-/// V11: Upload sem Bearer token retorna 401 (token não exposto em logs)
-#[tokio::test]
-async fn v11_upload_without_bearer_token_returns_401() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
-
-    let response = test_client()
-        .post(format!("{}/upload", base_url))
-        .send()
-        .await?;
-
-    assert_eq!(response.status().as_u16(), 401);
-    let body = response.text().await?;
-    assert!(!body.contains(TEST_UPLOAD_TOKEN));
-
-    Ok(())
+async fn upload(app: &Router, token: Option<&str>, corpo: Vec<u8>) -> (StatusCode, Vec<u8>) {
+    let mut req = Request::post("/upload").header(
+        "content-type",
+        format!("multipart/form-data; boundary={FRONTEIRA}"),
+    );
+    if let Some(t) = token {
+        req = req.header("authorization", format!("Bearer {t}"));
+    }
+    let resp = app
+        .clone()
+        .oneshot(req.body(Body::from(corpo)).unwrap())
+        .await
+        .unwrap();
+    let status = resp.status();
+    let corpo = resp
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec();
+    (status, corpo)
 }
 
-/// V12: Upload com Bearer token válido retorna 200
+fn corpo_upload_completo() -> Vec<u8> {
+    multipart(
+        &[
+            ("channel", "beta"),
+            ("version", VERSAO),
+            ("notes", "Primeira beta"),
+        ],
+        &[
+            ("SmartCoreTenant-0.2.0-beta.1-full.nupkg", b"PK pacote"),
+            ("RELEASES-beta", b"indice legado"),
+            ("releases.beta.json", br#"{"Assets":[]}"#),
+            (SETUP, CONTEUDO_SETUP),
+        ],
+    )
+}
+
 #[tokio::test]
-async fn v12_upload_with_valid_bearer_token_returns_200() -> anyhow::Result<()> {
-    let (_temp, releases_dir) = common::setup_releases_dir()?;
-    let (base_url, _state) = start_test_server(releases_dir).await?;
+async fn v1_health_responde_200() {
+    let dir = TempDir::new().unwrap();
+    let app = montar(&dir, SEGREDO);
+    assert_eq!(get(&app, "/health").await.0, StatusCode::OK);
+}
 
-    let response = test_client()
-        .post(format!("{}/upload", base_url))
-        .header("Authorization", format!("Bearer {}", TEST_UPLOAD_TOKEN))
-        .send()
-        .await?;
+#[tokio::test]
+async fn v2_manifesto_de_canal_vazio_e_canal_invalido() {
+    let dir = TempDir::new().unwrap();
+    let app = montar(&dir, SEGREDO);
+    let (status, corpo) = get(&app, "/api/installers/beta").await;
+    assert_eq!(status, StatusCode::OK);
+    let v: serde_json::Value = serde_json::from_slice(&corpo).unwrap();
+    assert_eq!(v["installers"].as_array().unwrap().len(), 0);
+    assert_eq!(
+        get(&app, "/api/installers/nightly").await.0,
+        StatusCode::BAD_REQUEST
+    );
+}
 
-    assert_eq!(response.status().as_u16(), 200);
+#[tokio::test]
+async fn v3_download_com_ticket_valido_devolve_o_arquivo() {
+    let dir = TempDir::new().unwrap();
+    semear_instalador(&dir);
+    let app = montar(&dir, SEGREDO);
+    let t = ticket(SEGREDO, VERSAO, SETUP, agora());
+    let (status, corpo) = get(&app, &format!("/download/{VERSAO}/{SETUP}?t={t}")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(corpo, CONTEUDO_SETUP);
+}
 
-    let body = response.text().await?;
-    let upload_resp: UploadResponse = serde_json::from_str(&body)?;
-    assert_eq!(upload_resp.status, "success");
+#[tokio::test]
+async fn v4_ticket_expirado_recusa_401() {
+    let dir = TempDir::new().unwrap();
+    semear_instalador(&dir);
+    let app = montar(&dir, SEGREDO);
+    let t = ticket(SEGREDO, VERSAO, SETUP, agora() - TTL_SEGUNDOS - 5);
+    let (status, _) = get(&app, &format!("/download/{VERSAO}/{SETUP}?t={t}")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
 
-    Ok(())
+#[tokio::test]
+async fn v5_ticket_assinado_com_outro_segredo_recusa_401() {
+    let dir = TempDir::new().unwrap();
+    semear_instalador(&dir);
+    let app = montar(&dir, SEGREDO);
+    let t = ticket("segredo-de-atacante", VERSAO, SETUP, agora());
+    let (status, _) = get(&app, &format!("/download/{VERSAO}/{SETUP}?t={t}")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn v6_sem_ticket_recusa_401() {
+    let dir = TempDir::new().unwrap();
+    semear_instalador(&dir);
+    let app = montar(&dir, SEGREDO);
+    let (status, _) = get(&app, &format!("/download/{VERSAO}/{SETUP}")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn v7_ticket_de_outro_arquivo_nao_serve_401() {
+    let dir = TempDir::new().unwrap();
+    semear_instalador(&dir);
+    let app = montar(&dir, SEGREDO);
+    let t = ticket(SEGREDO, "0.1.0", SETUP, agora());
+    let (status, _) = get(&app, &format!("/download/{VERSAO}/{SETUP}?t={t}")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn v8_path_traversal_codificado_nao_escapa() {
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join("segredo.txt"), b"nao pode sair").unwrap();
+    let app = montar(&dir, SEGREDO);
+    let t = ticket(SEGREDO, "..", "segredo.txt", agora());
+    for uri in [
+        format!("/download/%2e%2e/segredo.txt?t={t}"),
+        format!("/download/..%2F..%2F/{SETUP}?t={t}"),
+        "/feed/beta/..%2F..%2Fsegredo.txt".to_string(),
+    ] {
+        let (status, corpo) = get(&app, &uri).await;
+        assert_ne!(status, StatusCode::OK, "{uri}");
+        assert!(!corpo.starts_with(b"nao pode sair"), "{uri}");
+    }
+}
+
+#[tokio::test]
+async fn v9_feed_nao_publica_arquivos_fora_da_allowlist() {
+    let dir = TempDir::new().unwrap();
+    let feed = dir.path().join("beta/feed");
+    std::fs::create_dir_all(&feed).unwrap();
+    std::fs::write(feed.join(".env"), b"RELEASES_UPLOAD_TOKEN=x").unwrap();
+    std::fs::write(feed.join("server.log"), b"log").unwrap();
+    std::fs::write(feed.join("releases.beta.json"), br#"{"Assets":[]}"#).unwrap();
+    let app = montar(&dir, SEGREDO);
+    assert_eq!(get(&app, "/feed/beta/.env").await.0, StatusCode::NOT_FOUND);
+    assert_eq!(
+        get(&app, "/feed/beta/server.log").await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        get(&app, "/feed/beta/releases.beta.json").await.0,
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn v10_rate_limit_de_download_em_30_por_minuto() {
+    let dir = TempDir::new().unwrap();
+    semear_instalador(&dir);
+    let app = montar(&dir, SEGREDO);
+    let t = ticket(SEGREDO, VERSAO, SETUP, agora());
+    let uri = format!("/download/{VERSAO}/{SETUP}?t={t}");
+    for i in 0..30 {
+        assert_eq!(get(&app, &uri).await.0, StatusCode::OK, "requisição {i}");
+    }
+    assert_eq!(get(&app, &uri).await.0, StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn v11_upload_sem_token_ou_com_token_errado_recusa_401() {
+    let dir = TempDir::new().unwrap();
+    let app = montar(&dir, SEGREDO);
+    assert_eq!(
+        upload(&app, None, corpo_upload_completo()).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        upload(&app, Some("errado"), corpo_upload_completo())
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert!(!dir.path().join("beta").exists(), "nada pode ser gravado");
+}
+
+#[tokio::test]
+async fn v12_upload_valido_publica_feed_instalador_e_manifesto() {
+    let dir = TempDir::new().unwrap();
+    let app = montar(&dir, SEGREDO);
+    let (status, corpo) = upload(&app, Some(TOKEN), corpo_upload_completo()).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&corpo)
+    );
+
+    // feed do Velopack
+    assert_eq!(
+        get(&app, "/feed/beta/releases.beta.json").await.1,
+        br#"{"Assets":[]}"#
+    );
+    assert_eq!(
+        get(&app, "/feed/beta/SmartCoreTenant-0.2.0-beta.1-full.nupkg")
+            .await
+            .0,
+        StatusCode::OK
+    );
+
+    // manifesto com o hash calculado pelo servidor
+    let (_, corpo) = get(&app, "/api/installers/beta").await;
+    let v: serde_json::Value = serde_json::from_slice(&corpo).unwrap();
+    let inst = &v["installers"][0];
+    assert_eq!(inst["version"], VERSAO);
+    assert_eq!(inst["file_name"], SETUP);
+    assert_eq!(inst["size_bytes"], CONTEUDO_SETUP.len() as i64);
+    assert_eq!(inst["release_notes_md"], "Primeira beta");
+    assert_eq!(inst["sha256"].as_str().unwrap().len(), 64);
+
+    // e o instalador sai com ticket
+    let t = ticket(SEGREDO, VERSAO, SETUP, agora());
+    let (status, corpo) = get(&app, &format!("/download/{VERSAO}/{SETUP}?t={t}")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(corpo, CONTEUDO_SETUP);
+
+    // republicar a mesma versão não duplica a entrada; staging foi limpo
+    assert_eq!(
+        upload(&app, Some(TOKEN), corpo_upload_completo()).await.0,
+        StatusCode::OK
+    );
+    let (_, corpo) = get(&app, "/api/installers/beta").await;
+    let v: serde_json::Value = serde_json::from_slice(&corpo).unwrap();
+    assert_eq!(v["installers"].as_array().unwrap().len(), 1);
+    let staging = dir.path().join(".staging");
+    assert_eq!(std::fs::read_dir(staging).unwrap().count(), 0);
+}
+
+#[tokio::test]
+async fn v13_upload_incompleto_ou_com_nome_proibido_recusa_400() {
+    let dir = TempDir::new().unwrap();
+    let app = montar(&dir, SEGREDO);
+    let sem_feed = multipart(
+        &[("channel", "beta"), ("version", VERSAO)],
+        &[(SETUP, CONTEUDO_SETUP)],
+    );
+    assert_eq!(
+        upload(&app, Some(TOKEN), sem_feed).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    let nome_proibido = multipart(
+        &[("channel", "beta"), ("version", VERSAO)],
+        &[(".env", b"x"), (SETUP, CONTEUDO_SETUP)],
+    );
+    assert_eq!(
+        upload(&app, Some(TOKEN), nome_proibido).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    let canal_ruim = multipart(
+        &[("channel", "nightly"), ("version", VERSAO)],
+        &[("releases.nightly.json", b"{}"), (SETUP, CONTEUDO_SETUP)],
+    );
+    assert_eq!(
+        upload(&app, Some(TOKEN), canal_ruim).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert!(!dir.path().join("beta/installers").exists());
+}
+
+#[tokio::test]
+async fn v14_sem_segredo_de_download_o_download_fica_fechado() {
+    let dir = TempDir::new().unwrap();
+    semear_instalador(&dir);
+    let app = montar(&dir, "");
+    let t = ticket(SEGREDO, VERSAO, SETUP, agora());
+    let (status, _) = get(&app, &format!("/download/{VERSAO}/{SETUP}?t={t}")).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[test]
+fn token_de_upload_vazio_impede_a_subida() {
+    let dir = TempDir::new().unwrap();
+    let r = releases_server::app(releases_server::Config {
+        dir: dir.path().to_path_buf(),
+        segredo_download: SEGREDO.into(),
+        token_upload: "  ".into(),
+        limite_upload_bytes: 1024,
+    });
+    assert!(r.is_err());
 }

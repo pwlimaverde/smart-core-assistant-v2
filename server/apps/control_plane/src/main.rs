@@ -52,6 +52,8 @@ async fn main() -> anyhow::Result<()> {
     // mas o estado do OAuth e o stream de auditoria têm ciclos de vida
     // independentes e vale deixar isso explícito.
     let redis_conn_oauth = redis_conn.clone();
+    // Cada rota com estado recebe o seu clone (o `move` da closure consome o valor).
+    let redis_releases = redis_conn.clone();
     let s_disconnect = AppState { redis_conn };
 
     // 2. Inicia o Servidor RPC síncrono nos 3 de protocolos
@@ -67,8 +69,10 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move { handler_admin_bulk_disconnect(s, env).await })
         })
         .route("IssueReleaseDownloadTicket", move |env| {
-            let s = s_disconnect.clone();
-            Box::pin(async move { handler_issue_release_download_ticket(s, env).await })
+            let redis = redis_releases.clone();
+            Box::pin(
+                async move { releases::handler_issue_release_download_ticket(redis, env).await },
+            )
         });
 
     tracing::info!("Servidor RPC do control_plane configurado e pronto.");
@@ -539,138 +543,6 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
             Envelope {
                 kind: MessageKind::Error as i32,
                 method: "AdminBulkDisconnectReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
-    }
-}
-
-/// Handler RPC IssueReleaseDownloadTicket: emite ticket HMAC-SHA256 para download de release.
-///
-/// Entrada: {channel, version}
-/// Saída: {ticket, url, version, file_name, size_bytes, sha256, release_notes_md, expires_at_ms}
-#[tracing::instrument(
-    skip_all,
-    fields(service = "control_plane", rpc = "IssueReleaseDownloadTicket", traceparent = %env.traceparent)
-)]
-async fn handler_issue_release_download_ticket(mut state: AppState, env: Envelope) -> Envelope {
-    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(e) => {
-            let app_err = error_core::AppError::Validation(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
-            return Envelope {
-                kind: MessageKind::Error as i32,
-                method: "IssueReleaseDownloadTicketReply".to_string(),
-                error: Some(err_env),
-                ..env
-            };
-        }
-    };
-
-    // Extrair channel e version
-    let channel = match payload.get("channel").and_then(|v| v.as_str()) {
-        Some(c) => c,
-        None => {
-            let app_err = error_core::AppError::Validation("channel ausente".to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
-            return Envelope {
-                kind: MessageKind::Error as i32,
-                method: "IssueReleaseDownloadTicketReply".to_string(),
-                error: Some(err_env),
-                ..env
-            };
-        }
-    };
-
-    let version = match payload.get("version").and_then(|v| v.as_str()) {
-        Some(v) => v,
-        None => {
-            let app_err = error_core::AppError::Validation("version ausente".to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
-            return Envelope {
-                kind: MessageKind::Error as i32,
-                method: "IssueReleaseDownloadTicketReply".to_string(),
-                error: Some(err_env),
-                ..env
-            };
-        }
-    };
-
-    // Obter segredo de download — recusa se não está set
-    let download_secret = match std::env::var("RELEASES_DOWNLOAD_SECRET") {
-        Ok(s) if !s.is_empty() => s,
-        _ => {
-            let app_err = error_core::AppError::Internal(
-                "RELEASES_DOWNLOAD_SECRET não configurado".to_string(),
-            );
-            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
-            return Envelope {
-                kind: MessageKind::Error as i32,
-                method: "IssueReleaseDownloadTicketReply".to_string(),
-                error: Some(err_env),
-                ..env
-            };
-        }
-    };
-
-    let manifests_dir = std::path::PathBuf::from(
-        std::env::var("RELEASES_MANIFESTS_DIR").unwrap_or_else(|_| "/opt/smartcore/releases".to_string()),
-    );
-
-    let base_url = std::env::var("RELEASES_BASE_URL")
-        .unwrap_or_else(|_| "https://releases.smartcoreassistant.com.br".to_string());
-
-    // Gerar ticket
-    match releases::issue_release_download_ticket(
-        channel,
-        version,
-        env.auth_user_id,
-        &download_secret,
-        &base_url,
-        &manifests_dir,
-    )
-    .await
-    {
-        Ok(ticket_info) => {
-            // Publicar evento de auditoria
-            let tenant_id = if env.tenant_id.is_empty() || env.tenant_id == "00000000-0000-0000-0000-000000000000" {
-                None
-            } else {
-                Uuid::parse_str(&env.tenant_id).ok()
-            };
-
-            let _ = releases::publicar_evento_link_emitido(
-                &mut state.redis_conn,
-                tenant_id,
-                env.auth_user_id,
-                channel,
-                version,
-                &env.traceparent,
-            )
-            .await;
-
-            ok_reply(
-                &env,
-                "IssueReleaseDownloadTicketReply",
-                serde_json::json!({
-                    "ticket": ticket_info.ticket,
-                    "url": ticket_info.url,
-                    "version": ticket_info.version,
-                    "file_name": ticket_info.file_name,
-                    "size_bytes": ticket_info.size_bytes,
-                    "sha256": ticket_info.sha256,
-                    "release_notes_md": ticket_info.release_notes_md,
-                    "expires_at_ms": ticket_info.expires_at_ms,
-                }),
-            )
-        }
-        Err(e) => {
-            let err_env = e.to_error_envelope(&env.traceparent, "control_plane");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "IssueReleaseDownloadTicketReply".to_string(),
                 error: Some(err_env),
                 ..env
             }

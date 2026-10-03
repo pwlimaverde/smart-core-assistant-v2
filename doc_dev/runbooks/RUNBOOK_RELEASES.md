@@ -22,7 +22,7 @@ git push origin win-v0.1.0-beta.1
 ```
 
 **O que acontece:**
-- `.github/workflows/build-windows-installer.yml` dispara
+- `.github/workflows/release-windows.yml` dispara
 - Compila Flutter + Velopack com `--channel beta`
 - Upload para `releases.smartcoreassistant.com.br/upload`
 - Publica GitHub Release (prerelease=true)
@@ -31,7 +31,7 @@ git push origin win-v0.1.0-beta.1
 ### 2. Verificar upload
 
 ```bash
-curl -s https://releases.smartcoreassistant.com.br/api/releases?channel=beta \
+curl -s https://releases.smartcoreassistant.com.br/api/installers/beta \
   | jq '.Assets[] | select(.Version == "0.1.0-beta.1")'
 ```
 
@@ -44,7 +44,7 @@ Esperar ~1-2 min (CI + upload). O app cliente checa a cada 1h.
 ### 1. Identificar versão atual
 
 ```bash
-curl -s https://releases.smartcoreassistant.com.br/api/releases?channel=beta | jq '.Version'
+curl -s https://releases.smartcoreassistant.com.br/api/installers/beta | jq '.installers[-1].version'
 ```
 
 ### 2. Restaurar feed anterior
@@ -66,7 +66,7 @@ cp releases.beta.json.bak releases.beta.json
 ### 3. Verificar feed
 
 ```bash
-curl -s https://releases.smartcoreassistant.com.br/api/releases?channel=beta | jq '.Version'
+curl -s https://releases.smartcoreassistant.com.br/api/installers/beta | jq '.installers[-1].version'
 ```
 
 ---
@@ -126,14 +126,14 @@ docker logs -f smart-core-v2-releases | grep -i "release\|error\|warn"
 ### Verificar saúde
 
 ```bash
-curl -w '\n' http://localhost:8086/health
+curl -w '\n' http://172.17.0.1:8086/health
 # Esperado: 200 OK
 ```
 
 ### Métrica de uploads
 
 ```bash
-curl -s http://localhost:8086/metrics | grep -i "release_upload"
+docker logs smart-core-v2-releases 2>&1 | grep release_upload  # sem /metrics nesta versão
 ```
 
 ### Arquivo não encontrado na pasta
@@ -183,7 +183,7 @@ ls -lh /opt/smartcore/releases/v0.1.0/
 ```bash
 docker logs smart-core-v2-releases | tail -50
 docker restart smart-core-v2-releases
-curl http://localhost:8086/health  # Verificar volta
+curl http://172.17.0.1:8086/health  # Verificar volta
 ```
 
 ### Disco cheio

@@ -1,14 +1,15 @@
-/// Parâmetros para requisição de link de download do Windows.
-class GetWindowsDownloadLinkParams {
-  /// Canal de release ("beta" ou "stable").
-  /// Nesta entrega, apenas "beta" é suportado.
+import 'package:return_success_or_error/return_success_or_error.dart';
+
+/// Pede o link de download do instalador Windows.
+final class GetWindowsDownloadLinkParameters extends Parameters {
+  /// Canal da release. Nesta entrega o servidor só aceita `beta`.
   final String channel;
 
-  /// Versão específica a baixar (vazio = a mais recente do canal).
-  final String? version;
+  /// Versão específica; vazia = a publicada por último no canal.
+  final String version;
 
-  GetWindowsDownloadLinkParams({
+  const GetWindowsDownloadLinkParameters({
     this.channel = 'beta',
-    this.version,
+    this.version = '',
   });
 }

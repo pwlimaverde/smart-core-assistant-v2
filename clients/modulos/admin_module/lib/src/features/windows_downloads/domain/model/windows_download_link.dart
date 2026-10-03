@@ -1,5 +1,6 @@
-/// Modelo para o link de download seguro do instalador Windows.
-class WindowsDownloadLink {
+/// Link de download do instalador Windows, já assinado pelo servidor.
+final class WindowsDownloadLink {
+  /// URL completa com o ticket (`?t=`). Vale até [expiresAtMs].
   final String url;
   final String version;
   final String fileName;
@@ -8,7 +9,7 @@ class WindowsDownloadLink {
   final String releaseNotesMd;
   final int expiresAtMs;
 
-  WindowsDownloadLink({
+  const WindowsDownloadLink({
     required this.url,
     required this.version,
     required this.fileName,
@@ -18,23 +19,21 @@ class WindowsDownloadLink {
     required this.expiresAtMs,
   });
 
-  /// Verifica se o link ainda está válido.
-  bool get isValid {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    return now < expiresAtMs;
-  }
+  /// O ticket ainda vale em [agora] (padrão: o relógio local).
+  bool validoEm([DateTime? agora]) =>
+      (agora ?? DateTime.now()).millisecondsSinceEpoch < expiresAtMs;
 
-  /// Formata o tamanho em bytes para uma string legível (KB, MB).
-  String get formattedSize {
-    if (sizeBytes < 1024) {
-      return '${sizeBytes} B';
-    } else if (sizeBytes < 1024 * 1024) {
-      return '${(sizeBytes / 1024).toStringAsFixed(2)} KB';
-    } else {
-      return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+  /// Tamanho legível (B, KB, MB).
+  String get tamanhoFormatado {
+    if (sizeBytes < 1024) return '$sizeBytes B';
+    if (sizeBytes < 1024 * 1024) {
+      return '${(sizeBytes / 1024).toStringAsFixed(1)} KB';
     }
+    return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  /// SHA256 truncado para exibição (primeiros 16 caracteres).
-  String get sha256Short => sha256.substring(0, 16);
+  /// Começo do SHA-256 para exibição (o valor inteiro vai para a área de
+  /// transferência).
+  String get sha256Curto =>
+      sha256.length > 16 ? '${sha256.substring(0, 16)}…' : sha256;
 }

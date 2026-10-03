@@ -1,22 +1,56 @@
-import 'package:dependencies_module/dependencies_module.dart';
+import 'dart:developer' as developer;
 
+import 'package:api_client/api_client.dart'
+    show GrpcFailureKind, classificarFalhaGrpc;
+import 'package:return_success_or_error/return_success_or_error.dart';
+
+import '../../domain/errors/windows_downloads_errors.dart';
 import '../../domain/model/windows_download_link.dart';
-import '../../domain/repositories/windows_downloads_repository.dart';
-import '../datasources/windows_downloads_datasources.dart';
+import '../../domain/parameters/windows_downloads_parameters.dart';
 
-/// Implementação do repositório para operações de download do Windows.
-class GetWindowsDownloadLinkRepository implements WindowsDownloadsRepository {
-  final GetWindowsDownloadLinkDatasource _datasource;
+/// Traduz a falha gRPC do `GetWindowsDownloadLink` no erro da feature.
+///
+/// Segue o que a borda devolve (runtime_api `status_do_erro_de_release`):
+/// INVALID_ARGUMENT = canal recusado, FAILED_PRECONDITION = segredo não
+/// configurado, NOT_FOUND = nada publicado no canal.
+WindowsDownloadsError mapearFalhaWindowsDownloads(
+  Object exception,
+  StackTrace stackTrace,
+) {
+  final kind = classificarFalhaGrpc(exception);
+  developer.log(
+    'getWindowsDownloadLink falhou: $kind',
+    name: 'admin_module.windows_downloads',
+    error: exception,
+    stackTrace: stackTrace,
+  );
+  return switch (kind) {
+    GrpcFailureKind.unauthenticated => const WindowsDownloadsSessaoExpirada(),
+    GrpcFailureKind.permissionDenied => const WindowsDownloadsAcessoNegado(),
+    GrpcFailureKind.invalidArgument => const WindowsDownloadsCanalInvalido(),
+    GrpcFailureKind.failedPrecondition =>
+      const WindowsDownloadsNaoConfigurado(),
+    GrpcFailureKind.notFound => const WindowsDownloadsSemRelease(),
+    GrpcFailureKind.unavailable ||
+    GrpcFailureKind.rateLimited => const WindowsDownloadsIndisponivel(),
+    GrpcFailureKind.alreadyExists ||
+    GrpcFailureKind.unknown => const WindowsDownloadsInesperado(),
+  };
+}
 
-  GetWindowsDownloadLinkRepository({
-    required GetWindowsDownloadLinkDatasource datasource,
-  }) : _datasource = datasource;
+final class GetWindowsDownloadLinkRepository
+    extends
+        RepositoryBase<
+          WindowsDownloadLink,
+          GetWindowsDownloadLinkParameters,
+          WindowsDownloadsError
+        > {
+  const GetWindowsDownloadLinkRepository({required super.datasource});
 
   @override
-  Future<Result<WindowsDownloadLink, AppException>> getWindowsDownloadLink({
-    required String channel,
-    required String version,
-  }) {
-    return _datasource.call(channel: channel, version: version);
-  }
+  WindowsDownloadsError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    GetWindowsDownloadLinkParameters parameters,
+  ) => mapearFalhaWindowsDownloads(exception, stackTrace);
 }

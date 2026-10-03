@@ -342,8 +342,8 @@ fn registrar_rotas_admin(
         "ListFeatureFlags",
         "SetFeatureFlag",
         "SetFeatureFlagOverride",
-        // E3: Releases (Windows)
-        "GetWindowsDownloadLink",
+        // GetWindowsDownloadLink NÃO entra aqui: este catálogo encaminha ao
+        // data_postgres, e o link é emitido pelo control_plane (ver grpc_web.rs).
     ];
 
     for metodo in ROTAS_ADMIN {

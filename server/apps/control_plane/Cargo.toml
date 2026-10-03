@@ -19,6 +19,8 @@ transport = { workspace = true }
 error_core = { workspace = true }
 observability = { workspace = true }
 tracing = { workspace = true }
+# Ticket de download de release (mesmo formato que o releases_server verifica).
+release_ticket = { workspace = true }
 
 # Authorization server OAuth 2.1 do módulo MCP (N13.1). É a primeira superfície
 # HTTP deste serviço: até aqui ele só atendia RPC interno pelo `transport`.
