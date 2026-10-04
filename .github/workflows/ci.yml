@@ -485,3 +485,11 @@ jobs:
       - name: Smoke build web (--wasm)
         working-directory: clients/apps/smart-core-admin
         run: flutter build web --wasm --base-href /v2/admin/ -t lib/main_dev.dart --dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br
+
+      # O tenant depende do velopack_flutter (FFI de desktop). O import
+      # condicional o deixa fora do bundle Web e o hook de build dele sai cedo
+      # sem code assets — este smoke é a prova de que o --wasm continua de pé.
+      # Não precisa de Rust: na Web nada é compilado do crate.
+      - name: Smoke build web tenant (--wasm, com velopack_flutter)
+        working-directory: clients/apps/smart-core-tenant
+        run: flutter build web --wasm --base-href /v2/tenant/ -t lib/main_dev.dart --dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br

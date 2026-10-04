@@ -7,6 +7,17 @@ name: Release Windows (Velopack)
 #   win-v0.2.0-beta.2  → versão 0.2.0-beta.2, canal beta,   build DEV  (main_dev)
 #   win-v1.0.0         → versão 1.0.0,        canal stable, build PROD (main_prod)
 #
+# Assinatura (D5): o vpk chama o signtool em cada binário (exe, dll, Update.exe)
+# antes de empacotar e no Setup.exe no fim. O certificado vem dos secrets
+# SIGNTOOL_CERT (PFX em base64) e SIGNTOOL_PASSWORD; sem eles, o job gera um
+# auto-assinado efêmero e avisa. Certificado auto-assinado NÃO tira o aviso do
+# SmartScreen — só um certificado de CA pública (OV/EV) com reputação tira.
+#
+# Auto-update (D6): o app chama o Velopack na subida (velopack_flutter). Antes
+# de publicar, o job prova o ciclo inteiro numa instalação real no runner:
+# instala a versão 0.0.1-e2e.1, serve um feed local com a 0.0.1-e2e.2 e espera
+# o app se atualizar sozinho.
+#
 # Saídas:
 #   - artefato `windows-installer-<versão>` (Setup.exe + feed do Velopack);
 #   - GitHub Release da tag com os mesmos arquivos (pré-release no beta);
@@ -17,6 +28,9 @@ name: Release Windows (Velopack)
 on:
   push:
     tags: ['win-v*']
+    # Ensaio: branch ci/release-windows-* roda build, assinatura e o teste de
+    # auto-update sem publicar nada (sem Release, sem upload, sem imagem).
+    branches: ['ci/release-windows-*']
   workflow_dispatch:
     inputs:
       version:
@@ -52,7 +66,16 @@ jobs:
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          $versao = if ($env:INPUT_VERSION) { $env:INPUT_VERSION.Trim() } else { "${{ github.ref_name }}" -replace '^win-v', '' }
+          $publicar = 'true'
+          if ($env:INPUT_VERSION) {
+            $versao = $env:INPUT_VERSION.Trim()
+          } elseif ('${{ github.ref_type }}' -eq 'tag') {
+            $versao = "${{ github.ref_name }}" -replace '^win-v', ''
+          } else {
+            # Ensaio em branch ci/: versão descartável, nada é publicado.
+            $versao = "0.0.0-beta.${{ github.run_number }}"
+            $publicar = 'false'
+          }
           if ($versao -notmatch '^\d+\.\d+\.\d+(-beta\.\d+)?$') {
             Write-Error "Versão '$versao' fora do padrão X.Y.Z ou X.Y.Z-beta.N"
             exit 1
@@ -72,6 +95,7 @@ jobs:
           "app=$($cfg[$amb].app)"  >> $env:GITHUB_OUTPUT
           "build=$build"           >> $env:GITHUB_OUTPUT
           "tag=win-v$versao"       >> $env:GITHUB_OUTPUT
+          "publicar=$publicar"     >> $env:GITHUB_OUTPUT
           Write-Host "versão=$versao canal=$canal ambiente=$amb build=$build"
 
       - uses: subosito/flutter-action@v2
@@ -80,7 +104,9 @@ jobs:
           channel: stable
           cache: true
 
-      # cargokit do local_engine_ffi compila o crate Rust no build do Windows.
+      # Rust: o hook do velopack_flutter (clients/plugins) compila o crate no
+      # build do Windows. A versão exata (1.90.0) vem do rust-toolchain.toml do
+      # plugin e o rustup a baixa sozinho; o stable aqui só garante o rustup.
       - uses: dtolnay/rust-toolchain@stable
 
       # vpk 1.2.x roda sobre o .NET 10.
@@ -101,7 +127,8 @@ jobs:
             --dart-define=SMARTCORE_API_ENDPOINT=${{ steps.v.outputs.api }} `
             --dart-define=SMARTCORE_MCP_ENDPOINT=${{ steps.v.outputs.mcp }} `
             --dart-define=SMARTCORE_APP_PUBLIC_URL=${{ steps.v.outputs.app }} `
-            --dart-define=SMARTCORE_APP_BUILD=${{ steps.v.outputs.build }}
+            --dart-define=SMARTCORE_APP_BUILD=${{ steps.v.outputs.build }} `
+            --dart-define=SMARTCORE_UPDATE_FEED_URL=${{ env.RELEASES_URL }}/feed/${{ steps.v.outputs.canal }}
 
       # Um --dart-define esquecido não falha o build: gera um app que aponta para
       # outro lugar. A prova é a string dentro do snapshot AOT.
@@ -110,19 +137,75 @@ jobs:
           $snap = "clients/apps/smart-core-tenant/build/windows/x64/runner/Release/data/app.so"
           if (-not (Test-Path $snap)) { Write-Error "snapshot $snap ausente"; exit 1 }
           $texto = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($snap))
-          foreach ($e in @('${{ steps.v.outputs.api }}', '${{ steps.v.outputs.mcp }}', '${{ steps.v.outputs.app }}')) {
+          foreach ($e in @('${{ steps.v.outputs.api }}', '${{ steps.v.outputs.mcp }}', '${{ steps.v.outputs.app }}', '${{ env.RELEASES_URL }}/feed/${{ steps.v.outputs.canal }}')) {
             if (-not $texto.Contains($e)) { Write-Error "endereço ausente no binário: $e"; exit 1 }
             Write-Host "ok $e"
           }
 
+      # O frb abre a dll pelo nome (busca na pasta do exe). Se o hook não
+      # compilou o crate, o build passa e o auto-update morre calado no cliente.
+      - name: Confere a biblioteca do Velopack ao lado do exe
+        run: |
+          $dll = "clients/apps/smart-core-tenant/build/windows/x64/runner/Release/velopack_flutter.dll"
+          if (-not (Test-Path $dll)) {
+            Get-ChildItem -Recurse -Filter velopack_flutter.dll clients/apps/smart-core-tenant/build | ForEach-Object { Write-Host "achada em: $($_.FullName)" }
+            Write-Error "velopack_flutter.dll ausente na pasta do exe"
+            exit 1
+          }
+          Write-Host "ok $dll ($((Get-Item $dll).Length) bytes)"
+
+      # D5 — certificado de assinatura. PFX dos secrets; sem secret (fork, repo
+      # novo), um auto-assinado efêmero para o pipeline não parar. A senha vai
+      # mascarada para o log.
+      - name: Certificado de assinatura
+        id: cert
+        env:
+          SIGNTOOL_CERT: ${{ secrets.SIGNTOOL_CERT }}
+          SIGNTOOL_PASSWORD: ${{ secrets.SIGNTOOL_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'smartcore-sign.pfx'
+          if ($env:SIGNTOOL_CERT -and $env:SIGNTOOL_PASSWORD) {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNTOOL_CERT))
+            $senha = $env:SIGNTOOL_PASSWORD
+            $origem = 'secret SIGNTOOL_CERT'
+          } else {
+            Write-Host "::warning::SIGNTOOL_CERT/SIGNTOOL_PASSWORD ausentes — assinando com certificado efêmero"
+            $senha = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(24))
+            $c = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Smart Core Assistant (efemero CI)' `
+                   -CertStoreLocation Cert:\CurrentUser\My -KeyAlgorithm RSA -KeyLength 3072 -NotAfter (Get-Date).AddDays(7)
+            Export-PfxCertificate -Cert $c -FilePath $pfx -Password (ConvertTo-SecureString $senha -AsPlainText -Force) | Out-Null
+            $origem = 'efêmero'
+          }
+          Write-Host "::add-mask::$senha"
+          $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($pfx, $senha)
+          if (-not $cert.HasPrivateKey) { Write-Error "PFX sem chave privada"; exit 1 }
+          $eku = $cert.Extensions | Where-Object { $_ -is [Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension] }
+          if (-not ($eku.EnhancedKeyUsages | Where-Object { $_.Value -eq '1.3.6.1.5.5.7.3.3' })) {
+            Write-Error "certificado sem EKU de Code Signing (1.3.6.1.5.5.7.3.3)"; exit 1
+          }
+          # Só a parte pública, para a verificação adiante.
+          $cer = Join-Path $env:RUNNER_TEMP 'smartcore-sign.cer'
+          [IO.File]::WriteAllBytes($cer, $cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+          "SIGN_PFX=$pfx"        >> $env:GITHUB_ENV
+          "SIGN_PASSWORD=$senha" >> $env:GITHUB_ENV
+          "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
+          "cer=$cer"                       >> $env:GITHUB_OUTPUT
+          Write-Host "certificado ($origem): $($cert.Subject) thumbprint=$($cert.Thumbprint) validade=$($cert.NotAfter.ToString('yyyy-MM-dd'))"
+
       - name: Instala vpk
         run: dotnet tool install -g vpk --version $env:VPK_VERSION
 
-      # --skipVeloAppCheck: o app ainda não chama o SDK do Velopack (o
-      # velopack_flutter fica para a etapa de auto-update). O instalador e o feed
-      # funcionam; a atualização automática dentro do app ainda não.
-      - name: vpk pack
+      # --skipVeloAppCheck: o app chama o VelopackApp (velopack_flutter, dentro
+      # da velopack_flutter.dll), mas a checagem do vpk procura o SDK no exe
+      # principal — num app Flutter ele fica na dll, e a checagem daria falso
+      # negativo. O teste ponta a ponta abaixo é a prova de que funciona.
+      #
+      # --signParams: argumentos do `signtool sign` que o vpk aplica em cada
+      # binário antes de empacotar e no Setup.exe. SHA-256 + carimbo de tempo
+      # RFC 3161: a assinatura segue válida depois que o certificado vencer.
+      - name: vpk pack (assinado)
         run: |
+          $sign = "/fd sha256 /f `"$env:SIGN_PFX`" /p `"$env:SIGN_PASSWORD`" /tr http://timestamp.digicert.com /td sha256"
           $notas = "release-notes.md"
           "Smart Core Tenant ${{ steps.v.outputs.versao }} (canal ${{ steps.v.outputs.canal }})" | Out-File -Encoding utf8 $notas
           vpk pack `
@@ -138,11 +221,118 @@ jobs:
             --releaseNotes $notas `
             --noPortable `
             --skipVeloAppCheck `
+            --signParams $sign `
             --outputDir releases
           Get-ChildItem releases | Format-Table Name, Length
           $setup = "releases/$($env:PACK_ID)-${{ steps.v.outputs.canal }}-Setup.exe"
           if (-not (Test-Path $setup)) { Write-Error "Setup.exe não gerado"; exit 1 }
           (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() | Out-File -Encoding ascii "$setup.sha256"
+
+      # Prova a assinatura: confia no certificado SÓ neste runner (Root da
+      # máquina — o Root do usuário abre diálogo e trava o job) e exige status
+      # Valid, o thumbprint esperado e carimbo de tempo, no Setup.exe e nos
+      # binários de dentro do .nupkg (o que o auto-update instala).
+      - name: Verifica assinatura Authenticode
+        run: |
+          Import-Certificate -FilePath "${{ steps.cert.outputs.cer }}" -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+          $esperado = '${{ steps.cert.outputs.thumbprint }}'
+          $nupkg = Get-ChildItem releases -Filter "*-full.nupkg" | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'nupkg'
+          Copy-Item $nupkg.FullName "$dir.zip"
+          Expand-Archive "$dir.zip" -DestinationPath $dir -Force
+          $alvos = @(
+            "releases/$($env:PACK_ID)-${{ steps.v.outputs.canal }}-Setup.exe",
+            (Get-ChildItem $dir -Recurse -Filter smart_core_tenant.exe | Select-Object -First 1).FullName,
+            (Get-ChildItem $dir -Recurse -Filter velopack_flutter.dll | Select-Object -First 1).FullName
+          )
+          $falhas = 0
+          foreach ($a in $alvos) {
+            if (-not $a -or -not (Test-Path $a)) { Write-Host "::error::binário ausente: $a"; $falhas++; continue }
+            $s = Get-AuthenticodeSignature $a
+            $ok = ($s.Status -eq 'Valid') -and ($s.SignerCertificate.Thumbprint -eq $esperado) -and ($null -ne $s.TimeStamperCertificate)
+            Write-Host ("{0} | {1} | {2} | carimbo: {3}" -f (Split-Path $a -Leaf), $s.Status, $s.SignerCertificate.Subject, $s.TimeStamperCertificate.Subject)
+            if (-not $ok) { Write-Host "::error::assinatura inválida em $a ($($s.StatusMessage))"; $falhas++ }
+          }
+          if ($falhas) { exit 1 }
+
+      # D6 — ciclo real de auto-update, antes de publicar qualquer coisa. O
+      # mesmo build, empacotado duas vezes com versões falsas num canal e
+      # packId próprios (não toca na instalação do canal de verdade):
+      #   1. instala a 0.0.1-e2e.1 pelo Setup, em silêncio;
+      #   2. sobe um feed local (python http.server) que já tem a 0.0.1-e2e.2;
+      #   3. abre o app com SMARTCORE_UPDATE_FEED_URL apontando para o feed;
+      #   4. espera o current\sq.version virar 0.0.1-e2e.2 — o app achou a
+      #      versão nova, baixou, aplicou e reiniciou sem ninguém clicar.
+      - name: Auto-update ponta a ponta (feed local com versão falsa)
+        timeout-minutes: 15
+        run: |
+          $id = "$($env:PACK_ID)E2E"
+          $feed = Join-Path $env:RUNNER_TEMP 'e2e-feed'
+          $packDir = 'clients/apps/smart-core-tenant/build/windows/x64/runner/Release'
+          foreach ($v in @('0.0.1-e2e.1', '0.0.1-e2e.2')) {
+            vpk pack --packId $id --packVersion $v --packDir $packDir --mainExe smart_core_tenant.exe `
+              --channel e2e --noPortable --skipVeloAppCheck --outputDir $feed
+            if ($LASTEXITCODE -ne 0) { Write-Error "vpk pack $v falhou"; exit 1 }
+            if ($v -eq '0.0.1-e2e.1') { Copy-Item "$feed/$id-e2e-Setup.exe" "$env:RUNNER_TEMP/e2e-setup-v1.exe" }
+          }
+          Get-ChildItem $feed | Format-Table Name, Length
+
+          $srv = Start-Process python -ArgumentList '-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', $feed -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 3
+          $feedUrl = 'http://127.0.0.1:8765'
+          $null = Invoke-WebRequest "$feedUrl/releases.e2e.json" -UseBasicParsing
+          $env:SMARTCORE_UPDATE_FEED_URL = $feedUrl
+
+          $setup = Start-Process "$env:RUNNER_TEMP/e2e-setup-v1.exe" -ArgumentList '--silent' -Wait -PassThru
+          Write-Host "Setup v1 terminou com código $($setup.ExitCode)"
+          $raiz = Join-Path $env:LOCALAPPDATA $id
+          $versao = Join-Path $raiz 'current\sq.version'
+          if (-not (Test-Path $versao)) { Write-Error "instalação v1 não encontrada em $raiz"; exit 1 }
+          $lida = [regex]::Match((Get-Content -Raw $versao), '<version>([^<]+)</version>').Groups[1].Value
+          Write-Host "instalado: $lida"
+          if ($lida -ne '0.0.1-e2e.1') { Write-Error "esperava 0.0.1-e2e.1 instalada"; exit 1 }
+
+          # O Setup pode já ter aberto o app (herdando o feed local); abrir de
+          # novo garante a subida com a variável — a 2ª instância é inofensiva.
+          Start-Process (Join-Path $raiz 'current\smart_core_tenant.exe') | Out-Null
+
+          $atualizou = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Seconds 5
+            $conteudo = Get-Content -Raw $versao -ErrorAction SilentlyContinue
+            if ($conteudo -and [regex]::Match($conteudo, '<version>([^<]+)</version>').Groups[1].Value -eq '0.0.1-e2e.2') {
+              $atualizou = $true; break
+            }
+          }
+          Get-Process smart_core_tenant -ErrorAction SilentlyContinue | Stop-Process -Force
+          Stop-Process -Id $srv.Id -Force -ErrorAction SilentlyContinue
+          if (-not $atualizou) {
+            Write-Host "::group::logs do Velopack"
+            Get-ChildItem $raiz, (Join-Path $env:LOCALAPPDATA 'velopack') -Recurse -Include *.log -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "== $($_.FullName)"; Get-Content $_.FullName -Tail 80 }
+            Write-Host "::endgroup::"
+            Write-Error "o app não se atualizou para 0.0.1-e2e.2 em 5 minutos"
+            exit 1
+          }
+          Write-Host "ok: app instalado em 0.0.1-e2e.1 atualizou sozinho para 0.0.1-e2e.2 pelo feed"
+
+      - name: SHA-256 do instalador assinado
+        id: sha
+        run: |
+          $setup = "releases/$($env:PACK_ID)-${{ steps.v.outputs.canal }}-Setup.exe"
+          $sha = (Get-Content "$setup.sha256").Trim()
+          "sha256=$sha" >> $env:GITHUB_OUTPUT
+          $linhas = @(
+            "### Instalador ${{ steps.v.outputs.versao }} (canal ${{ steps.v.outputs.canal }})",
+            '',
+            '| Campo | Valor |',
+            '|---|---|',
+            "| Arquivo | $(Split-Path $setup -Leaf) |",
+            "| SHA-256 | $sha |",
+            "| Certificado (thumbprint) | ${{ steps.cert.outputs.thumbprint }} |"
+          )
+          $linhas -join "`n" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "SHA-256 $setup = $sha"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -152,6 +342,7 @@ jobs:
           retention-days: 30
 
       - name: GitHub Release
+        if: steps.v.outputs.publicar == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.v.outputs.tag }}
@@ -162,14 +353,15 @@ jobs:
           body: |
             Instalador Windows do Smart Core Tenant — canal `${{ steps.v.outputs.canal }}`.
 
-            - Baixe `${{ env.PACK_ID }}-${{ steps.v.outputs.canal }}-Setup.exe` e confira o SHA-256 no `.sha256` ao lado.
-            - Instala por usuário, sem pedir administrador.
-            - Sem assinatura de código nesta fase (D5): o SmartScreen avisa na primeira execução.
+            - Baixe `${{ env.PACK_ID }}-${{ steps.v.outputs.canal }}-Setup.exe` e confira o SHA-256: `${{ steps.sha.outputs.sha256 }}` (também no `.sha256` ao lado).
+            - Instala por usuário, sem pedir administrador. O app se atualiza sozinho pelo feed do canal `${{ steps.v.outputs.canal }}`.
+            - Assinado (Authenticode SHA-256 com carimbo de tempo), certificado `${{ steps.cert.outputs.thumbprint }}`. No beta o certificado é **auto-assinado de desenvolvimento**: o SmartScreen continua avisando ("Editor desconhecido") até a troca por um certificado de CA pública. Em máquinas de teste, importar `infra/windows/smartcore-dev.crt` em "Autoridades de Certificação Raiz Confiáveis" faz o Windows reconhecer a assinatura.
 
       # Publicação no releases_server. Fica de fora (com aviso) enquanto o
       # servidor não está no ar ou o secret não existe — o instalador já saiu
       # como artefato e Release acima.
       - name: Publica no releases_server
+        if: steps.v.outputs.publicar == 'true'
         env:
           UPLOAD_TOKEN: ${{ secrets.RELEASES_UPLOAD_TOKEN }}
         run: |
@@ -196,6 +388,7 @@ jobs:
 
   imagem-releases-server:
     name: Imagem do releases_server
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
