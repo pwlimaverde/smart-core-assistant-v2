@@ -8,8 +8,15 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // P2a — player de áudio/vídeo da bolha (ver main_dev.dart).
   MediaKit.ensureInitialized();
-  await bootstrap(_config);
+  await bootstrap(_config, updateFeedUrl: _updateFeedUrl);
 }
+
+// D6 — feed do Velopack do canal stable. O build do instalador repassa o
+// mesmo valor por --dart-define; o padrão cobre builds feitos à mão.
+const _updateFeedUrl = String.fromEnvironment(
+  'SMARTCORE_UPDATE_FEED_URL',
+  defaultValue: 'https://releases.smartcoreassistant.com.br/feed/stable',
+);
 
 const _config = AppConfig(
   flavor: AppFlavor.prod,

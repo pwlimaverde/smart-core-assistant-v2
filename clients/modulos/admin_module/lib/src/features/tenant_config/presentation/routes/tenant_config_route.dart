@@ -6,7 +6,7 @@ import '../../domain/usecases/tenant_config_usecases.dart';
 
 final class TenantConfigRoute extends GetItModule {
   @override
-  String get path => '/admin/tenant-config';
+  String get path => '/tenant-config';
 
   @override
   Widget get page => const TenantConfigPage();

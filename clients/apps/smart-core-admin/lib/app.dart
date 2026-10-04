@@ -61,6 +61,10 @@ class SmartCoreAdminApp extends StatelessWidget {
 
   /// Guard de boot + autenticação + superusuário (resolve a partir do estado injetado).
   static String? _authRedirect(BuildContext context, GoRouterState state) {
+    // Link antigo `/admin/<tela>` → `/<tela>` antes do guard (que reavalia
+    // a rota nova no redirect seguinte).
+    final legado = legacyAdminRedirect(state.uri);
+    if (legado != null) return legado;
     final auth = inject<login.AuthService>();
     return authRedirectTarget(
       booted: inject<BootState>().value,

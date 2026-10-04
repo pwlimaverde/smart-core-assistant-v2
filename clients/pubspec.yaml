@@ -10,6 +10,7 @@ workspace:
   - packages/get_it_module
   - packages/api_client
   - packages/local_engine_ffi
+  - plugins/velopack_flutter
   - modulos/presentation_module
   - modulos/design_system_module
   - modulos/navigation_module

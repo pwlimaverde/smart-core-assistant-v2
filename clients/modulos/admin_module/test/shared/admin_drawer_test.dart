@@ -9,14 +9,14 @@ import 'package:go_router/go_router.dart';
 /// um roteador real com as oito rotas e verifica o destaque e a navegação.
 void main() {
   const rotas = [
-    '/admin/dashboard',
-    '/admin/core-settings',
-    '/admin/tenant-config',
-    '/admin/tenants',
-    '/admin/billing',
-    '/admin/evolution',
-    '/admin/feature-flags',
-    '/admin/audit',
+    '/dashboard',
+    '/core-settings',
+    '/tenant-config',
+    '/tenants',
+    '/billing',
+    '/evolution',
+    '/feature-flags',
+    '/audit',
     '/login',
   ];
 
@@ -45,7 +45,7 @@ void main() {
   }
 
   testWidgets('lista todos os destinos do painel', (tester) async {
-    await montar(tester, '/admin/dashboard');
+    await montar(tester, '/dashboard');
 
     for (final rotulo in const [
       'Dashboard Geral',
@@ -67,7 +67,7 @@ void main() {
   });
 
   testWidgets('marca exatamente o item da rota atual', (tester) async {
-    await montar(tester, '/admin/tenants');
+    await montar(tester, '/tenants');
 
     final selecionados = tester
         .widgetList<ListTile>(find.byType(ListTile))
@@ -79,7 +79,7 @@ void main() {
   });
 
   testWidgets('em outra rota, o destaque acompanha', (tester) async {
-    await montar(tester, '/admin/audit');
+    await montar(tester, '/audit');
 
     final selecionado = tester
         .widgetList<ListTile>(find.byType(ListTile))
@@ -91,15 +91,12 @@ void main() {
   testWidgets('tocar num destino navega para a rota correspondente', (
     tester,
   ) async {
-    final router = await montar(tester, '/admin/dashboard');
+    final router = await montar(tester, '/dashboard');
 
     await tester.tap(find.text('Planos & Faturamento'));
     await tester.pumpAndSettle();
 
-    expect(
-      router.routerDelegate.currentConfiguration.uri.path,
-      '/admin/billing',
-    );
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/billing');
   });
 
   testWidgets('nenhum item fica marcado numa rota fora do painel', (

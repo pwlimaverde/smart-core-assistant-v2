@@ -35,7 +35,7 @@ curl -s https://releases.smartcoreassistant.com.br/api/installers/beta \
   | jq '.Assets[] | select(.Version == "0.1.0-beta.1")'
 ```
 
-Esperar ~1-2 min (CI + upload). O app cliente checa a cada 1h.
+Esperar ~1-2 min (CI + upload). O app instalado consulta o feed a cada subida e, havendo versão nova, baixa, aplica e reinicia sozinho (D6).
 
 ---
 

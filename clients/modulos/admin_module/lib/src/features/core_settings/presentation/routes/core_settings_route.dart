@@ -6,7 +6,7 @@ import '../../domain/usecases/core_settings_usecases.dart';
 
 final class CoreSettingsRoute extends GetItModule {
   @override
-  String get path => '/admin/core-settings';
+  String get path => '/core-settings';
 
   @override
   Widget get page => const CoreSettingsPage();

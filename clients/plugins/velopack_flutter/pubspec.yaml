@@ -1,0 +1,34 @@
+# Cópia vendorizada do velopack_flutter 0.3.2 (pub.dev, MIT — ver LICENSE).
+#
+# Por que não a dependência do pub.dev direto:
+#   1. O pacote fixa `flutter_rust_bridge: 2.11.1` (exato) e o local_engine_ffi
+#      fixa 2.12.0. O pub workspace tem uma resolução só: as duas não convivem.
+#      Aqui os bindings foram regerados com o codegen 2.12.0.
+#   2. O hook de build original lê `input.config.code` sem checar se o build
+#      pede code assets. No `flutter build web` ele não pede, e o hook quebra o
+#      build web do app tenant. O hook daqui sai cedo nesse caso.
+#   3. Só o Windows compila o crate (único alvo nativo do app); o resto pula,
+#      o que evita compilar Rust no `flutter test` do CI em Linux.
+# Atualizar: baixar a versão nova do pub.dev, reaplicar os três pontos acima e
+# rodar `flutter_rust_bridge_codegen generate` nesta pasta.
+name: velopack_flutter
+description: "Velopack (instalação e auto-update) para o app desktop — cópia vendorizada do velopack_flutter 0.3.2."
+version: 0.3.2+smartcore.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: '>=3.3.0'
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  code_assets: ^1.0.0
+  flutter_rust_bridge: 2.12.0
+  hooks: ^1.0.3
+  native_toolchain_rust: ^1.0.3
+
+dev_dependencies:
+  flutter_lints: ^6.0.0

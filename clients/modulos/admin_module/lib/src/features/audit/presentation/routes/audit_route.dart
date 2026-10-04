@@ -7,7 +7,7 @@ import '../../../tenants/domain/usecases/tenants_usecases.dart';
 
 final class AuditRoute extends GetItModule {
   @override
-  String get path => '/admin/audit';
+  String get path => '/audit';
 
   @override
   Widget get page => const AuditPage();

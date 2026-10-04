@@ -10,8 +10,15 @@ Future<void> main() async {
   // é carregado quando a primeira bolha cria um `Player`. Na Web é no-op
   // prático (usa o <video> do navegador).
   MediaKit.ensureInitialized();
-  await bootstrap(_config);
+  await bootstrap(_config, updateFeedUrl: _updateFeedUrl);
 }
+
+// D6 — feed do Velopack do canal beta. O build do instalador repassa o
+// mesmo valor por --dart-define; o padrão cobre builds feitos à mão.
+const _updateFeedUrl = String.fromEnvironment(
+  'SMARTCORE_UPDATE_FEED_URL',
+  defaultValue: 'https://releases.smartcoreassistant.com.br/feed/beta',
+);
 
 const _config = AppConfig(
   flavor: AppFlavor.dev,

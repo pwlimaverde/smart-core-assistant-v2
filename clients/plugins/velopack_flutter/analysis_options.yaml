@@ -1,0 +1,7 @@
+include: package:flutter_lints/flutter.yaml
+
+# lib/src/rust é gerado pelo flutter_rust_bridge_codegen: não se edita à mão e
+# não passa pelo lint (mesma política do local_engine_ffi e da cobertura do CI).
+analyzer:
+  exclude:
+    - lib/src/rust/**

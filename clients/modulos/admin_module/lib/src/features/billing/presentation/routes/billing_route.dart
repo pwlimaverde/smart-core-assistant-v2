@@ -6,7 +6,7 @@ import '../../domain/usecases/billing_usecases.dart';
 
 final class BillingRoute extends GetItModule {
   @override
-  String get path => '/admin/billing';
+  String get path => '/billing';
 
   @override
   Widget get page => const BillingPage();

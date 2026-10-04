@@ -6,7 +6,7 @@ import '../pages/usuarios_page.dart';
 
 final class UsuariosRoute extends GetItModule {
   @override
-  String get path => '/admin/usuarios';
+  String get path => '/usuarios';
 
   @override
   Widget get page => const UsuariosPage();

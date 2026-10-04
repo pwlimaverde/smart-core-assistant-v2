@@ -221,9 +221,8 @@ class _TenantsPageState extends State<TenantsPage> {
                               color: Colors.amber,
                             ),
                             tooltip: 'Ver Configurações',
-                            onPressed: () => context.go(
-                              '/admin/tenant-config?id=${tenant.id}',
-                            ),
+                            onPressed: () =>
+                                context.go('/tenant-config?id=${tenant.id}'),
                           ),
                           IconButton(
                             icon: const Icon(
@@ -231,9 +230,8 @@ class _TenantsPageState extends State<TenantsPage> {
                               color: Colors.green,
                             ),
                             tooltip: 'Ver Pagamentos',
-                            onPressed: () => context.go(
-                              '/admin/billing?tenantId=${tenant.id}',
-                            ),
+                            onPressed: () =>
+                                context.go('/billing?tenantId=${tenant.id}'),
                           ),
                           IconButton(
                             icon: const Icon(
@@ -241,9 +239,8 @@ class _TenantsPageState extends State<TenantsPage> {
                               color: Colors.deepPurple,
                             ),
                             tooltip: 'Ver Auditoria',
-                            onPressed: () => context.go(
-                              '/admin/audit?tenantId=${tenant.id}',
-                            ),
+                            onPressed: () =>
+                                context.go('/audit?tenantId=${tenant.id}'),
                           ),
                         ],
                       ),

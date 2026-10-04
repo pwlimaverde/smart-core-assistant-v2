@@ -21,6 +21,9 @@ secrets/
 *.pem
 *.key
 *.crt
+# Exceção: parte PÚBLICA do certificado de assinatura de desenvolvimento (D5),
+# para máquinas de teste confiarem nele. A chave (.key/.pfx) segue bloqueada.
+!infra/windows/smartcore-dev.crt
 *.p12
 *.pfx
 credentials.json

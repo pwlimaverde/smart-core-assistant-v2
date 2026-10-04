@@ -80,7 +80,7 @@ void main() {
           booted: true,
           isAuthenticated: true,
           isSuperuser: false,
-          location: '/admin/core-settings',
+          location: '/core-settings',
         ),
         '/login',
       );
@@ -94,7 +94,7 @@ void main() {
           isSuperuser: true,
           location: '/login',
         ),
-        '/admin/core-settings',
+        '/core-settings',
       );
       expect(
         authRedirectTarget(
@@ -103,17 +103,40 @@ void main() {
           isSuperuser: true,
           location: '/',
         ),
-        '/admin/core-settings',
+        '/core-settings',
       );
       expect(
         authRedirectTarget(
           booted: true,
           isAuthenticated: true,
           isSuperuser: true,
-          location: '/admin/core-settings',
+          location: '/core-settings',
         ),
         isNull,
       );
+    });
+  });
+
+  group('legacyAdminRedirect', () {
+    test(
+      'rota antiga /admin/<tela> vai para /<tela> (sem /v2/admin/admin)',
+      () {
+        expect(
+          legacyAdminRedirect(Uri.parse('/admin/windows-downloads')),
+          '/windows-downloads',
+        );
+        expect(
+          legacyAdminRedirect(Uri.parse('/admin/billing?tenantId=42')),
+          '/billing?tenantId=42',
+        );
+        expect(legacyAdminRedirect(Uri.parse('/admin')), '/');
+      },
+    );
+
+    test('rotas atuais não são tocadas', () {
+      expect(legacyAdminRedirect(Uri.parse('/windows-downloads')), isNull);
+      expect(legacyAdminRedirect(Uri.parse('/login')), isNull);
+      expect(legacyAdminRedirect(Uri.parse('/administracao')), isNull);
     });
   });
 }

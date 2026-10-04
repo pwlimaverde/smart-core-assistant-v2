@@ -25,7 +25,19 @@ String? authRedirectTarget({
   // Sem sessão OU sem privilégio de superusuário → fora do painel admin.
   if (!isAuthenticated || !isSuperuser) return rotaPublica ? null : '/login';
   if (indoParaLogin || location == '/' || location == '/home') {
-    return '/admin/core-settings';
+    return '/core-settings';
   }
   return null;
+}
+
+/// Links antigos do painel: até 10/2026 as rotas do `admin_module` tinham o
+/// prefixo `/admin`, que somado ao `--base-href /v2/admin/` dava
+/// `/v2/admin/admin/<tela>`. As rotas agora começam na raiz do app
+/// (`/v2/admin/<tela>`); favoritos e links velhos são levados para o caminho
+/// novo, preservando a query (`?tenantId=…`). `null` = nada a fazer.
+String? legacyAdminRedirect(Uri uri) {
+  final path = uri.path;
+  if (path != '/admin' && !path.startsWith('/admin/')) return null;
+  final novo = path.substring('/admin'.length);
+  return uri.replace(path: novo.isEmpty ? '/' : novo).toString();
 }
