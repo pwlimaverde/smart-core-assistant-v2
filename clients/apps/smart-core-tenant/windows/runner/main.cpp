@@ -27,7 +27,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"smart_core_tenant", origin, size)) {
+  // D3: Título da janela (aparece na barra de título e no Alt+Tab)
+  if (!window.Create(L"Smart Core Tenant", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "smart_core_tenant" "\0"
+            VALUE "CompanyName", "Smart Core" "\0"
+            VALUE "FileDescription", "Smart Core Tenant" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "smart_core_tenant" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Smart Core. All rights reserved." "\0"
             VALUE "OriginalFilename", "smart_core_tenant.exe" "\0"
-            VALUE "ProductName", "smart_core_tenant" "\0"
+            VALUE "ProductName", "Smart Core Tenant" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
