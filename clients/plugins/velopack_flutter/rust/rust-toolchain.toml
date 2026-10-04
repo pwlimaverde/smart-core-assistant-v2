@@ -1,0 +1,11 @@
+[toolchain]
+# O native_toolchain_rust exige versão fixa (nada de `stable` sozinho): o build
+# fica reprodutível. O rustup baixa esta versão sozinho no primeiro build.
+channel = "1.90.0"
+
+# Só os alvos que o app usa: o rustup instala todos os listados, e a lista
+# original trazia Android/iOS/macOS/Linux à toa (o hook só compila no Windows).
+targets = [
+  "x86_64-pc-windows-msvc",
+  "aarch64-pc-windows-msvc",
+]

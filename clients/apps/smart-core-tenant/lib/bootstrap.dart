@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dependencies_module/dependencies_module.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
 import 'package:login_module/login_module.dart';
@@ -7,6 +9,7 @@ import 'package:tenant_module/tenant_module.dart';
 import 'package:treinamento_module/treinamento_module.dart';
 
 import 'app.dart';
+import 'platform/auto_update.dart';
 import 'platform/url_strategy.dart';
 
 /// Compõe os módulos, registra os serviços globais e sobe o app.
@@ -14,12 +17,22 @@ import 'platform/url_strategy.dart';
 /// Chamado pelos entrypoints flavor-específicos (main_dev / main_prod).
 /// O boot assíncrono (runBootTasks) roda DENTRO da rota '/', não aqui.
 ///
+/// [updateFeedUrl] é a base do feed do Velopack do canal do build
+/// (`…/feed/beta` no DEV, `…/feed/stable` no PROD). Só o desktop Windows
+/// instalado pelo Setup usa; na Web e fora da instalação é ignorado.
+///
 /// Este app é exclusivo de sessões de TENANT (donos/funcionários) — o painel
 /// do superusuário da plataforma é o `smart-core-admin`, que não hospeda mais
 /// o `OperacionalModule` (movido para cá, já que o workspace é dos
 /// funcionários do tenant, não do superusuário).
-Future<void> bootstrap(AppConfig config) async {
+Future<void> bootstrap(AppConfig config, {String updateFeedUrl = ''}) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // D6 — auto-update. O Velopack carrega ANTES de tudo: quando o Setup chama
+  // o app com `--veloapp-install`/`--veloapp-uninstall`, o processo precisa
+  // encerrar já, sem subir UI.
+  final updateChecker = criarUpdateChecker(updateFeedUrl);
+  await updateChecker.preparar();
 
   // Path URL strategy: URLs limpas sob /v2/tenant/ (sem '#'); combina com
   // --base-href /v2/tenant/ e o SPA fallback (try_files) do Caddy. Sem isso,
@@ -70,4 +83,8 @@ Future<void> bootstrap(AppConfig config) async {
   GetIt.instance.registerSingleton<List<AppModule>>(modules);
 
   runApp(SmartCoreTenantApp(modules: modules));
+
+  // Consulta o feed depois da primeira tela, sem segurar o boot. Havendo
+  // versão nova, baixa, aplica e reinicia o app sozinho.
+  unawaited(updateChecker.verificar());
 }

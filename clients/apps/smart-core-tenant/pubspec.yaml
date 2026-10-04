@@ -37,6 +37,11 @@ dependencies:
   # Windows; os pacotes de Android/iOS/macOS/Linux ficam de fora). Na Web o
   # plugin não tem implementação e não entra no bundle.
   media_kit_libs_windows_video: ^1.0.11
+  # D6 — auto-update pelo feed do Velopack (só desktop Windows; na Web o
+  # import condicional de lib/platform/auto_update.dart deixa o pacote de
+  # fora). Cópia vendorizada: ver clients/plugins/velopack_flutter/pubspec.yaml.
+  velopack_flutter:
+    path: ../../plugins/velopack_flutter
 
 dev_dependencies:
   flutter_test:
