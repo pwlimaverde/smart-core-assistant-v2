@@ -73,7 +73,7 @@ jobs:
             $versao = "${{ github.ref_name }}" -replace '^win-v', ''
           } else {
             # Ensaio em branch ci/: versão descartável, nada é publicado.
-            $versao = "0.0.0-beta.${{ github.run_number }}"
+            $versao = "0.0.1-beta.${{ github.run_number }}"
             $publicar = 'false'
           }
           if ($versao -notmatch '^\d+\.\d+\.\d+(-beta\.\d+)?$') {
