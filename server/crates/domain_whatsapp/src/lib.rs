@@ -226,13 +226,7 @@ impl NormalizedMessage {
                     .and_then(|c| c.as_str())
                     .unwrap_or("")
                     .to_string();
-                if content.is_empty() {
-                    content = img
-                        .get("url")
-                        .and_then(|u| u.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                } else {
+                if !content.is_empty() {
                     legenda = Some(content.clone());
                 }
                 let (mime, size) = extrair_meta_midia(img);
@@ -241,11 +235,6 @@ impl NormalizedMessage {
                 media_file_size = size;
             } else if let Some(audio) = msg_obj.get("audioMessage") {
                 media_type = MediaType::Audio;
-                content = audio
-                    .get("url")
-                    .and_then(|u| u.as_str())
-                    .unwrap_or("")
-                    .to_string();
                 let (mime, size) = extrair_meta_midia(audio);
                 media_payload = Some(audio.clone());
                 media_mime = mime;
@@ -257,13 +246,7 @@ impl NormalizedMessage {
                     .and_then(|c| c.as_str())
                     .unwrap_or("")
                     .to_string();
-                if content.is_empty() {
-                    content = video
-                        .get("url")
-                        .and_then(|u| u.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                } else {
+                if !content.is_empty() {
                     legenda = Some(content.clone());
                 }
                 let (mime, size) = extrair_meta_midia(video);
@@ -1130,24 +1113,25 @@ mod tests {
         .unwrap();
         assert_eq!(com_legenda.texto_para_ia(), Some("é esse o modelo?"));
 
-        // Áudio sem legenda: `content` é a URL da CDN, mas não há texto do usuário.
+        // Áudio sem legenda: `content` vazio, URL fica em media_payload
         let audio = NormalizedMessage::parse(
             &payload_com_message(json!({ "audioMessage": { "url": "http://x/a.ogg" } })),
             Uuid::new_v4(),
             1,
         )
         .unwrap();
-        assert_eq!(audio.content, "http://x/a.ogg");
+        assert_eq!(audio.content, "");
         assert_eq!(audio.legenda, None);
         assert_eq!(audio.texto_para_ia(), None);
 
-        // Imagem sem legenda: idem — `content` cai para a URL.
+        // Imagem sem legenda: `content` vazio, URL fica em media_payload
         let imagem = NormalizedMessage::parse(
             &payload_com_message(json!({ "imageMessage": { "url": "http://x/i.jpg" } })),
             Uuid::new_v4(),
             1,
         )
         .unwrap();
+        assert_eq!(imagem.content, "");
         assert_eq!(imagem.texto_para_ia(), None);
 
         // Documento: o nome do arquivo é metadado, não mensagem.
