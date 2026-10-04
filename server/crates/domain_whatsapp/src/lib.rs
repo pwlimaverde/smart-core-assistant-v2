@@ -722,7 +722,7 @@ mod tests {
         }));
         let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
         assert_eq!(msg.media_type, MediaType::Image);
-        assert_eq!(msg.content, "http://example.com/img.jpg");
+        assert_eq!(msg.content, ""); // URL não é mais copiada para content
     }
 
     #[test]
@@ -732,7 +732,7 @@ mod tests {
         }));
         let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
         assert_eq!(msg.media_type, MediaType::Audio);
-        assert_eq!(msg.content, "http://example.com/audio.ogg");
+        assert_eq!(msg.content, ""); // URL não é mais copiada para content
     }
 
     #[test]
@@ -801,7 +801,7 @@ mod tests {
         }));
         let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
         assert_eq!(msg.media_type, MediaType::Video);
-        assert_eq!(msg.content, "http://x/v.mp4");
+        assert_eq!(msg.content, ""); // URL não é mais copiada para content
     }
 
     #[test]
@@ -853,7 +853,7 @@ mod tests {
         }));
         let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
         assert_eq!(msg.media_type, MediaType::Sticker);
-        assert_eq!(msg.content, "http://x/sticker.webp");
+        assert_eq!(msg.content, ""); // URL não é mais copiada para content
     }
 
     #[test]
