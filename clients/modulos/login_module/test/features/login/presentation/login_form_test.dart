@@ -35,6 +35,8 @@ class _AuthOcioso implements AuthService {
 
   @override
   Listenable get authChanges => ValueNotifier<int>(0);
+  @override
+  bool get temSessao => false;
 }
 
 void main() {

@@ -226,18 +226,26 @@ impl NormalizedMessage {
                     .and_then(|c| c.as_str())
                     .unwrap_or("")
                     .to_string();
-                if !content.is_empty() {
+                if content.is_empty() {
+                    content = img
+                        .get("url")
+                        .and_then(|u| u.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                } else {
                     legenda = Some(content.clone());
                 }
-                // C1: não copiar URL para content (mídia armazenada em R2, não CDN do WhatsApp)
                 let (mime, size) = extrair_meta_midia(img);
                 media_payload = Some(img.clone());
                 media_mime = mime;
                 media_file_size = size;
             } else if let Some(audio) = msg_obj.get("audioMessage") {
                 media_type = MediaType::Audio;
-                // C1: não copiar URL para content (áudio armazenado em R2, transcrição em analise_midia)
-                content = String::new();
+                content = audio
+                    .get("url")
+                    .and_then(|u| u.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let (mime, size) = extrair_meta_midia(audio);
                 media_payload = Some(audio.clone());
                 media_mime = mime;
@@ -249,10 +257,15 @@ impl NormalizedMessage {
                     .and_then(|c| c.as_str())
                     .unwrap_or("")
                     .to_string();
-                if !content.is_empty() {
+                if content.is_empty() {
+                    content = video
+                        .get("url")
+                        .and_then(|u| u.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                } else {
                     legenda = Some(content.clone());
                 }
-                // C1: não copiar URL para content (vídeo armazenado em R2, não CDN do WhatsApp)
                 let (mime, size) = extrair_meta_midia(video);
                 media_payload = Some(video.clone());
                 media_mime = mime;

@@ -41,6 +41,8 @@ class _FakeAuth implements AuthService {
 
   @override
   Listenable get authChanges => ValueNotifier<int>(0);
+  @override
+  bool get temSessao => false;
 }
 
 Session _session() => Session(
