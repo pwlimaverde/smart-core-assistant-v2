@@ -561,6 +561,7 @@ table MensagemThread {
   citada_preview:string;
   reacoes:[ReacaoDaMensagem];
   metadados_json:string;
+  analise_midia:string;
 }
 
 table ReacaoDaMensagem {
@@ -1607,6 +1608,21 @@ table GetVersaoDoAppResponse {
   build_atual:long;
   url_download:string;
   notas:string;
+}
+
+table GetWindowsDownloadLinkRequest {
+  channel:string;
+  version:string;
+}
+
+table GetWindowsDownloadLinkResponse {
+  url:string;
+  version:string;
+  file_name:string;
+  size_bytes:long;
+  sha256:string;
+  release_notes_md:string;
+  expires_at_ms:long;
 }
 
 table TestarProvedorIaRequest {
