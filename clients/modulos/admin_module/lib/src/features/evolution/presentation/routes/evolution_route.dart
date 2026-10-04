@@ -7,7 +7,7 @@ import '../../../tenants/domain/usecases/tenants_usecases.dart';
 
 final class EvolutionRoute extends GetItModule {
   @override
-  String get path => '/admin/evolution';
+  String get path => '/evolution';
 
   @override
   Widget get page => const EvolutionPage();

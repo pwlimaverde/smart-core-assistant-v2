@@ -6,7 +6,7 @@ import '../../domain/usecases/dashboard_usecases.dart';
 
 final class DashboardRoute extends GetItModule {
   @override
-  String get path => '/admin/dashboard';
+  String get path => '/dashboard';
 
   @override
   Widget get page => const DashboardPage();

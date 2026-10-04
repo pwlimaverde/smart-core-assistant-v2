@@ -29,91 +29,91 @@ class AdminDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.dashboard),
             title: const Text('Dashboard Geral'),
-            selected: location == '/admin/dashboard',
+            selected: location == '/dashboard',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/dashboard');
+              context.go('/dashboard');
             },
           ),
           ListTile(
             leading: const Icon(Icons.settings),
             title: const Text('Configurações Globais'),
-            selected: location == '/admin/core-settings',
+            selected: location == '/core-settings',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/core-settings');
+              context.go('/core-settings');
             },
           ),
           ListTile(
             leading: const Icon(Icons.business),
             title: const Text('Configurações de Tenant'),
-            selected: location == '/admin/tenant-config',
+            selected: location == '/tenant-config',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/tenant-config');
+              context.go('/tenant-config');
             },
           ),
           ListTile(
             leading: const Icon(Icons.people),
             title: const Text('Clientes / Tenants'),
-            selected: location == '/admin/tenants',
+            selected: location == '/tenants',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/tenants');
+              context.go('/tenants');
             },
           ),
           ListTile(
             leading: const Icon(Icons.manage_accounts_outlined),
             title: const Text('Usuários'),
-            selected: location == '/admin/usuarios',
+            selected: location == '/usuarios',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/usuarios');
+              context.go('/usuarios');
             },
           ),
           ListTile(
             leading: const Icon(Icons.payment),
             title: const Text('Planos & Faturamento'),
-            selected: location == '/admin/billing',
+            selected: location == '/billing',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/billing');
+              context.go('/billing');
             },
           ),
           ListTile(
             leading: const Icon(Icons.sync_alt),
             title: const Text('Integração Evolution'),
-            selected: location == '/admin/evolution',
+            selected: location == '/evolution',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/evolution');
+              context.go('/evolution');
             },
           ),
           ListTile(
             leading: const Icon(Icons.toggle_on),
             title: const Text('Feature Flags'),
-            selected: location == '/admin/feature-flags',
+            selected: location == '/feature-flags',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/feature-flags');
+              context.go('/feature-flags');
             },
           ),
           ListTile(
             leading: const Icon(Icons.security),
             title: const Text('Auditoria & Segurança'),
-            selected: location == '/admin/audit',
+            selected: location == '/audit',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/audit');
+              context.go('/audit');
             },
           ),
           ListTile(
             leading: const Icon(Icons.download),
             title: const Text('Instalador Windows'),
-            selected: location == '/admin/windows-downloads',
+            selected: location == '/windows-downloads',
             onTap: () {
               Navigator.pop(context);
-              context.go('/admin/windows-downloads');
+              context.go('/windows-downloads');
             },
           ),
           const Spacer(),

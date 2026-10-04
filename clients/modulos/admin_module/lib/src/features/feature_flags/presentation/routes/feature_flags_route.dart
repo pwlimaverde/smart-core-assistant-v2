@@ -7,7 +7,7 @@ import '../../../tenants/domain/usecases/tenants_usecases.dart';
 
 final class FeatureFlagsRoute extends GetItModule {
   @override
-  String get path => '/admin/feature-flags';
+  String get path => '/feature-flags';
 
   @override
   Widget get page => const FeatureFlagsPage();

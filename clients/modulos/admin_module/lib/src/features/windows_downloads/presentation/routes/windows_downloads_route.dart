@@ -6,7 +6,7 @@ import '../pages/windows_downloads_page.dart';
 
 final class WindowsDownloadsRoute extends GetItModule {
   @override
-  String get path => '/admin/windows-downloads';
+  String get path => '/windows-downloads';
 
   @override
   Widget get page => const WindowsDownloadsPage();
