@@ -3974,6 +3974,23 @@ async fn anexar_analise_midia(
         )
         .await;
     }
+
+    // C6: Publicar evento quando a análise foi completada (transcrição/descrição)
+    if completo && (!analise.is_empty() || !resumo.is_empty()) {
+        publicar_realtime_unico(
+            state,
+            ctx.tenant_uuid,
+            "mensagem.midia_analisada",
+            &ctx.mensagem_id.to_string(),
+            serde_json::json!({
+                "atendimento_id": ctx.atendimento_id,
+                "mensagem_id": ctx.mensagem_id,
+                "tipo": ctx.tipo_str,
+            }),
+        )
+        .await;
+    }
+
     span.record("resultado", if completo { "ok" } else { "parcial" });
 
     // Auditoria: mídia analisada (nível INFO). SEM conteúdo/transcrição — só

@@ -564,6 +564,7 @@ table MensagemThread {
   citada_preview:string;
   reacoes:[ReacaoDaMensagem];
   metadados_json:string;
+  analise_midia:string;
 }
 
 table ReacaoDaMensagem {

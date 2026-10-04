@@ -8735,6 +8735,11 @@ impl AdminService for AdminFacade {
                             // P8 — reações e o que não cabe em `conteudo`.
                             reacoes: reacoes_do_item(item),
                             metadados_json: metadados_do_item(item),
+                            // C4 — análise de mídia (transcrição/descrição)
+                            analise_midia: item
+                                .get("analise_midia")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
                         });
                     }
                 }

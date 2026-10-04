@@ -229,24 +229,15 @@ impl NormalizedMessage {
                 if !content.is_empty() {
                     legenda = Some(content.clone());
                 }
-                if content.is_empty() {
-                    content = img
-                        .get("url")
-                        .and_then(|u| u.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                }
+                // C1: não copiar URL para content (mídia armazenada em R2, não CDN do WhatsApp)
                 let (mime, size) = extrair_meta_midia(img);
                 media_payload = Some(img.clone());
                 media_mime = mime;
                 media_file_size = size;
             } else if let Some(audio) = msg_obj.get("audioMessage") {
                 media_type = MediaType::Audio;
-                content = audio
-                    .get("url")
-                    .and_then(|u| u.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                // C1: não copiar URL para content (áudio armazenado em R2, transcrição em analise_midia)
+                content = String::new();
                 let (mime, size) = extrair_meta_midia(audio);
                 media_payload = Some(audio.clone());
                 media_mime = mime;
@@ -261,13 +252,7 @@ impl NormalizedMessage {
                 if !content.is_empty() {
                     legenda = Some(content.clone());
                 }
-                if content.is_empty() {
-                    content = video
-                        .get("url")
-                        .and_then(|u| u.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                }
+                // C1: não copiar URL para content (vídeo armazenado em R2, não CDN do WhatsApp)
                 let (mime, size) = extrair_meta_midia(video);
                 media_payload = Some(video.clone());
                 media_mime = mime;

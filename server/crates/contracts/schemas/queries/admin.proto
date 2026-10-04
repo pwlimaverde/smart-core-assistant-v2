@@ -629,6 +629,8 @@ message MensagemThread {
   // tipo, e um campo por tipo engessaria o contrato no que o WhatsApp oferece
   // hoje.
   optional string metadados_json = 17;
+  // C4 — análise de mídia (transcrição de áudio, descrição de imagem)
+  optional string analise_midia = 18;
 }
 
 // P8 — quem reagiu e com quê.

@@ -562,6 +562,7 @@ table MensagemThread {
   citada_preview:string;
   reacoes:[smartcore.contracts.queries.ReacaoDaMensagem];
   metadados_json:string;
+  analise_midia:string;
 }
 
 table ReacaoDaMensagem {
