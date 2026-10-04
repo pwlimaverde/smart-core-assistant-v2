@@ -25,7 +25,8 @@ use infrastructure_postgres::operacional::fluxos::{
     PostgresFluxoAtendimentoRepository,
 };
 use infrastructure_postgres::{
-    connection::run_in_tenant_transaction, DbError, RequestContext, TenantConfigCache,
+    connection::run_in_tenant_transaction, tenants::settings, DbError, RequestContext,
+    TenantConfigCache,
 };
 
 use crate::ports::operacional::{ConfigIa, CoreSetting};
@@ -340,6 +341,36 @@ impl OperacionalStore for PgOperacionalStore {
             row.get::<Option<rust_decimal::Decimal>, _>(col)
                 .unwrap_or_default()
         };
+
+        // B1: Carregar CoreSettings globais para calcular valores efetivos
+        let core_settings = settings::load_all_settings(&self.pool, &self.cipher)
+            .await
+            .unwrap_or_default();
+
+        // Helper para fallback de bool: tenant (se Some/true) sobre global
+        let fallback_bool = |tenant_val: Option<bool>, core_key: &str| -> bool {
+            tenant_val.unwrap_or_else(|| {
+                core_settings
+                    .get(core_key)
+                    .map(|s| s.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false)
+            })
+        };
+
+        // B1: Calcular valores efetivos (tenant override, ou global)
+        let pesquisa_satisfacao_efetiva = fallback_bool(
+            row.get::<Option<bool>, _>("pesquisa_satisfacao_ativa"),
+            "PESQUISA_SATISFACAO_ATIVA",
+        );
+        let analise_previa_efetiva = fallback_bool(
+            row.get::<Option<bool>, _>("analise_previa_habilitada"),
+            "ANALISE_PREVIA_HABILITADA",
+        );
+        let transcricao_efetiva = fallback_bool(
+            row.get::<Option<bool>, _>("transcription_enabled"),
+            "TRANSCRIPTION_ENABLED",
+        );
+
         Ok(Some(serde_json::json!({
             "dados_empresa": s("dados_empresa"),
             "persona_bot": s("persona_bot"),
@@ -377,6 +408,10 @@ impl OperacionalStore for PgOperacionalStore {
             "msg_pesquisa_satisfacao": s("msg_pesquisa_satisfacao"),
             "minutos_inatividade_encerra": row.get::<Option<i32>, _>("minutos_inatividade_encerra"),
             "transcription_enabled": row.get::<Option<bool>, _>("transcription_enabled"),
+            // B1: Valores efetivos (tenant override OU global)
+            "pesquisa_satisfacao_efetiva": pesquisa_satisfacao_efetiva,
+            "analise_previa_efetiva": analise_previa_efetiva,
+            "transcricao_efetiva": transcricao_efetiva,
         })))
     }
 

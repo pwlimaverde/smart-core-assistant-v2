@@ -1424,6 +1424,12 @@ fn mapear_tenant_config_response(val: &serde_json::Value) -> GetTenantConfigResp
             .and_then(|v| v.as_i64())
             .map(|v| v as i32),
         transcription_enabled: val.get("transcription_enabled").and_then(|v| v.as_bool()),
+        // B1: Valores efetivos (tenant override OU global)
+        pesquisa_satisfacao_efetiva: val
+            .get("pesquisa_satisfacao_efetiva")
+            .and_then(|v| v.as_bool()),
+        analise_previa_efetiva: val.get("analise_previa_efetiva").and_then(|v| v.as_bool()),
+        transcricao_efetiva: val.get("transcricao_efetiva").and_then(|v| v.as_bool()),
         // Preenchido pelo handler (vem do cache de config, não deste JSON).
         motor_analise: String::new(),
     }

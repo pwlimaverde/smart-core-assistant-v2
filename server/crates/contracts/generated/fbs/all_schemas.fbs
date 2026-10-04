@@ -82,6 +82,9 @@ table GetTenantConfigResponse {
   minutos_inatividade_encerra:int;
   transcription_enabled:bool;
   motor_analise:string;
+  pesquisa_satisfacao_efetiva:bool;
+  analise_previa_efetiva:bool;
+  transcricao_efetiva:bool;
 }
 
 table UpdateTenantConfigRequest {
@@ -1607,6 +1610,21 @@ table GetVersaoDoAppResponse {
   build_atual:long;
   url_download:string;
   notas:string;
+}
+
+table GetWindowsDownloadLinkRequest {
+  channel:string;
+  version:string;
+}
+
+table GetWindowsDownloadLinkResponse {
+  url:string;
+  version:string;
+  file_name:string;
+  size_bytes:long;
+  sha256:string;
+  release_notes_md:string;
+  expires_at_ms:long;
 }
 
 table TestarProvedorIaRequest {

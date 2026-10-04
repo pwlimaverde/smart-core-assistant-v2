@@ -89,6 +89,11 @@ message GetTenantConfigResponse {
   // Motor das decisões da IA em vigor (llm | sombra | jev), já resolvido com o
   // global — é o que o seletor do painel mostra ao abrir.
   string motor_analise = 35;
+  // B1: valores efetivos (tenant ou global) dos 3 settings com interruptor
+  // Mostram ao painel o que realmente está ativo, resolvendo tenant (se presente) com global
+  optional bool pesquisa_satisfacao_efetiva = 36;
+  optional bool analise_previa_efetiva = 37;
+  optional bool transcricao_efetiva = 38;
 }
 
 message UpdateTenantConfigRequest {
