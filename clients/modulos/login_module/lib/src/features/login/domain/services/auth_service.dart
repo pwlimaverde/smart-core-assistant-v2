@@ -38,6 +38,10 @@ abstract interface class AuthService {
   /// `true` quando há sessão válida (não expirada) em memória.
   bool get isAuthenticated;
 
+  /// `true` quando há sessão em memória, independente de expiração do access token.
+  /// Usado pelo guard do router para evitar logout por expiração de access (que renova automaticamente).
+  bool get temSessao;
+
   /// A sessão atual, se houver.
   Session? get currentSession;
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core_module/core_module.dart' as core;
 import 'package:flutter/foundation.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
@@ -34,6 +36,7 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
   Session? _current;
   Future<ReturnSuccessOrError<Session, RefreshError>>? _refreshInFlight;
   final ValueNotifier<int> _authChanges = ValueNotifier<int>(0);
+  Timer? _renovacaoTimer;
 
   /// Dependências recebidas como private named parameters (Dart 3.12): o
   /// chamador usa os nomes públicos (`loginUsecase`, `tokenStore`, …) e os
@@ -48,6 +51,9 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
 
   @override
   bool get isAuthenticated => _current != null && !_current!.isExpired;
+
+  @override
+  bool get temSessao => _current != null;
 
   @override
   Session? get currentSession => _current;
@@ -131,11 +137,15 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
 
   /// Gancho de boot (auto-login silencioso): tenta refresh com o token
   /// persistido. Falha é esperada quando não há sessão — não propaga, só fica
-  /// deslogado.
+  /// deslogado. Indisponibilidade de rede não derruba a sessão.
   @override
   Future<void> checkCurrentUser() async {
     final result = await refresh();
-    if (result is Failure) await _limparSessao();
+    if (result case Failure(:final error)) {
+      if (error is RefreshRejeitado || error is SemSessaoPersistida) {
+        await _limparSessao();
+      }
+    }
   }
 
   @override
@@ -153,6 +163,7 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
     _current = s;
     _session.setSession(token: s.accessToken, tenantId: s.tenantId);
     await _tokenStore.writeRefresh(s.refreshToken);
+    _agendarRenovacao();
     _notificar();
   }
 
@@ -160,7 +171,28 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
     _current = null;
     _session.clearSession();
     await _tokenStore.deleteRefresh();
+    _renovacaoTimer?.cancel();
+    _renovacaoTimer = null;
     _notificar();
+  }
+
+  void _agendarRenovacao() {
+    _renovacaoTimer?.cancel();
+    if (_current == null) return;
+
+    final agora = DateTime.now();
+    final vencimento = _current!.expiresAt;
+    final tempoAteVencimento = vencimento.difference(agora);
+    final tempoParaRenovar = tempoAteVencimento - const Duration(seconds: 60);
+
+    if (tempoParaRenovar.isNegative) {
+      refresh();
+    } else {
+      _renovacaoTimer = Timer(tempoParaRenovar, () async {
+        await refresh();
+        _agendarRenovacao();
+      });
+    }
   }
 
   void _notificar() => _authChanges.value++;
