@@ -55,7 +55,7 @@ class SmartCoreTenantApp extends StatelessWidget {
     final auth = inject<login.AuthService>();
     final portao = inject<PortaoConfiguracao>();
     final ehTenant =
-        auth.isAuthenticated && !(auth.currentSession?.isSuperuser ?? false);
+        auth.temSessao && !(auth.currentSession?.isSuperuser ?? false);
 
     // Dispara a consulta do progresso na primeira navegação com sessão de
     // tenant; o `PortaoConfiguracao` ignora chamadas repetidas e notifica o
@@ -69,7 +69,7 @@ class SmartCoreTenantApp extends StatelessWidget {
 
     return tenantAuthRedirectTarget(
       booted: inject<BootState>().value,
-      isAuthenticated: auth.isAuthenticated,
+      isAuthenticated: auth.temSessao,
       isSuperuser: auth.currentSession?.isSuperuser ?? false,
       scopes: auth.currentSession?.scopes ?? const [],
       location: state.matchedLocation,

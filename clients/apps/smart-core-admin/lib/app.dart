@@ -68,7 +68,7 @@ class SmartCoreAdminApp extends StatelessWidget {
     final auth = inject<login.AuthService>();
     return authRedirectTarget(
       booted: inject<BootState>().value,
-      isAuthenticated: auth.isAuthenticated,
+      isAuthenticated: auth.temSessao,
       isSuperuser: auth.currentSession?.isSuperuser ?? false,
       location: state.matchedLocation,
     );
