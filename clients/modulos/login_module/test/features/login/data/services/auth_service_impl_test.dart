@@ -309,10 +309,24 @@ void main() {
       expect(m.session.token, 'access');
     });
 
-    test('falha no boot limpa qualquer resíduo persistido', () async {
+    test('indisponibilidade no boot não apaga o refresh persistido', () async {
       final m = _montar(
         refreshDs: _Ds<Session, RefreshParameters>(
           erro: GrpcError.unavailable('offline'),
+        ),
+      );
+      await m.tokenStore.writeRefresh('resto-de-sessao');
+
+      await m.service.checkCurrentUser();
+
+      expect(m.service.isAuthenticated, isFalse);
+      expect(await m.tokenStore.readRefresh(), 'resto-de-sessao');
+    });
+
+    test('recusa do servidor no boot limpa o refresh persistido', () async {
+      final m = _montar(
+        refreshDs: _Ds<Session, RefreshParameters>(
+          erro: GrpcError.unauthenticated('errors.auth'),
         ),
       );
       await m.tokenStore.writeRefresh('resto-de-sessao');
