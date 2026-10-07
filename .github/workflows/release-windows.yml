@@ -217,7 +217,7 @@ jobs:
             --packTitle "Smart Core Tenant" `
             --packAuthors "Smart Core" `
             --icon infra/branding/assets/app_icon.ico `
-            --splashImage infra/branding/assets/logo_full.png `
+            --splashImage infra/branding/assets/installer-splash.png `
             --releaseNotes $notas `
             --noPortable `
             --skipVeloAppCheck `
