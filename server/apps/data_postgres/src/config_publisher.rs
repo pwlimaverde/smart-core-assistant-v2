@@ -15,11 +15,6 @@ use secrecy::ExposeSecret;
 use serde::Serialize;
 use uuid::Uuid;
 
-/// Validade da config no Redis. O valor é reescrito a cada mudança pelo gancho de
-/// invalidação, então o TTL é só uma rede de segurança contra entrada órfã (tenant
-/// removido) — não é o mecanismo de atualização.
-const TTL_CONFIG_SEGUNDOS: u64 = 24 * 60 * 60;
-
 /// Espelho serializável do `RuntimeConfig`.
 ///
 /// Existe separado de propósito: o `RuntimeConfig` guarda as chaves em
@@ -159,8 +154,10 @@ pub async fn publicar_config_tenant(conn: &ConnectionManager, cfg: &RuntimeConfi
 
     let mut conn = conn.clone();
     let chave = infrastructure_redis::chave_config_tenant(cfg.tenant_id);
+    // Sem TTL: a config só muda com uma escrita (que republica), e um tenant sem
+    // alteração não pode perder a config depois de um dia.
     let set: Result<(), redis::RedisError> =
-        redis::AsyncCommands::set_ex(&mut conn, &chave, json, TTL_CONFIG_SEGUNDOS).await;
+        redis::AsyncCommands::set(&mut conn, &chave, json).await;
     if let Err(e) = set {
         tracing::warn!(tenant_id = %cfg.tenant_id, "Falha ao gravar config no Redis: {e}");
         return;
