@@ -87,6 +87,12 @@ class ConfigAvancada {
   final int? minutosInatividade;
   final bool? transcricao;
 
+  /// Valor que o sistema usa de fato (negócio, senão padrão global). Mostrado
+  /// quando o negócio não definiu um valor próprio.
+  final bool? analisePreviaEfetiva;
+  final bool? pesquisaSatisfacaoEfetiva;
+  final bool? transcricaoEfetiva;
+
   const ConfigAvancada({
     this.tiposDeEntidadeJson = '',
     this.prompts = const {},
@@ -100,6 +106,9 @@ class ConfigAvancada {
     this.msgPesquisaSatisfacao = '',
     this.minutosInatividade,
     this.transcricao,
+    this.analisePreviaEfetiva,
+    this.pesquisaSatisfacaoEfetiva,
+    this.transcricaoEfetiva,
   });
 }
 

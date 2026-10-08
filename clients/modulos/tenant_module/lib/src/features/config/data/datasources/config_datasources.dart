@@ -60,6 +60,15 @@ final class GetMyTenantConfigDatasource
         transcricao: resp.hasTranscriptionEnabled()
             ? resp.transcriptionEnabled
             : null,
+        analisePreviaEfetiva: resp.hasAnalisePreviaEfetiva()
+            ? resp.analisePreviaEfetiva
+            : null,
+        pesquisaSatisfacaoEfetiva: resp.hasPesquisaSatisfacaoEfetiva()
+            ? resp.pesquisaSatisfacaoEfetiva
+            : null,
+        transcricaoEfetiva: resp.hasTranscricaoEfetiva()
+            ? resp.transcricaoEfetiva
+            : null,
       ),
     );
   }

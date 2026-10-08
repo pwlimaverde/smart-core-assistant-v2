@@ -197,12 +197,16 @@ class _ConfigAvancadaFormState extends State<ConfigAvancadaForm> {
     String ajuda,
     bool? valor,
     ValueChanged<bool> aoMudar,
+    bool? efetivo,
   ) {
+    final padrao = efetivo == true ? 'ligado' : 'desligado';
     return SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(titulo),
-      subtitle: Text(valor == null ? '$ajuda (usando o padrão)' : ajuda),
-      value: valor ?? false,
+      subtitle: Text(
+        valor == null ? '$ajuda (padrão do sistema: $padrao)' : ajuda,
+      ),
+      value: valor ?? efetivo ?? false,
       onChanged: widget.podeSalvar ? aoMudar : null,
     );
   }
@@ -276,18 +280,21 @@ class _ConfigAvancadaFormState extends State<ConfigAvancadaForm> {
             'Detecta intenção e dados do cliente antes de responder',
             _analisePrevia,
             (v) => setState(() => _analisePrevia = v),
+            widget.avancada.analisePreviaEfetiva,
           ),
           _interruptor(
             'Transcrever áudios',
             'Converte áudios recebidos em texto para a IA',
             _transcricao,
             (v) => setState(() => _transcricao = v),
+            widget.avancada.transcricaoEfetiva,
           ),
           _interruptor(
             'Pesquisa de satisfação',
             'Pergunta a nota ao cliente ao encerrar',
             _pesquisa,
             (v) => setState(() => _pesquisa = v),
+            widget.avancada.pesquisaSatisfacaoEfetiva,
           ),
           AppTextField(
             label: 'Mensagem da pesquisa de satisfação',
