@@ -2624,10 +2624,11 @@ async fn processar_mensagem_recebida(
     // download+análise em background (fire-and-forget controlado). A mensagem já
     // apareceu no chat na etapa de persistência acima — a análise é assíncrona e
     // NUNCA bloqueia nem falha o handler principal (degradação graciosa interna).
-    // `de_mim` fica fora: é mídia que o próprio atendente enviou — não há o que
-    // transcrever/interpretar para ele, e transcrever custa por minuto de áudio.
-    if let (false, Some(media_payload), Some(mensagem_id)) =
-        (de_mim, msg_normalized.media_payload.clone(), mensagem_id)
+    // `de_mim` entra no pipeline para gravar o binário e o ponteiro (sem eles o
+    // atendente não consegue reouvir o próprio áudio), mas não é analisado:
+    // transcrever o que ele mesmo enviou custa por minuto sem ganho.
+    if let (Some(media_payload), Some(mensagem_id)) =
+        (msg_normalized.media_payload.clone(), mensagem_id)
     {
         let state_midia = state.clone();
         let raw_event = raw_event.clone();
@@ -2650,6 +2651,7 @@ async fn processar_mensagem_recebida(
                 &raw_event,
                 &causation,
                 &traceparent,
+                !de_mim,
             )
             .await;
         });
@@ -3592,6 +3594,7 @@ async fn processar_pipeline_midia(
     raw_event: &serde_json::Value,
     causation_id: &str,
     traceparent: &str,
+    analisar: bool,
 ) {
     let span = tracing::Span::current();
     // Até o ponteiro ser gravado, qualquer saída antecipada é "sem anexo".
@@ -3748,6 +3751,11 @@ async fn processar_pipeline_midia(
     // transcrição/visão neste ciclo — simplificação conhecida; providers dedicados
     // de transcrição/visão ficam para uma continuação). Resolvida ANTES do presign
     // porque o kill-switch de transcrição pode dispensar as duas etapas seguintes.
+    if !analisar {
+        anexar_analise_midia(state, &span, anexo, "", "", true).await;
+        return;
+    }
+
     let cfg_midia = match transcricao_habilitada(state, tenant_str, causation_id, traceparent).await
     {
         Ok(p) => p,
@@ -6599,6 +6607,7 @@ mod tests {
             &raw_event,
             "causation-1",
             "00-trace-pipe-01-01",
+            true,
         )
         .await;
 
@@ -6765,6 +6774,7 @@ mod tests {
             &raw_event,
             "causation-2",
             "00-trace-pipe-02-01",
+            true,
         )
         .await;
 

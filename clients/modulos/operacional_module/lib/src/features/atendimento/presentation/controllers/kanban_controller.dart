@@ -67,6 +67,10 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   /// antiga é trocada pela nova mesmo sendo o mesmo objeto.
   static const frescorDaFoto = Duration(seconds: 2880);
 
+  /// Teto do quadro inteiro. O padrão de 50 escondia as conversas mais antigas
+  /// (resolvidas) até alguém buscar por elas.
+  static const limiteDoQuadro = 1000;
+
   /// P6 (C17) — por cartão, a URL da foto que está na tela e quando ela foi
   /// obtida. Cada recarga do quadro traz uma assinatura nova; trocar a URL
   /// é baixar a imagem de novo e o avatar piscar.
@@ -358,6 +362,7 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     final res = await _listUsecase(
       ListAtendimentosParameters(
         status: '',
+        limit: limiteDoQuadro,
         busca: _busca.trim(),
         somenteMeus: _somenteMeus,
         somenteNaoLidos: _somenteNaoLidas,
