@@ -1172,13 +1172,18 @@ impl AtendimentoStore for PgAtendimentoStore {
                 .await?
             {
                 Some(a) => a,
-                None => {
-                    is_new = true;
-                    // Cria um novo atendimento
-                    repo_atendimento
-                        .criar(&mut tx, &ctx, contato.id, None, None, None)
-                        .await?
-                }
+                None => match repo_atendimento
+                    .reabrir_arquivado_recente(&mut tx, &ctx, contato.id)
+                    .await?
+                {
+                    Some(a) => a,
+                    None => {
+                        is_new = true;
+                        repo_atendimento
+                            .criar(&mut tx, &ctx, contato.id, None, None, None)
+                            .await?
+                    }
+                },
             };
 
             Ok(((contato.id, atendimento, is_new), tx))

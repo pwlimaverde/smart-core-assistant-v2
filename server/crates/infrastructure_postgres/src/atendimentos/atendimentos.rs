@@ -276,6 +276,16 @@ pub trait AtendimentoRepository: Send + Sync {
         contato_id: i32,
     ) -> Result<Option<Atendimento>, DbError>;
 
+    /// Reabre o atendimento arquivado mais recente do contato, se foi arquivado
+    /// há no máximo 7 dias. Quem volta a escrever cai na mesma conversa, e não
+    /// num card novo que o scheduler arquivaria 30 minutos depois.
+    async fn reabrir_arquivado_recente(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<Option<Atendimento>, DbError>;
+
     /// Posiciona o atendimento na etapa inicial do Kanban, atribuindo fluxo e
     /// departamento padrão quando ainda ausentes e marcando o status como 'fila'.
     /// Usado pela política de ticket/Kanban (WS-2.4).
@@ -861,6 +871,44 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                WHERE tenant_id = $1 AND contato_id = $2 
                  AND status NOT IN ('resolvido', 'cancelado', 'arquivado')
                LIMIT 1"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(contato_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+    async fn reabrir_arquivado_recente(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<Option<Atendimento>, DbError> {
+        // Query em runtime (sem macro), como as demais deste arquivo. Só troca o
+        // status: etapa, departamento e histórico ficam como estavam.
+        let row = sqlx::query_as::<_, Atendimento>(
+            r#"UPDATE oraculo_atendimento
+                  SET status = 'fila',
+                      data_fim = NULL,
+                      data_ultima_mensagem = NOW()
+                WHERE tenant_id = $1
+                  AND id = (
+                      SELECT id FROM oraculo_atendimento
+                       WHERE tenant_id = $1 AND contato_id = $2
+                         AND status = 'arquivado'
+                         AND excluido_em IS NULL
+                         AND data_fim > NOW() - INTERVAL '7 days'
+                       ORDER BY data_fim DESC
+                       LIMIT 1
+                  )
+               RETURNING id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
+                         status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
+                         assunto, prioridade, atendente_humano_id, contexto_conversa,
+                         historico_status, tags, avaliacao, feedback,
+                         data_primeira_resposta, bot_pode_atender,
+                         sentimento_nota, sentimento_label"#,
         )
         .bind(ctx.tenant_id)
         .bind(contato_id)

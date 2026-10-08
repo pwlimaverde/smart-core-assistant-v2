@@ -626,6 +626,88 @@ async fn painel_nao_abre_segundo_atendimento_para_o_mesmo_contato() {
     tx.rollback().await.unwrap();
 }
 
+/// Quem arquivou por inatividade e volta a escrever cai na mesma conversa. Sem
+/// isto, cada mensagem nova abria um card que o scheduler arquivava 30 minutos
+/// depois, e o cliente sumia da tela do atendente.
+#[tokio::test]
+async fn cliente_que_volta_reabre_o_arquivado_recente() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Reabre Arquivado").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let contato = PostgresContatoRepository
+        .salvar(&mut tx, &ctx, "5511955554444", Some("Cliente Volta"))
+        .await
+        .unwrap();
+    let antigo = PostgresAtendimentoRepository
+        .criar(&mut tx, &ctx, contato.id, None, None, None)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE oraculo_atendimento SET status = 'arquivado', data_fim = NOW() - INTERVAL '1 hour' WHERE id = $1",
+    )
+    .bind(antigo.id)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+
+    let reaberto = PostgresAtendimentoRepository
+        .reabrir_arquivado_recente(&mut tx, &ctx, contato.id)
+        .await
+        .unwrap();
+    assert_eq!(reaberto.map(|a| a.id), Some(antigo.id));
+
+    let ativo = PostgresAtendimentoRepository
+        .buscar_ativo_por_contato(&mut tx, &ctx, contato.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        ativo.map(|a| a.id),
+        Some(antigo.id),
+        "a conversa precisa voltar a ficar ativa"
+    );
+
+    tx.rollback().await.unwrap();
+}
+
+/// Arquivado há mais de 7 dias não é reaberto: a próxima mensagem abre conversa nova.
+#[tokio::test]
+async fn arquivado_antigo_nao_e_reaberto() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Arquivado Antigo").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let contato = PostgresContatoRepository
+        .salvar(&mut tx, &ctx, "5511944443333", Some("Cliente Antigo"))
+        .await
+        .unwrap();
+    let antigo = PostgresAtendimentoRepository
+        .criar(&mut tx, &ctx, contato.id, None, None, None)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE oraculo_atendimento SET status = 'arquivado', data_fim = NOW() - INTERVAL '8 days' WHERE id = $1",
+    )
+    .bind(antigo.id)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+
+    let reaberto = PostgresAtendimentoRepository
+        .reabrir_arquivado_recente(&mut tx, &ctx, contato.id)
+        .await
+        .unwrap();
+    assert!(reaberto.is_none());
+
+    tx.rollback().await.unwrap();
+}
+
 /// Exclusão definitiva (doc 39): some de todo lugar, não volta, libera o
 /// telefone para um contato novo e fica visível só na lista de excluídos.
 ///
