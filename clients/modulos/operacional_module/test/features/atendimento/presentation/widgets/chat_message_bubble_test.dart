@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/midia_mensagem.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/mensagem_thread.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/widgets/chat_message_bubble.dart';
 
@@ -254,6 +255,38 @@ void main() {
         expect(posicaoNoGrupo(enviada, pendente, null), PosicaoNoGrupo.ultima);
       },
     );
+  });
+
+  group('secoesDaAnaliseIa', () {
+    test('áudio com transcrição e resumo: Transcrição, depois Resumo', () {
+      final secoes = secoesDaAnaliseIa(
+        tipo: TipoMidia.audio,
+        transcricao: '  Quero a segunda via.  ',
+        resumo: 'Pedido de boleto',
+      );
+      expect(secoes.map((s) => s.rotulo), ['Transcrição', 'Resumo']);
+      expect(secoes.first.texto, 'Quero a segunda via.');
+    });
+
+    test('imagem nunca mostra transcrição, só descrição', () {
+      final secoes = secoesDaAnaliseIa(
+        tipo: TipoMidia.imagem,
+        transcricao: 'texto que não deveria aparecer',
+        resumo: 'Foto de um boleto vencido',
+      );
+      expect(secoes.map((s) => s.rotulo), ['Descrição']);
+    });
+
+    test('textos vazios ou só espaços não geram seção', () {
+      expect(
+        secoesDaAnaliseIa(
+          tipo: TipoMidia.audio,
+          transcricao: ' ',
+          resumo: null,
+        ),
+        isEmpty,
+      );
+    });
   });
 
   group('ChatMessageBubble agrupada (P1.1-D)', () {

@@ -207,7 +207,12 @@ jobs:
         run: |
           $sign = "/fd sha256 /f `"$env:SIGN_PFX`" /p `"$env:SIGN_PASSWORD`" /tr http://timestamp.digicert.com /td sha256"
           $notas = "release-notes.md"
-          "Smart Core Tenant ${{ steps.v.outputs.versao }} (canal ${{ steps.v.outputs.canal }})" | Out-File -Encoding utf8 $notas
+          @(
+            "Smart Core Tenant ${{ steps.v.outputs.versao }} (canal ${{ steps.v.outputs.canal }})",
+            "",
+            "Instalação: por usuário, sem administrador, em %LOCALAPPDATA%\SmartCoreTenant (ex.: C:\Users\<usuário>\AppData\Local\SmartCoreTenant).",
+            "As atualizações chegam automaticamente pelo próprio app."
+          ) | Out-File -Encoding utf8 $notas
           vpk pack `
             --packId $env:PACK_ID `
             --packVersion ${{ steps.v.outputs.versao }} `

@@ -474,6 +474,26 @@ class _IndicadorIa extends StatelessWidget {
 
 /// Bloco secundário com o resumo/análise da mídia (áudio/imagem/documento),
 /// visualmente destacado do texto principal da mensagem.
+/// Seção da análise IA: rótulo e texto já limpos.
+typedef SecaoAnaliseIa = ({String rotulo, String texto});
+
+/// Áudio mostra a transcrição e, se houver, o resumo; as demais mídias mostram
+/// só a descrição (o `resumo_midia` da imagem). Vazio não vira seção.
+List<SecaoAnaliseIa> secoesDaAnaliseIa({
+  required TipoMidia? tipo,
+  required String? transcricao,
+  required String? resumo,
+}) {
+  final texto = transcricao?.trim() ?? '';
+  final descricao = resumo?.trim() ?? '';
+  final ehAudio = tipo == TipoMidia.audio;
+  return [
+    if (ehAudio && texto.isNotEmpty) (rotulo: 'Transcrição', texto: texto),
+    if (descricao.isNotEmpty)
+      (rotulo: ehAudio ? 'Resumo' : 'Descrição', texto: descricao),
+  ];
+}
+
 class _AnaliseIa extends StatefulWidget {
   final TipoMidia? tipo;
   final String? transcricao;
@@ -500,9 +520,11 @@ class _AnaliseIaState extends State<_AnaliseIa> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final fg = widget.fg;
-    final transcricao = widget.transcricao?.trim() ?? '';
-    final resumo = widget.resumo?.trim() ?? '';
-    final ehAudio = widget.tipo == TipoMidia.audio;
+    final secoes = secoesDaAnaliseIa(
+      tipo: widget.tipo,
+      transcricao: widget.transcricao,
+      resumo: widget.resumo,
+    );
 
     return Container(
       width: double.infinity,
@@ -542,12 +564,9 @@ class _AnaliseIaState extends State<_AnaliseIa> {
               ],
             ),
           ),
-          if (_aberto) ...[
-            if (ehAudio && transcricao.isNotEmpty)
-              _secao('Transcrição', transcricao, textTheme),
-            if (resumo.isNotEmpty)
-              _secao(ehAudio ? 'Resumo' : 'Descrição', resumo, textTheme),
-          ],
+          if (_aberto)
+            for (final secao in secoes)
+              _secao(secao.rotulo, secao.texto, textTheme),
         ],
       ),
     );
