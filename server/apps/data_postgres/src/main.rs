@@ -627,8 +627,6 @@ async fn main() -> anyhow::Result<()> {
     let state_for_move_atendimento_etapa = state_clone.clone();
     let state_for_send_outbound_message = state_clone.clone();
     let state_for_listar_feedback_vencido = state_clone.clone();
-    let state_for_listar_inativos = state_clone.clone();
-    let state_for_encerrar_inatividade = state_clone.clone();
     let state_for_marcar_feedback_expirado = state_clone.clone();
     let state_for_aguardando_avaliacao = state_clone.clone();
     let state_for_registrar_avaliacao = state_clone.clone();
@@ -834,16 +832,6 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_send_outbound_message(state.atendimento.as_ref(), env).await },
             )
-        })
-        .route("ListarAtendimentosInativos", move |env| {
-            let state = state_for_listar_inativos.clone();
-            Box::pin(async move { handler_listar_inativos(state.atendimento.as_ref(), env).await })
-        })
-        .route("EncerrarAtendimentoPorInatividade", move |env| {
-            let state = state_for_encerrar_inatividade.clone();
-            Box::pin(async move {
-                handler_encerrar_por_inatividade(state.atendimento.as_ref(), env).await
-            })
         })
         .route("ListarAtendimentosFeedbackVencido", move |env| {
             let state = state_for_listar_feedback_vencido.clone();
@@ -4752,70 +4740,6 @@ async fn handler_send_outbound_message(
 /// Varredura cross-tenant (scheduler do worker, F4.3b): atendimentos com feedback vencido.
 /// `limite`/`ttl_horas` vêm do payload; sem eles, usa defaults conservadores.
 /// D5 — varredura cross-tenant das conversas paradas (scheduler).
-async fn handler_listar_inativos(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
-    };
-    let limite = payload_json
-        .get("limite")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(100);
-    let minutos_padrao = payload_json
-        .get("minutos_padrao")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(30);
-
-    let ctx = contexto_do_envelope(&env);
-    match store.listar_inativos(&ctx, limite, minutos_padrao).await {
-        Ok(list) => {
-            let itens: Vec<serde_json::Value> = list
-                .into_iter()
-                .map(|a| serde_json::json!({ "id": a.id, "tenant_id": a.tenant_id.to_string() }))
-                .collect();
-            ok_reply(
-                &env,
-                "ListarAtendimentosInativosReply",
-                serde_json::json!({ "atendimentos": itens }),
-            )
-        }
-        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
-    }
-}
-
-/// D5 — arquiva uma conversa abandonada (tenant-scoped).
-async fn handler_encerrar_por_inatividade(
-    store: &dyn ports::AtendimentoStore,
-    env: Envelope,
-) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
-    };
-    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
-        Some(id) => id as i32,
-        None => {
-            return erro(
-                error_core::AppError::Validation("atendimento_id ausente".into()),
-                &env,
-            )
-        }
-    };
-
-    let ctx = contexto_do_envelope(&env);
-    match store.encerrar_por_inatividade(&ctx, atendimento_id).await {
-        // `encerrado: false` não é erro: entre a varredura e a escrita o cliente
-        // pode ter voltado a escrever, e a recheca de status recusou. O job só
-        // não conta essa linha.
-        Ok(encerrado) => ok_reply(
-            &env,
-            "EncerrarAtendimentoPorInatividadeReply",
-            serde_json::json!({ "encerrado": encerrado }),
-        ),
-        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
-    }
-}
-
 async fn handler_listar_feedback_vencido(
     store: &dyn ports::AtendimentoStore,
     env: Envelope,

@@ -46,9 +46,6 @@ class _ConfigAvancadaFormState extends State<ConfigAvancadaForm> {
   late final _msgPesquisa = TextEditingController(
     text: widget.avancada.msgPesquisaSatisfacao,
   );
-  late final _minutos = TextEditingController(
-    text: widget.avancada.minutosInatividade?.toString() ?? '',
-  );
   late final _tipos = TextEditingController(
     text: _formatarJson(widget.avancada.tiposDeEntidadeJson),
   );
@@ -82,7 +79,6 @@ class _ConfigAvancadaFormState extends State<ConfigAvancadaForm> {
       _fuso,
       _idioma,
       _msgPesquisa,
-      _minutos,
       _tipos,
       ..._prompts.values,
     ]) {
@@ -114,11 +110,6 @@ class _ConfigAvancadaFormState extends State<ConfigAvancadaForm> {
         return (null, 'Cor $nome: use o formato #RRGGBB.');
       }
     }
-    final minutosTexto = _minutos.text.trim();
-    final minutos = minutosTexto.isEmpty ? null : int.tryParse(minutosTexto);
-    if (minutosTexto.isNotEmpty && (minutos == null || minutos < 0)) {
-      return (null, 'Inatividade: informe minutos inteiros (0 = padrão).');
-    }
     return (
       ConfigAvancada(
         tiposDeEntidadeJson: tipos,
@@ -134,7 +125,6 @@ class _ConfigAvancadaFormState extends State<ConfigAvancadaForm> {
         analisePrevia: _analisePrevia,
         pesquisaSatisfacao: _pesquisa,
         msgPesquisaSatisfacao: _msgPesquisa.text,
-        minutosInatividade: minutos,
         transcricao: _transcricao,
       ),
       null,
@@ -299,13 +289,6 @@ class _ConfigAvancadaFormState extends State<ConfigAvancadaForm> {
           AppTextField(
             label: 'Mensagem da pesquisa de satisfação',
             controller: _msgPesquisa,
-          ),
-          const SizedBox(height: 12),
-          AppTextField(
-            label: 'Encerrar conversa parada após (minutos)',
-            hint: '0 ou em branco = padrão',
-            controller: _minutos,
-            keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 24),
           Text('Tipos de entidade', style: titulo),

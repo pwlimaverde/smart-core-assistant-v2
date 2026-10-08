@@ -6,7 +6,7 @@ use sqlx::PgPool;
 
 use infrastructure_postgres::atendimentos::atendimentos::{
     status_do_tipo_etapa, status_e_fim_de_linha, tipo_etapa_do_status, Atendimento,
-    AtendimentoInativo, AtendimentoRepository, PostgresAtendimentoRepository,
+    AtendimentoRepository, PostgresAtendimentoRepository,
 };
 use infrastructure_postgres::atendimentos::campos::{
     CampoPersonalizadoRepository, PostgresCampoPersonalizadoRepository,
@@ -1660,59 +1660,6 @@ impl AtendimentoStore for PgAtendimentoStore {
                 "pesquisa_solicitada": pesquisa_solicitada,
             });
             Ok((json, tx))
-        })
-        .await
-    }
-
-    #[tracing::instrument(skip_all, fields(limite = limite, minutos_padrao = minutos_padrao))]
-    async fn listar_inativos(
-        &self,
-        ctx: &RequestContext,
-        limite: i64,
-        minutos_padrao: i64,
-    ) -> Result<Vec<AtendimentoInativo>, DbError> {
-        if self.admin_pool.is_none() {
-            tracing::warn!(
-                "listar_inativos sem DATABASE_ADMIN_URL: a RLS bloqueará a \
-                 varredura cross-tenant e a lista virá vazia"
-            );
-        }
-        let effective_pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
-        let repo = PostgresAtendimentoRepository;
-        let mut tx = effective_pool.begin().await?;
-        let rows = repo
-            .listar_inativos(&mut tx, ctx, limite, minutos_padrao)
-            .await?;
-        tx.commit().await?;
-        Ok(rows)
-    }
-
-    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
-    async fn encerrar_por_inatividade(
-        &self,
-        ctx: &RequestContext,
-        atendimento_id: i32,
-    ) -> Result<bool, DbError> {
-        let repo = PostgresAtendimentoRepository;
-        let ctx = ctx.clone();
-        let tenant_id = ctx.tenant_id;
-        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            let encerrado = repo
-                .encerrar_por_inatividade(&mut tx, &ctx, atendimento_id)
-                .await?;
-            // Só registra no histórico o que de fato mudou: a recheca de status
-            // dentro do UPDATE pode ter recusado porque o cliente voltou.
-            if encerrado {
-                repo.registrar_historico_status(
-                    &mut tx,
-                    &ctx,
-                    atendimento_id,
-                    "arquivado",
-                    "Encerrado automaticamente por inatividade",
-                )
-                .await?;
-            }
-            Ok((encerrado, tx))
         })
         .await
     }

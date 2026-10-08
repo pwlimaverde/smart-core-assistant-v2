@@ -90,17 +90,6 @@ pub fn status_e_fim_de_linha(status: &str) -> bool {
     matches!(status, "resolvido" | "cancelado" | "arquivado")
 }
 
-/// Uma conversa parada, do ponto de vista da varredura do scheduler (D5).
-///
-/// Só id e tenant: o job não precisa da linha inteira, e trazer o atendimento
-/// completo levaria junto `assunto` e `contexto_conversa` — conteúdo do cliente
-/// — para dentro de um caminho que só quer saber o que arquivar.
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct AtendimentoInativo {
-    pub id: i32,
-    pub tenant_id: Uuid,
-}
-
 #[async_trait]
 pub trait AtendimentoRepository: Send + Sync {
     async fn criar(
@@ -335,36 +324,6 @@ pub trait AtendimentoRepository: Send + Sync {
         limite: i64,
         ttl_horas: i64,
     ) -> Result<Vec<Atendimento>, DbError>;
-
-    /// D5 — conversas paradas tempo demais, prontas para arquivar.
-    ///
-    /// Cross-tenant por desenho (scheduler): exige pool com BYPASSRLS. O prazo é
-    /// resolvido por linha — cada tenant pode ter o seu, com o padrão global
-    /// como piso.
-    async fn listar_inativos(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        ctx: &RequestContext,
-        limite: i64,
-        minutos_padrao: i64,
-    ) -> Result<Vec<AtendimentoInativo>, DbError>;
-
-    /// D5 — arquiva a conversa abandonada.
-    ///
-    /// **`arquivado`, nunca `resolvido`.** Não é preciosismo de vocabulário: a
-    /// pesquisa de satisfação é disparada por
-    /// `solicitar_pesquisa_satisfacao`, que só age quando o status novo é
-    /// `resolvido`. Encerrar por inatividade como resolvido perguntaria "como
-    /// foi seu atendimento?" a quem justamente parou de responder — e ainda
-    /// contaminaria a métrica de satisfação com conversas que nunca terminaram.
-    /// A regra fica garantida pela estrutura, não por um `if` que alguém pode
-    /// remover depois.
-    async fn encerrar_por_inatividade(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        ctx: &RequestContext,
-        atendimento_id: i32,
-    ) -> Result<bool, DbError>;
 
     /// Marca o atendimento como tendo o feedback expirado (idempotente: chamada
     /// futura para o mesmo id é no-op pois `feedback_expirado_em` já estará setado
@@ -657,98 +616,6 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         .execute(&mut **tx)
         .await?;
         Ok(())
-    }
-
-    #[tracing::instrument(skip_all, fields(limite = limite, minutos_padrao = minutos_padrao))]
-    async fn listar_inativos(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        ctx: &RequestContext,
-        limite: i64,
-        minutos_padrao: i64,
-    ) -> Result<Vec<AtendimentoInativo>, DbError> {
-        ctx.exigir_qualquer(&["operacional:admin"])?;
-        // Cross-tenant por desenho (scheduler): exige pool com BYPASSRLS.
-        //
-        // Só `fila` e `pendencia`. `em_atendimento` fica de fora de propósito:
-        // uma pessoa no meio de um caso pode passar meia hora sem escrever
-        // (consultando um sistema, falando com outro setor), e ver o cartão
-        // sumir da própria tela seria pior que qualquer fila inflada.
-        //
-        // O prazo é resolvido por linha, com cascata tenant > global > 30. O
-        // filtro `value ~ '^[0-9]+$'` é o "cast que não explode": CoreSettings é
-        // texto livre, e um valor inválido cai no padrão em vez de derrubar a
-        // varredura inteira do sistema.
-        //
-        // `COALESCE(data_ultima_mensagem, data_inicio)`: conversa criada e nunca
-        // respondida tem `data_ultima_mensagem` nula e também precisa vencer —
-        // era justamente a que ficava para sempre.
-        let rows = sqlx::query_as::<_, AtendimentoInativo>(
-            r#"WITH padrao AS (
-                   SELECT COALESCE(
-                       (SELECT value::int
-                          FROM settings_manager_coresettings
-                         WHERE key = 'MINUTOS_INATIVIDADE_ENCERRA'
-                           AND value ~ '^[0-9]+$'),
-                       $1
-                   ) AS minutos
-               )
-               SELECT a.id, a.tenant_id
-                 FROM oraculo_atendimento a
-                 LEFT JOIN tenants_tenantconfig tc ON tc.tenant_id = a.tenant_id
-                 CROSS JOIN padrao p
-                WHERE a.status IN ('fila', 'pendencia')
-                  AND COALESCE(tc.minutos_inatividade_encerra, p.minutos) > 0
-                  AND COALESCE(a.data_ultima_mensagem, a.data_inicio)
-                      < NOW() - (COALESCE(tc.minutos_inatividade_encerra, p.minutos)
-                                 || ' minutes')::interval
-                  -- Cliente que escreveu e ninguém respondeu não está "parado": está
-                  -- esperando. Arquivar agora faria a conversa sumir da tela justamente
-                  -- quando alguém precisa responder.
-                  AND NOT EXISTS (
-                      SELECT 1 FROM oraculo_mensagem c
-                       WHERE c.tenant_id = a.tenant_id
-                         AND c.atendimento_id = a.id
-                         AND c.remetente = 'contato'
-                         AND c."timestamp" > COALESCE(
-                             (SELECT max(r."timestamp") FROM oraculo_mensagem r
-                               WHERE r.tenant_id = a.tenant_id
-                                 AND r.atendimento_id = a.id
-                                 AND r.remetente <> 'contato'),
-                             'epoch'::timestamptz)
-                  )
-                ORDER BY COALESCE(a.data_ultima_mensagem, a.data_inicio) ASC
-                LIMIT $2"#,
-        )
-        .bind(minutos_padrao as i32)
-        .bind(limite)
-        .fetch_all(&mut **tx)
-        .await?;
-        Ok(rows)
-    }
-
-    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
-    async fn encerrar_por_inatividade(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        ctx: &RequestContext,
-        atendimento_id: i32,
-    ) -> Result<bool, DbError> {
-        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
-        // Recheca o status no UPDATE, e não só na varredura: entre a leitura
-        // cross-tenant e esta escrita o cliente pode ter voltado a escrever. Sem
-        // a recheca, o scheduler arquivaria uma conversa que acabou de reviver.
-        let res = sqlx::query(
-            r#"UPDATE oraculo_atendimento
-                  SET status = 'arquivado', data_fim = NOW()
-                WHERE tenant_id = $1 AND id = $2
-                  AND status IN ('fila', 'pendencia')"#,
-        )
-        .bind(ctx.tenant_id)
-        .bind(atendimento_id)
-        .execute(&mut **tx)
-        .await?;
-        Ok(res.rows_affected() > 0)
     }
 
     #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, atendente_id = atendente_id))]

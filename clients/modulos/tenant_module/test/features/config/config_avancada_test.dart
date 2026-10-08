@@ -70,7 +70,6 @@ void main() {
     expect(a.analisePrevia, isTrue);
     // Não configurado = herda: `null`, e não `false`.
     expect(a.transcricao, isNull);
-    expect(a.minutosInatividade, isNull);
   });
 
   test('gravar manda os campos e esvazia os prompts retirados', () async {
@@ -87,7 +86,6 @@ void main() {
         marca: 'Eco',
         corPrimaria: '#000000',
         analisePrevia: false,
-        minutosInatividade: 30,
       ),
       promptsRemovidos: {'PROMPT_B'},
     );
@@ -108,7 +106,6 @@ void main() {
     expect(req.hasSecondaryColor(), isFalse);
     expect(req.analisePreviaHabilitada, isFalse);
     expect(req.hasTranscriptionEnabled(), isFalse);
-    expect(req.minutosInatividadeEncerra, 30);
     expect(req.entityTypesJson, '{}');
   });
 

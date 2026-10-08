@@ -54,9 +54,6 @@ final class GetMyTenantConfigDatasource
             ? resp.pesquisaSatisfacaoAtiva
             : null,
         msgPesquisaSatisfacao: resp.msgPesquisaSatisfacao,
-        minutosInatividade: resp.hasMinutosInatividadeEncerra()
-            ? resp.minutosInatividadeEncerra
-            : null,
         transcricao: resp.hasTranscriptionEnabled()
             ? resp.transcriptionEnabled
             : null,
@@ -151,7 +148,6 @@ final class UpdateConfigAvancadaDatasource
         analisePreviaHabilitada: a.analisePrevia,
         pesquisaSatisfacaoAtiva: a.pesquisaSatisfacao,
         msgPesquisaSatisfacao: a.msgPesquisaSatisfacao,
-        minutosInatividadeEncerra: a.minutosInatividade ?? 0,
         transcriptionEnabled: a.transcricao,
       ),
     );

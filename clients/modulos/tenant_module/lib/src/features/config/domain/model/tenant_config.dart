@@ -35,7 +35,7 @@ class TenantConfig {
 
   /// O que o servidor guarda e nenhuma tela editava até a paridade do MCP:
   /// prompts do negócio, tipos de entidade, marca, fuso, idioma e os
-  /// interruptores de análise, transcrição, pesquisa e inatividade.
+  /// interruptores de análise, transcrição e pesquisa.
   final ConfigAvancada avancada;
 
   const TenantConfig({
@@ -84,7 +84,6 @@ class ConfigAvancada {
   final bool? analisePrevia;
   final bool? pesquisaSatisfacao;
   final String msgPesquisaSatisfacao;
-  final int? minutosInatividade;
   final bool? transcricao;
 
   /// Valor que o sistema usa de fato (negócio, senão padrão global). Mostrado
@@ -104,7 +103,6 @@ class ConfigAvancada {
     this.analisePrevia,
     this.pesquisaSatisfacao,
     this.msgPesquisaSatisfacao = '',
-    this.minutosInatividade,
     this.transcricao,
     this.analisePreviaEfetiva,
     this.pesquisaSatisfacaoEfetiva,
