@@ -6,6 +6,7 @@ import 'package:operacional_module/src/features/atendimento/presentation/widgets
 MensagemThread _mensagem({
   bool geradoPorIa = false,
   String? resumoMidia,
+  String? analiseMidia,
   String remetente = 'bot',
 }) => MensagemThread(
   id: 1,
@@ -20,6 +21,7 @@ MensagemThread _mensagem({
   statusEnvio: 'sent',
   geradoPorIa: geradoPorIa,
   resumoMidia: resumoMidia,
+  analiseMidia: analiseMidia,
 );
 
 Future<void> _pump(WidgetTester tester, MensagemThread mensagem) =>
@@ -50,25 +52,42 @@ void main() {
       expect(find.byIcon(Icons.auto_awesome), findsOneWidget);
     });
 
-    testWidgets('sem bloco de resumo quando resumoMidia=null', (tester) async {
+    testWidgets('sem bloco de análise quando não há resumo nem transcrição', (
+      tester,
+    ) async {
       await _pump(tester, _mensagem());
 
-      expect(find.text('Resumo da mídia'), findsNothing);
+      expect(find.text('Análise IA'), findsNothing);
     });
 
-    testWidgets('renderiza o resumo da mídia quando resumoMidia != null', (
+    testWidgets('análise IA começa recolhida e abre com a descrição', (
+      tester,
+    ) async {
+      await _pump(tester, _mensagem(resumoMidia: 'Foto de um boleto vencido.'));
+
+      expect(find.text('Análise IA'), findsOneWidget);
+      expect(find.text('Foto de um boleto vencido.'), findsNothing);
+
+      await tester.tap(find.text('Análise IA'));
+      await tester.pump();
+
+      expect(find.text('Descrição'), findsOneWidget);
+      expect(find.text('Foto de um boleto vencido.'), findsOneWidget);
+    });
+
+    testWidgets('a transcrição só aparece com áudio, nunca como texto solto', (
       tester,
     ) async {
       await _pump(
         tester,
-        _mensagem(resumoMidia: 'Áudio: cliente pede segunda via do boleto.'),
+        _mensagem(analiseMidia: 'Quero a segunda via do boleto.'),
       );
 
-      expect(find.text('Resumo da mídia'), findsOneWidget);
-      expect(
-        find.text('Áudio: cliente pede segunda via do boleto.'),
-        findsOneWidget,
-      );
+      await tester.tap(find.text('Análise IA'));
+      await tester.pump();
+
+      expect(find.text('Transcrição'), findsNothing);
+      expect(find.text('Quero a segunda via do boleto.'), findsNothing);
     });
   });
   // ─── P2: ticks e citação ──────────────────────────────────────────────────

@@ -451,6 +451,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         statusEnvio: m.statusEnvio,
         geradoPorIa: m.geradoPorIa,
         resumoMidia: m.hasResumoMidia() ? m.resumoMidia : null,
+        analiseMidia: m.hasAnaliseMidia() ? m.analiseMidia : null,
         midia: m.hasMidia() ? _paraMidia(m.midia) : null,
         entregueEm: m.hasDataEntregue()
             ? DateTime.fromMillisecondsSinceEpoch(m.dataEntregue.toInt())

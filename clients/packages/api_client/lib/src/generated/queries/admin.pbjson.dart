@@ -8,8 +8,7 @@
 // ignore_for_file: constant_identifier_names
 // ignore_for_file: curly_braces_in_flow_control_structures
 // ignore_for_file: deprecated_member_use_from_same_package, library_prefixes
-// ignore_for_file: non_constant_identifier_names, prefer_relative_imports
-// ignore_for_file: unused_import
+// ignore_for_file: non_constant_identifier_names, unused_import
 
 import 'dart:convert' as $convert;
 import 'dart:core' as $core;
@@ -283,12 +282,42 @@ const GetTenantConfigResponse$json = {
       '17': true
     },
     {'1': 'motor_analise', '3': 35, '4': 1, '5': 9, '10': 'motorAnalise'},
+    {
+      '1': 'pesquisa_satisfacao_efetiva',
+      '3': 36,
+      '4': 1,
+      '5': 8,
+      '9': 4,
+      '10': 'pesquisaSatisfacaoEfetiva',
+      '17': true
+    },
+    {
+      '1': 'analise_previa_efetiva',
+      '3': 37,
+      '4': 1,
+      '5': 8,
+      '9': 5,
+      '10': 'analisePreviaEfetiva',
+      '17': true
+    },
+    {
+      '1': 'transcricao_efetiva',
+      '3': 38,
+      '4': 1,
+      '5': 8,
+      '9': 6,
+      '10': 'transcricaoEfetiva',
+      '17': true
+    },
   ],
   '8': [
     {'1': '_analise_previa_habilitada'},
     {'1': '_pesquisa_satisfacao_ativa'},
     {'1': '_minutos_inatividade_encerra'},
     {'1': '_transcription_enabled'},
+    {'1': '_pesquisa_satisfacao_efetiva'},
+    {'1': '_analise_previa_efetiva'},
+    {'1': '_transcricao_efetiva'},
   ],
 };
 
@@ -323,9 +352,14 @@ final $typed_data.Uint8List getTenantConfigResponseDescriptor = $convert.base64D
     'Z1Blc3F1aXNhU2F0aXNmYWNhbxJDChttaW51dG9zX2luYXRpdmlkYWRlX2VuY2VycmEYISABKA'
     'VIAlIZbWludXRvc0luYXRpdmlkYWRlRW5jZXJyYYgBARI4ChV0cmFuc2NyaXB0aW9uX2VuYWJs'
     'ZWQYIiABKAhIA1IUdHJhbnNjcmlwdGlvbkVuYWJsZWSIAQESIwoNbW90b3JfYW5hbGlzZRgjIA'
-    'EoCVIMbW90b3JBbmFsaXNlQhwKGl9hbmFsaXNlX3ByZXZpYV9oYWJpbGl0YWRhQhwKGl9wZXNx'
-    'dWlzYV9zYXRpc2ZhY2FvX2F0aXZhQh4KHF9taW51dG9zX2luYXRpdmlkYWRlX2VuY2VycmFCGA'
-    'oWX3RyYW5zY3JpcHRpb25fZW5hYmxlZA==');
+    'EoCVIMbW90b3JBbmFsaXNlEkMKG3Blc3F1aXNhX3NhdGlzZmFjYW9fZWZldGl2YRgkIAEoCEgE'
+    'UhlwZXNxdWlzYVNhdGlzZmFjYW9FZmV0aXZhiAEBEjkKFmFuYWxpc2VfcHJldmlhX2VmZXRpdm'
+    'EYJSABKAhIBVIUYW5hbGlzZVByZXZpYUVmZXRpdmGIAQESNAoTdHJhbnNjcmljYW9fZWZldGl2'
+    'YRgmIAEoCEgGUhJ0cmFuc2NyaWNhb0VmZXRpdmGIAQFCHAoaX2FuYWxpc2VfcHJldmlhX2hhYm'
+    'lsaXRhZGFCHAoaX3Blc3F1aXNhX3NhdGlzZmFjYW9fYXRpdmFCHgocX21pbnV0b3NfaW5hdGl2'
+    'aWRhZGVfZW5jZXJyYUIYChZfdHJhbnNjcmlwdGlvbl9lbmFibGVkQh4KHF9wZXNxdWlzYV9zYX'
+    'Rpc2ZhY2FvX2VmZXRpdmFCGQoXX2FuYWxpc2VfcHJldmlhX2VmZXRpdmFCFgoUX3RyYW5zY3Jp'
+    'Y2FvX2VmZXRpdmE=');
 
 @$core.Deprecated('Use updateTenantConfigRequestDescriptor instead')
 const UpdateTenantConfigRequest$json = {
@@ -1969,6 +2003,15 @@ const MensagemThread$json = {
       '10': 'metadadosJson',
       '17': true
     },
+    {
+      '1': 'analise_midia',
+      '3': 18,
+      '4': 1,
+      '5': 9,
+      '9': 8,
+      '10': 'analiseMidia',
+      '17': true
+    },
   ],
   '8': [
     {'1': '_resumo_midia'},
@@ -1979,6 +2022,7 @@ const MensagemThread$json = {
     {'1': '_citada_remetente'},
     {'1': '_citada_preview'},
     {'1': '_metadados_json'},
+    {'1': '_analise_midia'},
   ],
 };
 
@@ -1996,10 +2040,11 @@ final $typed_data.Uint8List mensagemThreadDescriptor = $convert.base64Decode(
     'JlbWV0ZW50ZRgOIAEoCUgFUg9jaXRhZGFSZW1ldGVudGWIAQESKgoOY2l0YWRhX3ByZXZpZXcY'
     'DyABKAlIBlINY2l0YWRhUHJldmlld4gBARJHCgdyZWFjb2VzGBAgAygLMi0uc21hcnRjb3JlLm'
     'NvbnRyYWN0cy5xdWVyaWVzLlJlYWNhb0RhTWVuc2FnZW1SB3JlYWNvZXMSKgoObWV0YWRhZG9z'
-    'X2pzb24YESABKAlIB1INbWV0YWRhZG9zSnNvbogBAUIPCg1fcmVzdW1vX21pZGlhQggKBl9taW'
-    'RpYUIQCg5fZGF0YV9lbnRyZWd1ZUIMCgpfZGF0YV9saWRhQhUKE19tZW5zYWdlbV9jaXRhZGFf'
-    'aWRCEwoRX2NpdGFkYV9yZW1ldGVudGVCEQoPX2NpdGFkYV9wcmV2aWV3QhEKD19tZXRhZGFkb3'
-    'NfanNvbg==');
+    'X2pzb24YESABKAlIB1INbWV0YWRhZG9zSnNvbogBARIoCg1hbmFsaXNlX21pZGlhGBIgASgJSA'
+    'hSDGFuYWxpc2VNaWRpYYgBAUIPCg1fcmVzdW1vX21pZGlhQggKBl9taWRpYUIQCg5fZGF0YV9l'
+    'bnRyZWd1ZUIMCgpfZGF0YV9saWRhQhUKE19tZW5zYWdlbV9jaXRhZGFfaWRCEwoRX2NpdGFkYV'
+    '9yZW1ldGVudGVCEQoPX2NpdGFkYV9wcmV2aWV3QhEKD19tZXRhZGFkb3NfanNvbkIQCg5fYW5h'
+    'bGlzZV9taWRpYQ==');
 
 @$core.Deprecated('Use reacaoDaMensagemDescriptor instead')
 const ReacaoDaMensagem$json = {
@@ -6901,3 +6946,1728 @@ const NotaResponse$json = {
 final $typed_data.Uint8List notaResponseDescriptor = $convert.base64Decode(
     'CgxOb3RhUmVzcG9uc2USNQoEbm90YRgBIAEoCzIhLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcm'
     'llcy5Ob3RhUgRub3Rh');
+
+const $core.Map<$core.String, $core.dynamic> AdminServiceBase$json = {
+  '1': 'AdminService',
+  '2': [
+    {
+      '1': 'ListCoreSettings',
+      '2': '.smartcore.contracts.queries.ListCoreSettingsRequest',
+      '3': '.smartcore.contracts.queries.ListCoreSettingsResponse'
+    },
+    {
+      '1': 'UpsertCoreSetting',
+      '2': '.smartcore.contracts.queries.UpsertCoreSettingRequest',
+      '3': '.smartcore.contracts.queries.UpsertCoreSettingResponse'
+    },
+    {
+      '1': 'DeleteCoreSetting',
+      '2': '.smartcore.contracts.queries.DeleteCoreSettingRequest',
+      '3': '.smartcore.contracts.queries.DeleteCoreSettingResponse'
+    },
+    {
+      '1': 'GetTenantConfig',
+      '2': '.smartcore.contracts.queries.GetTenantConfigRequest',
+      '3': '.smartcore.contracts.queries.GetTenantConfigResponse'
+    },
+    {
+      '1': 'UpdateTenantConfig',
+      '2': '.smartcore.contracts.queries.UpdateTenantConfigRequest',
+      '3': '.smartcore.contracts.queries.UpdateTenantConfigResponse'
+    },
+    {
+      '1': 'AdminListUsers',
+      '2': '.smartcore.contracts.queries.AdminListUsersRequest',
+      '3': '.smartcore.contracts.queries.AdminListUsersResponse'
+    },
+    {
+      '1': 'AdminSetUserActive',
+      '2': '.smartcore.contracts.queries.AdminSetUserActiveRequest',
+      '3': '.smartcore.contracts.queries.AdminSetUserActiveResponse'
+    },
+    {
+      '1': 'MigrarEscoposImplicitos',
+      '2': '.smartcore.contracts.queries.MigrarEscoposImplicitosRequest',
+      '3': '.smartcore.contracts.queries.MigrarEscoposImplicitosResponse'
+    },
+    {
+      '1': 'ListTenants',
+      '2': '.smartcore.contracts.queries.ListTenantsRequest',
+      '3': '.smartcore.contracts.queries.ListTenantsResponse'
+    },
+    {
+      '1': 'GetTenant',
+      '2': '.smartcore.contracts.queries.GetTenantRequest',
+      '3': '.smartcore.contracts.queries.GetTenantResponse'
+    },
+    {
+      '1': 'CreateTenant',
+      '2': '.smartcore.contracts.queries.CreateTenantRequest',
+      '3': '.smartcore.contracts.queries.CreateTenantResponse'
+    },
+    {
+      '1': 'UpdateTenant',
+      '2': '.smartcore.contracts.queries.UpdateTenantRequest',
+      '3': '.smartcore.contracts.queries.UpdateTenantResponse'
+    },
+    {
+      '1': 'SetTenantActive',
+      '2': '.smartcore.contracts.queries.SetTenantActiveRequest',
+      '3': '.smartcore.contracts.queries.SetTenantActiveResponse'
+    },
+    {
+      '1': 'GenerateAccessCode',
+      '2': '.smartcore.contracts.queries.GenerateAccessCodeRequest',
+      '3': '.smartcore.contracts.queries.GenerateAccessCodeResponse'
+    },
+    {
+      '1': 'ListPlans',
+      '2': '.smartcore.contracts.queries.ListPlansRequest',
+      '3': '.smartcore.contracts.queries.ListPlansResponse'
+    },
+    {
+      '1': 'CreatePlan',
+      '2': '.smartcore.contracts.queries.CreatePlanRequest',
+      '3': '.smartcore.contracts.queries.CreatePlanResponse'
+    },
+    {
+      '1': 'UpdatePlan',
+      '2': '.smartcore.contracts.queries.UpdatePlanRequest',
+      '3': '.smartcore.contracts.queries.UpdatePlanResponse'
+    },
+    {
+      '1': 'ListSubscriptions',
+      '2': '.smartcore.contracts.queries.ListSubscriptionsRequest',
+      '3': '.smartcore.contracts.queries.ListSubscriptionsResponse'
+    },
+    {
+      '1': 'RegisterPayment',
+      '2': '.smartcore.contracts.queries.RegisterPaymentRequest',
+      '3': '.smartcore.contracts.queries.RegisterPaymentResponse'
+    },
+    {
+      '1': 'ListPayments',
+      '2': '.smartcore.contracts.queries.ListPaymentsRequest',
+      '3': '.smartcore.contracts.queries.ListPaymentsResponse'
+    },
+    {
+      '1': 'ListVouchers',
+      '2': '.smartcore.contracts.queries.ListVouchersRequest',
+      '3': '.smartcore.contracts.queries.ListVouchersResponse'
+    },
+    {
+      '1': 'CreateVoucher',
+      '2': '.smartcore.contracts.queries.CreateVoucherRequest',
+      '3': '.smartcore.contracts.queries.CreateVoucherResponse'
+    },
+    {
+      '1': 'RevokeVoucher',
+      '2': '.smartcore.contracts.queries.RevokeVoucherRequest',
+      '3': '.smartcore.contracts.queries.RevokeVoucherResponse'
+    },
+    {
+      '1': 'ListVoucherRedemptions',
+      '2': '.smartcore.contracts.queries.ListVoucherRedemptionsRequest',
+      '3': '.smartcore.contracts.queries.ListVoucherRedemptionsResponse'
+    },
+    {
+      '1': 'TestEvolutionConnection',
+      '2': '.smartcore.contracts.queries.TestEvolutionConnectionRequest',
+      '3': '.smartcore.contracts.queries.TestEvolutionConnectionResponse'
+    },
+    {
+      '1': 'TestarProvedorIa',
+      '2': '.smartcore.contracts.queries.TestarProvedorIaRequest',
+      '3': '.smartcore.contracts.queries.TestarProvedorIaResponse'
+    },
+    {
+      '1': 'ListFeatureFlags',
+      '2': '.smartcore.contracts.queries.ListFeatureFlagsRequest',
+      '3': '.smartcore.contracts.queries.ListFeatureFlagsResponse'
+    },
+    {
+      '1': 'SetFeatureFlag',
+      '2': '.smartcore.contracts.queries.SetFeatureFlagRequest',
+      '3': '.smartcore.contracts.queries.SetFeatureFlagResponse'
+    },
+    {
+      '1': 'SetFeatureFlagOverride',
+      '2': '.smartcore.contracts.queries.SetFeatureFlagOverrideRequest',
+      '3': '.smartcore.contracts.queries.SetFeatureFlagOverrideResponse'
+    },
+    {
+      '1': 'QueryAuditLog',
+      '2': '.smartcore.contracts.queries.QueryAuditLogRequest',
+      '3': '.smartcore.contracts.queries.QueryAuditLogResponse'
+    },
+    {
+      '1': 'GetServiceHealth',
+      '2': '.smartcore.contracts.queries.GetServiceHealthRequest',
+      '3': '.smartcore.contracts.queries.GetServiceHealthResponse'
+    },
+    {
+      '1': 'GetDashboardSummary',
+      '2': '.smartcore.contracts.queries.GetDashboardSummaryRequest',
+      '3': '.smartcore.contracts.queries.GetDashboardSummaryResponse'
+    },
+    {
+      '1': 'ExportTenantsCsv',
+      '2': '.smartcore.contracts.queries.ExportTenantsCsvRequest',
+      '3': '.smartcore.contracts.queries.ExportTenantsCsvResponse',
+      '6': true
+    },
+    {
+      '1': 'StreamAtendimentos',
+      '2': '.smartcore.contracts.queries.StreamAtendimentosRequest',
+      '3': '.smartcore.contracts.queries.AtendimentoEvent',
+      '6': true
+    },
+    {
+      '1': 'ListAtendimentos',
+      '2': '.smartcore.contracts.queries.ListAtendimentosRequest',
+      '3': '.smartcore.contracts.queries.ListAtendimentosResponse'
+    },
+    {
+      '1': 'GetThread',
+      '2': '.smartcore.contracts.queries.GetThreadRequest',
+      '3': '.smartcore.contracts.queries.GetThreadResponse'
+    },
+    {
+      '1': 'IniciarAtendimentoManual',
+      '2': '.smartcore.contracts.queries.IniciarAtendimentoManualRequest',
+      '3': '.smartcore.contracts.queries.IniciarAtendimentoManualResponse'
+    },
+    {
+      '1': 'MoveAtendimentoEtapa',
+      '2': '.smartcore.contracts.queries.MoveAtendimentoEtapaRequest',
+      '3': '.smartcore.contracts.queries.MoveAtendimentoEtapaResponse'
+    },
+    {
+      '1': 'SetAtendimentoStatus',
+      '2': '.smartcore.contracts.queries.SetAtendimentoStatusRequest',
+      '3': '.smartcore.contracts.queries.SetAtendimentoStatusResponse'
+    },
+    {
+      '1': 'GetDetalheAtendimento',
+      '2': '.smartcore.contracts.queries.AtendimentoIdRequest',
+      '3': '.smartcore.contracts.queries.DetalheAtendimentoResponse'
+    },
+    {
+      '1': 'CreateEtiqueta',
+      '2': '.smartcore.contracts.queries.CreateEtiquetaRequest',
+      '3': '.smartcore.contracts.queries.EtiquetaResponse'
+    },
+    {
+      '1': 'AlternarEtiqueta',
+      '2': '.smartcore.contracts.queries.AlternarEtiquetaRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'CreateNota',
+      '2': '.smartcore.contracts.queries.CreateNotaRequest',
+      '3': '.smartcore.contracts.queries.NotaResponse'
+    },
+    {
+      '1': 'SendOutboundMessage',
+      '2': '.smartcore.contracts.queries.SendOutboundMessageRequest',
+      '3': '.smartcore.contracts.queries.SendOutboundMessageResponse'
+    },
+    {
+      '1': 'SolicitarUploadMidia',
+      '2': '.smartcore.contracts.queries.SolicitarUploadMidiaRequest',
+      '3': '.smartcore.contracts.queries.SolicitarUploadMidiaResponse'
+    },
+    {
+      '1': 'EnviarMidiaAtendimento',
+      '2': '.smartcore.contracts.queries.EnviarMidiaAtendimentoRequest',
+      '3': '.smartcore.contracts.queries.EnviarMidiaAtendimentoResponse'
+    },
+    {
+      '1': 'ListarMidiasAtendimento',
+      '2': '.smartcore.contracts.queries.ListarMidiasAtendimentoRequest',
+      '3': '.smartcore.contracts.queries.ListarMidiasAtendimentoResponse'
+    },
+    {
+      '1': 'EnviarPresenca',
+      '2': '.smartcore.contracts.queries.EnviarPresencaRequest',
+      '3': '.smartcore.contracts.queries.EnviarPresencaResponse'
+    },
+    {
+      '1': 'ListarTimelineAtendimento',
+      '2': '.smartcore.contracts.queries.ListarTimelineRequest',
+      '3': '.smartcore.contracts.queries.ListarTimelineResponse'
+    },
+    {
+      '1': 'ListarAtendimentosDoContato',
+      '2': '.smartcore.contracts.queries.ListarAtendimentosDoContatoRequest',
+      '3': '.smartcore.contracts.queries.ListarAtendimentosDoContatoResponse'
+    },
+    {
+      '1': 'RemoverNota',
+      '2': '.smartcore.contracts.queries.RemoverNotaRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'UpdateEtiqueta',
+      '2': '.smartcore.contracts.queries.UpdateEtiquetaRequest',
+      '3': '.smartcore.contracts.queries.EtiquetaResponse'
+    },
+    {
+      '1': 'DesativarEtiqueta',
+      '2': '.smartcore.contracts.queries.DesativarEtiquetaRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'AtribuirAtendimento',
+      '2': '.smartcore.contracts.queries.AtribuirAtendimentoRequest',
+      '3': '.smartcore.contracts.queries.AtribuirAtendimentoResponse'
+    },
+    {
+      '1': 'DefinirPrioridade',
+      '2': '.smartcore.contracts.queries.DefinirPrioridadeRequest',
+      '3': '.smartcore.contracts.queries.DefinirPrioridadeResponse'
+    },
+    {
+      '1': 'TransferirParaFluxo',
+      '2': '.smartcore.contracts.queries.TransferirParaFluxoRequest',
+      '3': '.smartcore.contracts.queries.TransferirParaFluxoResponse'
+    },
+    {
+      '1': 'ExportarQuadro',
+      '2': '.smartcore.contracts.queries.ExportarQuadroRequest',
+      '3': '.smartcore.contracts.queries.ExportarQuadroResponse'
+    },
+    {
+      '1': 'CreateInvite',
+      '2': '.smartcore.contracts.queries.CreateInviteRequest',
+      '3': '.smartcore.contracts.queries.CreateInviteResponse'
+    },
+    {
+      '1': 'AcceptInvite',
+      '2': '.smartcore.contracts.queries.AcceptInviteRequest',
+      '3': '.smartcore.contracts.queries.AcceptInviteResponse'
+    },
+    {
+      '1': 'ListInvites',
+      '2': '.smartcore.contracts.queries.ListInvitesRequest',
+      '3': '.smartcore.contracts.queries.ListInvitesResponse'
+    },
+    {
+      '1': 'RevokeInvite',
+      '2': '.smartcore.contracts.queries.RevokeInviteRequest',
+      '3': '.smartcore.contracts.queries.RevokeInviteResponse'
+    },
+    {
+      '1': 'ReenviarConvite',
+      '2': '.smartcore.contracts.queries.ReenviarConviteRequest',
+      '3': '.smartcore.contracts.queries.ReenviarConviteResponse'
+    },
+    {
+      '1': 'ListTenantUsers',
+      '2': '.smartcore.contracts.queries.ListTenantUsersRequest',
+      '3': '.smartcore.contracts.queries.ListTenantUsersResponse'
+    },
+    {
+      '1': 'UpdateTenantUser',
+      '2': '.smartcore.contracts.queries.UpdateTenantUserRequest',
+      '3': '.smartcore.contracts.queries.UpdateTenantUserResponse'
+    },
+    {
+      '1': 'GetMyTenantConfig',
+      '2': '.smartcore.contracts.queries.GetMyTenantConfigRequest',
+      '3': '.smartcore.contracts.queries.GetTenantConfigResponse'
+    },
+    {
+      '1': 'UpdateMyTenantConfig',
+      '2': '.smartcore.contracts.queries.UpdateMyTenantConfigRequest',
+      '3': '.smartcore.contracts.queries.UpdateTenantConfigResponse'
+    },
+    {
+      '1': 'UpdateMyConfigAvancada',
+      '2': '.smartcore.contracts.queries.UpdateMyConfigAvancadaRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMcpGrants',
+      '2': '.smartcore.contracts.queries.ListMcpGrantsRequest',
+      '3': '.smartcore.contracts.queries.ListMcpGrantsResponse'
+    },
+    {
+      '1': 'RevokeMcpGrant',
+      '2': '.smartcore.contracts.queries.RevokeMcpGrantRequest',
+      '3': '.smartcore.contracts.queries.RevokeMcpGrantResponse'
+    },
+    {
+      '1': 'AjustarEscoposMcpGrant',
+      '2': '.smartcore.contracts.queries.AjustarEscoposMcpGrantRequest',
+      '3': '.smartcore.contracts.queries.AjustarEscoposMcpGrantResponse'
+    },
+    {
+      '1': 'ListMyAuditLog',
+      '2': '.smartcore.contracts.queries.ListMyAuditLogRequest',
+      '3': '.smartcore.contracts.queries.ListMyAuditLogResponse'
+    },
+    {
+      '1': 'CreateMyWhatsappInstance',
+      '2': '.smartcore.contracts.queries.CreateMyWhatsappInstanceRequest',
+      '3': '.smartcore.contracts.queries.CreateMyWhatsappInstanceResponse'
+    },
+    {
+      '1': 'GetMyWhatsappInstanceStatus',
+      '2': '.smartcore.contracts.queries.GetMyWhatsappInstanceStatusRequest',
+      '3': '.smartcore.contracts.queries.GetMyWhatsappInstanceStatusResponse'
+    },
+    {
+      '1': 'CreateMyDepartamento',
+      '2': '.smartcore.contracts.queries.CreateMyDepartamentoRequest',
+      '3': '.smartcore.contracts.queries.CreateMyDepartamentoResponse'
+    },
+    {
+      '1': 'SetMyBotPersona',
+      '2': '.smartcore.contracts.queries.SetMyBotPersonaRequest',
+      '3': '.smartcore.contracts.queries.SetMyBotPersonaResponse'
+    },
+    {
+      '1': 'SetOnboardingProgress',
+      '2': '.smartcore.contracts.queries.SetOnboardingProgressRequest',
+      '3': '.smartcore.contracts.queries.SetOnboardingProgressResponse'
+    },
+    {
+      '1': 'GetMyOnboardingProgress',
+      '2': '.smartcore.contracts.queries.GetMyOnboardingProgressRequest',
+      '3': '.smartcore.contracts.queries.GetMyOnboardingProgressResponse'
+    },
+    {
+      '1': 'QuitarMinhaAssinatura',
+      '2': '.smartcore.contracts.queries.QuitarMinhaAssinaturaRequest',
+      '3': '.smartcore.contracts.queries.QuitarMinhaAssinaturaResponse'
+    },
+    {
+      '1': 'CreateMyTreinamento',
+      '2': '.smartcore.contracts.queries.CreateMyTreinamentoRequest',
+      '3': '.smartcore.contracts.queries.MyTreinamentoResponse'
+    },
+    {
+      '1': 'ListMyTreinamentos',
+      '2': '.smartcore.contracts.queries.ListMyTreinamentosRequest',
+      '3': '.smartcore.contracts.queries.ListMyTreinamentosResponse'
+    },
+    {
+      '1': 'ListMyIntents',
+      '2': '.smartcore.contracts.queries.ListMyIntentsRequest',
+      '3': '.smartcore.contracts.queries.ListMyIntentsResponse'
+    },
+    {
+      '1': 'CreateMyIntent',
+      '2': '.smartcore.contracts.queries.MyIntentDados',
+      '3': '.smartcore.contracts.queries.MyIntentResponse'
+    },
+    {
+      '1': 'UpdateMyIntent',
+      '2': '.smartcore.contracts.queries.UpdateMyIntentRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'RemoveMyIntent',
+      '2': '.smartcore.contracts.queries.MyIntentIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'TestarPergunta',
+      '2': '.smartcore.contracts.queries.TestarPerguntaRequest',
+      '3': '.smartcore.contracts.queries.TestarPerguntaResponse'
+    },
+    {
+      '1': 'SolicitarUploadTreinamento',
+      '2': '.smartcore.contracts.queries.SolicitarUploadTreinamentoRequest',
+      '3': '.smartcore.contracts.queries.SolicitarUploadTreinamentoResponse'
+    },
+    {
+      '1': 'CreateMyTreinamentoComArquivo',
+      '2': '.smartcore.contracts.queries.CreateMyTreinamentoComArquivoRequest',
+      '3': '.smartcore.contracts.queries.MyTreinamentoResponse'
+    },
+    {
+      '1': 'RegistrarFeedbackTeste',
+      '2': '.smartcore.contracts.queries.RegistrarFeedbackTesteRequest',
+      '3': '.smartcore.contracts.queries.RegistrarFeedbackTesteResponse'
+    },
+    {
+      '1': 'ListMyAvaliacoesDeTeste',
+      '2': '.smartcore.contracts.queries.ListMyAvaliacoesDeTesteRequest',
+      '3': '.smartcore.contracts.queries.ListMyAvaliacoesDeTesteResponse'
+    },
+    {
+      '1': 'MarcarAvaliacaoTratada',
+      '2': '.smartcore.contracts.queries.MarcarAvaliacaoTratadaRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'GetMyTreinamento',
+      '2': '.smartcore.contracts.queries.GetMyTreinamentoRequest',
+      '3': '.smartcore.contracts.queries.MyTreinamentoResponse'
+    },
+    {
+      '1': 'FinalizarMyTreinamento',
+      '2': '.smartcore.contracts.queries.FinalizarMyTreinamentoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'RemoverMyTreinamento',
+      '2': '.smartcore.contracts.queries.RemoverMyTreinamentoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMyWhatsappInstances',
+      '2': '.smartcore.contracts.queries.ListMyWhatsappInstancesRequest',
+      '3': '.smartcore.contracts.queries.ListMyWhatsappInstancesResponse'
+    },
+    {
+      '1': 'DefinirRespostaBotInstancia',
+      '2': '.smartcore.contracts.queries.DefinirRespostaBotInstanciaRequest',
+      '3': '.smartcore.contracts.queries.DefinirRespostaBotInstanciaResponse'
+    },
+    {
+      '1': 'DefinirBotDaConversa',
+      '2': '.smartcore.contracts.queries.DefinirBotDaConversaRequest',
+      '3': '.smartcore.contracts.queries.DefinirBotDaConversaResponse'
+    },
+    {
+      '1': 'MarcarAtendimentoLido',
+      '2': '.smartcore.contracts.queries.MarcarAtendimentoLidoRequest',
+      '3': '.smartcore.contracts.queries.MarcarAtendimentoLidoResponse'
+    },
+    {
+      '1': 'ReconnectMyWhatsappInstance',
+      '2': '.smartcore.contracts.queries.MyWhatsappInstanceIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DeleteMyWhatsappInstance',
+      '2': '.smartcore.contracts.queries.MyWhatsappInstanceIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DesconectarMyWhatsappInstance',
+      '2': '.smartcore.contracts.queries.MyWhatsappInstanceIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ObterContatoDoAtendimento',
+      '2': '.smartcore.contracts.queries.ObterContatoDoAtendimentoRequest',
+      '3': '.smartcore.contracts.queries.ObterContatoDoAtendimentoResponse'
+    },
+    {
+      '1': 'MarcarRevisado',
+      '2': '.smartcore.contracts.queries.MarcarRevisadoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'GetVersaoDoApp',
+      '2': '.smartcore.contracts.queries.GetVersaoDoAppRequest',
+      '3': '.smartcore.contracts.queries.GetVersaoDoAppResponse'
+    },
+    {
+      '1': 'GetWindowsDownloadLink',
+      '2': '.smartcore.contracts.queries.GetWindowsDownloadLinkRequest',
+      '3': '.smartcore.contracts.queries.GetWindowsDownloadLinkResponse'
+    },
+    {
+      '1': 'DefinirDepartamentoDaConexao',
+      '2': '.smartcore.contracts.queries.DefinirDepartamentoDaConexaoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DetalheDaConexao',
+      '2': '.smartcore.contracts.queries.DetalheDaConexaoRequest',
+      '3': '.smartcore.contracts.queries.DetalheDaConexaoResponse'
+    },
+    {
+      '1': 'ListMyMensagensNaoEntregues',
+      '2': '.smartcore.contracts.queries.ListMyMensagensNaoEntreguesRequest',
+      '3': '.smartcore.contracts.queries.ListMyMensagensNaoEntreguesResponse'
+    },
+    {
+      '1': 'ReenviarMensagemNaoEntregue',
+      '2': '.smartcore.contracts.queries.ReenviarMensagemNaoEntregueRequest',
+      '3': '.smartcore.contracts.queries.ReenviarMensagemNaoEntregueResponse'
+    },
+    {
+      '1': 'ListMyNumerosIgnorados',
+      '2': '.smartcore.contracts.queries.ListMyNumerosIgnoradosRequest',
+      '3': '.smartcore.contracts.queries.ListMyNumerosIgnoradosResponse'
+    },
+    {
+      '1': 'CriarNumeroIgnorado',
+      '2': '.smartcore.contracts.queries.CriarNumeroIgnoradoRequest',
+      '3': '.smartcore.contracts.queries.MyNumeroIgnoradoResponse'
+    },
+    {
+      '1': 'AtualizarNumeroIgnorado',
+      '2': '.smartcore.contracts.queries.AtualizarNumeroIgnoradoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'RemoverNumeroIgnorado',
+      '2': '.smartcore.contracts.queries.NumeroIgnoradoIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMyDepartamentos',
+      '2': '.smartcore.contracts.queries.ListMyDepartamentosRequest',
+      '3': '.smartcore.contracts.queries.ListMyDepartamentosResponse'
+    },
+    {
+      '1': 'UpdateMyDepartamento',
+      '2': '.smartcore.contracts.queries.UpdateMyDepartamentoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DesativarMyDepartamento',
+      '2': '.smartcore.contracts.queries.MyDepartamentoIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMyAtendentes',
+      '2': '.smartcore.contracts.queries.ListMyAtendentesRequest',
+      '3': '.smartcore.contracts.queries.ListMyAtendentesResponse'
+    },
+    {
+      '1': 'CreateMyAtendente',
+      '2': '.smartcore.contracts.queries.CreateMyAtendenteRequest',
+      '3': '.smartcore.contracts.queries.MyAtendenteResponse'
+    },
+    {
+      '1': 'UpdateMyAtendente',
+      '2': '.smartcore.contracts.queries.UpdateMyAtendenteRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DesativarMyAtendente',
+      '2': '.smartcore.contracts.queries.MyAtendenteIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'GetMyPainel',
+      '2': '.smartcore.contracts.queries.GetMyPainelRequest',
+      '3': '.smartcore.contracts.queries.GetMyPainelResponse'
+    },
+    {
+      '1': 'ListMyContatos',
+      '2': '.smartcore.contracts.queries.ListMyContatosRequest',
+      '3': '.smartcore.contracts.queries.ListMyContatosResponse'
+    },
+    {
+      '1': 'CreateMyContato',
+      '2': '.smartcore.contracts.queries.CreateMyContatoRequest',
+      '3': '.smartcore.contracts.queries.MyContatoResponse'
+    },
+    {
+      '1': 'UpdateMyContato',
+      '2': '.smartcore.contracts.queries.UpdateMyContatoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DefinirMyContatoAtivo',
+      '2': '.smartcore.contracts.queries.DefinirMyContatoAtivoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ExcluirMyItem',
+      '2': '.smartcore.contracts.queries.ExcluirMyItemRequest',
+      '3': '.smartcore.contracts.queries.ExcluirMyItemResponse'
+    },
+    {
+      '1': 'DefinirMyItemAtivo',
+      '2': '.smartcore.contracts.queries.DefinirMyItemAtivoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMyExcluidos',
+      '2': '.smartcore.contracts.queries.ListMyExcluidosRequest',
+      '3': '.smartcore.contracts.queries.ListMyExcluidosResponse'
+    },
+    {
+      '1': 'ListMyClientes',
+      '2': '.smartcore.contracts.queries.ListMyClientesRequest',
+      '3': '.smartcore.contracts.queries.ListMyClientesResponse'
+    },
+    {
+      '1': 'CreateMyCliente',
+      '2': '.smartcore.contracts.queries.CreateMyClienteRequest',
+      '3': '.smartcore.contracts.queries.MyClienteResponse'
+    },
+    {
+      '1': 'UpdateMyCliente',
+      '2': '.smartcore.contracts.queries.UpdateMyClienteRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DefinirMyClienteAtivo',
+      '2': '.smartcore.contracts.queries.DefinirMyClienteAtivoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMyContatosDoCliente',
+      '2': '.smartcore.contracts.queries.MyClienteIdRequest',
+      '3': '.smartcore.contracts.queries.ListMyContatosDoClienteResponse'
+    },
+    {
+      '1': 'VincularMyContatoCliente',
+      '2': '.smartcore.contracts.queries.VincularMyContatoClienteRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMyCampos',
+      '2': '.smartcore.contracts.queries.ListMyCamposRequest',
+      '3': '.smartcore.contracts.queries.ListMyCamposResponse'
+    },
+    {
+      '1': 'CreateMyCampo',
+      '2': '.smartcore.contracts.queries.CreateMyCampoRequest',
+      '3': '.smartcore.contracts.queries.MyCampoResponse'
+    },
+    {
+      '1': 'UpdateMyCampo',
+      '2': '.smartcore.contracts.queries.UpdateMyCampoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DesativarMyCampo',
+      '2': '.smartcore.contracts.queries.MyCampoIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'SetMyValorCampo',
+      '2': '.smartcore.contracts.queries.SetMyValorCampoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMyFluxos',
+      '2': '.smartcore.contracts.queries.ListMyFluxosRequest',
+      '3': '.smartcore.contracts.queries.ListMyFluxosResponse'
+    },
+    {
+      '1': 'CreateMyFluxo',
+      '2': '.smartcore.contracts.queries.CreateMyFluxoRequest',
+      '3': '.smartcore.contracts.queries.MyFluxoResponse'
+    },
+    {
+      '1': 'UpdateMyFluxo',
+      '2': '.smartcore.contracts.queries.UpdateMyFluxoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DesativarMyFluxo',
+      '2': '.smartcore.contracts.queries.MyFluxoIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMyEtapasFluxo',
+      '2': '.smartcore.contracts.queries.MyFluxoIdRequest',
+      '3': '.smartcore.contracts.queries.ListMyEtapasFluxoResponse'
+    },
+    {
+      '1': 'CreateMyEtapaFluxo',
+      '2': '.smartcore.contracts.queries.CreateMyEtapaFluxoRequest',
+      '3': '.smartcore.contracts.queries.MyEtapaFluxoResponse'
+    },
+    {
+      '1': 'UpdateMyEtapaFluxo',
+      '2': '.smartcore.contracts.queries.UpdateMyEtapaFluxoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'DesativarMyEtapaFluxo',
+      '2': '.smartcore.contracts.queries.MyEtapaFluxoIdRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'MoverMyEtapaFluxo',
+      '2': '.smartcore.contracts.queries.MoverMyEtapaFluxoRequest',
+      '3': '.smartcore.contracts.queries.SimpleOkResponse'
+    },
+    {
+      '1': 'ListMyRegrasTransferencia',
+      '2': '.smartcore.contracts.queries.ListMyRegrasTransferenciaRequest',
+      '3': '.smartcore.contracts.queries.ListMyRegrasTransferenciaResponse'
+    },
+    {
+      '1': 'SalvarMyRegraTransferencia',
+      '2': '.smartcore.contracts.queries.SalvarMyRegraTransferenciaRequest',
+      '3': '.smartcore.contracts.queries.SalvarMyRegraTransferenciaResponse'
+    },
+    {
+      '1': 'SetMyRegraTransferenciaAtiva',
+      '2': '.smartcore.contracts.queries.SetMyRegraTransferenciaAtivaRequest',
+      '3': '.smartcore.contracts.queries.SetMyRegraTransferenciaAtivaResponse'
+    },
+    {
+      '1': 'GetMyConfigTransferencia',
+      '2': '.smartcore.contracts.queries.GetMyConfigTransferenciaRequest',
+      '3': '.smartcore.contracts.queries.ConfigTransferenciaResponse'
+    },
+    {
+      '1': 'SetMySinaisTransferencia',
+      '2': '.smartcore.contracts.queries.SetMySinaisTransferenciaRequest',
+      '3': '.smartcore.contracts.queries.ConfigTransferenciaResponse'
+    },
+    {
+      '1': 'ListMyTransferencias',
+      '2': '.smartcore.contracts.queries.ListMyTransferenciasRequest',
+      '3': '.smartcore.contracts.queries.ListMyTransferenciasResponse'
+    },
+    {
+      '1': 'TestarMyRegraTransferencia',
+      '2': '.smartcore.contracts.queries.TestarMyRegraTransferenciaRequest',
+      '3': '.smartcore.contracts.queries.TestarMyRegraTransferenciaResponse'
+    },
+    {
+      '1': 'GerarMySugestoesTransferencia',
+      '2': '.smartcore.contracts.queries.GerarMySugestoesTransferenciaRequest',
+      '3': '.smartcore.contracts.queries.GerarMySugestoesTransferenciaResponse'
+    },
+    {
+      '1': 'DefinirMotorTenant',
+      '2': '.smartcore.contracts.queries.DefinirMotorTenantRequest',
+      '3': '.smartcore.contracts.queries.DefinirMotorTenantResponse'
+    },
+  ],
+};
+
+@$core.Deprecated('Use adminServiceDescriptor instead')
+const $core.Map<$core.String, $core.Map<$core.String, $core.dynamic>>
+    AdminServiceBase$messageJson = {
+  '.smartcore.contracts.queries.ListCoreSettingsRequest':
+      ListCoreSettingsRequest$json,
+  '.smartcore.contracts.queries.ListCoreSettingsResponse':
+      ListCoreSettingsResponse$json,
+  '.smartcore.contracts.queries.CoreSetting': CoreSetting$json,
+  '.smartcore.contracts.queries.UpsertCoreSettingRequest':
+      UpsertCoreSettingRequest$json,
+  '.smartcore.contracts.queries.UpsertCoreSettingResponse':
+      UpsertCoreSettingResponse$json,
+  '.smartcore.contracts.queries.DeleteCoreSettingRequest':
+      DeleteCoreSettingRequest$json,
+  '.smartcore.contracts.queries.DeleteCoreSettingResponse':
+      DeleteCoreSettingResponse$json,
+  '.smartcore.contracts.queries.GetTenantConfigRequest':
+      GetTenantConfigRequest$json,
+  '.smartcore.contracts.queries.GetTenantConfigResponse':
+      GetTenantConfigResponse$json,
+  '.smartcore.contracts.queries.ApiKeyEntry': ApiKeyEntry$json,
+  '.smartcore.contracts.queries.PromptDoTenant': PromptDoTenant$json,
+  '.smartcore.contracts.queries.UpdateTenantConfigRequest':
+      UpdateTenantConfigRequest$json,
+  '.smartcore.contracts.queries.UpdateTenantConfigResponse':
+      UpdateTenantConfigResponse$json,
+  '.smartcore.contracts.queries.AdminListUsersRequest':
+      AdminListUsersRequest$json,
+  '.smartcore.contracts.queries.AdminListUsersResponse':
+      AdminListUsersResponse$json,
+  '.smartcore.contracts.queries.AdminUserItem': AdminUserItem$json,
+  '.smartcore.contracts.queries.AdminSetUserActiveRequest':
+      AdminSetUserActiveRequest$json,
+  '.smartcore.contracts.queries.AdminSetUserActiveResponse':
+      AdminSetUserActiveResponse$json,
+  '.smartcore.contracts.queries.MigrarEscoposImplicitosRequest':
+      MigrarEscoposImplicitosRequest$json,
+  '.smartcore.contracts.queries.MigrarEscoposImplicitosResponse':
+      MigrarEscoposImplicitosResponse$json,
+  '.smartcore.contracts.queries.ContagemDeMigracao': ContagemDeMigracao$json,
+  '.smartcore.contracts.queries.ListTenantsRequest': ListTenantsRequest$json,
+  '.smartcore.contracts.queries.ListTenantsResponse': ListTenantsResponse$json,
+  '.smartcore.contracts.queries.Tenant': Tenant$json,
+  '.smartcore.contracts.queries.GetTenantRequest': GetTenantRequest$json,
+  '.smartcore.contracts.queries.GetTenantResponse': GetTenantResponse$json,
+  '.smartcore.contracts.queries.CreateTenantRequest': CreateTenantRequest$json,
+  '.smartcore.contracts.queries.CreateTenantResponse':
+      CreateTenantResponse$json,
+  '.smartcore.contracts.queries.UpdateTenantRequest': UpdateTenantRequest$json,
+  '.smartcore.contracts.queries.UpdateTenantResponse':
+      UpdateTenantResponse$json,
+  '.smartcore.contracts.queries.SetTenantActiveRequest':
+      SetTenantActiveRequest$json,
+  '.smartcore.contracts.queries.SetTenantActiveResponse':
+      SetTenantActiveResponse$json,
+  '.smartcore.contracts.queries.GenerateAccessCodeRequest':
+      GenerateAccessCodeRequest$json,
+  '.smartcore.contracts.queries.GenerateAccessCodeResponse':
+      GenerateAccessCodeResponse$json,
+  '.smartcore.contracts.queries.ListPlansRequest': ListPlansRequest$json,
+  '.smartcore.contracts.queries.ListPlansResponse': ListPlansResponse$json,
+  '.smartcore.contracts.queries.Plan': Plan$json,
+  '.smartcore.contracts.queries.CreatePlanRequest': CreatePlanRequest$json,
+  '.smartcore.contracts.queries.CreatePlanResponse': CreatePlanResponse$json,
+  '.smartcore.contracts.queries.UpdatePlanRequest': UpdatePlanRequest$json,
+  '.smartcore.contracts.queries.UpdatePlanResponse': UpdatePlanResponse$json,
+  '.smartcore.contracts.queries.ListSubscriptionsRequest':
+      ListSubscriptionsRequest$json,
+  '.smartcore.contracts.queries.ListSubscriptionsResponse':
+      ListSubscriptionsResponse$json,
+  '.smartcore.contracts.queries.Subscription': Subscription$json,
+  '.smartcore.contracts.queries.RegisterPaymentRequest':
+      RegisterPaymentRequest$json,
+  '.smartcore.contracts.queries.RegisterPaymentResponse':
+      RegisterPaymentResponse$json,
+  '.smartcore.contracts.queries.PaymentRecord': PaymentRecord$json,
+  '.smartcore.contracts.queries.ListPaymentsRequest': ListPaymentsRequest$json,
+  '.smartcore.contracts.queries.ListPaymentsResponse':
+      ListPaymentsResponse$json,
+  '.smartcore.contracts.queries.ListVouchersRequest': ListVouchersRequest$json,
+  '.smartcore.contracts.queries.ListVouchersResponse':
+      ListVouchersResponse$json,
+  '.smartcore.contracts.queries.Voucher': Voucher$json,
+  '.smartcore.contracts.queries.CreateVoucherRequest':
+      CreateVoucherRequest$json,
+  '.smartcore.contracts.queries.CreateVoucherResponse':
+      CreateVoucherResponse$json,
+  '.smartcore.contracts.queries.RevokeVoucherRequest':
+      RevokeVoucherRequest$json,
+  '.smartcore.contracts.queries.RevokeVoucherResponse':
+      RevokeVoucherResponse$json,
+  '.smartcore.contracts.queries.ListVoucherRedemptionsRequest':
+      ListVoucherRedemptionsRequest$json,
+  '.smartcore.contracts.queries.ListVoucherRedemptionsResponse':
+      ListVoucherRedemptionsResponse$json,
+  '.smartcore.contracts.queries.VoucherRedemption': VoucherRedemption$json,
+  '.smartcore.contracts.queries.TestEvolutionConnectionRequest':
+      TestEvolutionConnectionRequest$json,
+  '.smartcore.contracts.queries.TestEvolutionConnectionResponse':
+      TestEvolutionConnectionResponse$json,
+  '.smartcore.contracts.queries.TestarProvedorIaRequest':
+      TestarProvedorIaRequest$json,
+  '.smartcore.contracts.queries.TestarProvedorIaResponse':
+      TestarProvedorIaResponse$json,
+  '.smartcore.contracts.queries.ListFeatureFlagsRequest':
+      ListFeatureFlagsRequest$json,
+  '.smartcore.contracts.queries.ListFeatureFlagsResponse':
+      ListFeatureFlagsResponse$json,
+  '.smartcore.contracts.queries.FeatureFlag': FeatureFlag$json,
+  '.smartcore.contracts.queries.FeatureFlagOverride': FeatureFlagOverride$json,
+  '.smartcore.contracts.queries.SetFeatureFlagRequest':
+      SetFeatureFlagRequest$json,
+  '.smartcore.contracts.queries.SetFeatureFlagResponse':
+      SetFeatureFlagResponse$json,
+  '.smartcore.contracts.queries.SetFeatureFlagOverrideRequest':
+      SetFeatureFlagOverrideRequest$json,
+  '.smartcore.contracts.queries.SetFeatureFlagOverrideResponse':
+      SetFeatureFlagOverrideResponse$json,
+  '.smartcore.contracts.queries.QueryAuditLogRequest':
+      QueryAuditLogRequest$json,
+  '.smartcore.contracts.queries.QueryAuditLogResponse':
+      QueryAuditLogResponse$json,
+  '.smartcore.contracts.queries.AuditLogEntry': AuditLogEntry$json,
+  '.smartcore.contracts.queries.GetServiceHealthRequest':
+      GetServiceHealthRequest$json,
+  '.smartcore.contracts.queries.GetServiceHealthResponse':
+      GetServiceHealthResponse$json,
+  '.smartcore.contracts.queries.ServiceHealth': ServiceHealth$json,
+  '.smartcore.contracts.queries.GetDashboardSummaryRequest':
+      GetDashboardSummaryRequest$json,
+  '.smartcore.contracts.queries.GetDashboardSummaryResponse':
+      GetDashboardSummaryResponse$json,
+  '.smartcore.contracts.queries.ExportTenantsCsvRequest':
+      ExportTenantsCsvRequest$json,
+  '.smartcore.contracts.queries.ExportTenantsCsvResponse':
+      ExportTenantsCsvResponse$json,
+  '.smartcore.contracts.queries.StreamAtendimentosRequest':
+      StreamAtendimentosRequest$json,
+  '.smartcore.contracts.queries.AtendimentoEvent': AtendimentoEvent$json,
+  '.smartcore.contracts.queries.ListAtendimentosRequest':
+      ListAtendimentosRequest$json,
+  '.smartcore.contracts.queries.ListAtendimentosResponse':
+      ListAtendimentosResponse$json,
+  '.smartcore.contracts.queries.AtendimentoResumo': AtendimentoResumo$json,
+  '.smartcore.contracts.queries.GetThreadRequest': GetThreadRequest$json,
+  '.smartcore.contracts.queries.GetThreadResponse': GetThreadResponse$json,
+  '.smartcore.contracts.queries.MensagemThread': MensagemThread$json,
+  '.smartcore.contracts.queries.MidiaMensagem': MidiaMensagem$json,
+  '.smartcore.contracts.queries.ReacaoDaMensagem': ReacaoDaMensagem$json,
+  '.smartcore.contracts.queries.IniciarAtendimentoManualRequest':
+      IniciarAtendimentoManualRequest$json,
+  '.smartcore.contracts.queries.IniciarAtendimentoManualResponse':
+      IniciarAtendimentoManualResponse$json,
+  '.smartcore.contracts.queries.MoveAtendimentoEtapaRequest':
+      MoveAtendimentoEtapaRequest$json,
+  '.smartcore.contracts.queries.MoveAtendimentoEtapaResponse':
+      MoveAtendimentoEtapaResponse$json,
+  '.smartcore.contracts.queries.SetAtendimentoStatusRequest':
+      SetAtendimentoStatusRequest$json,
+  '.smartcore.contracts.queries.SetAtendimentoStatusResponse':
+      SetAtendimentoStatusResponse$json,
+  '.smartcore.contracts.queries.AtendimentoIdRequest':
+      AtendimentoIdRequest$json,
+  '.smartcore.contracts.queries.DetalheAtendimentoResponse':
+      DetalheAtendimentoResponse$json,
+  '.smartcore.contracts.queries.Etiqueta': Etiqueta$json,
+  '.smartcore.contracts.queries.Nota': Nota$json,
+  '.smartcore.contracts.queries.ValorCampoDoAtendimento':
+      ValorCampoDoAtendimento$json,
+  '.smartcore.contracts.queries.OpcaoCampo': OpcaoCampo$json,
+  '.smartcore.contracts.queries.DadoDoContato': DadoDoContato$json,
+  '.smartcore.contracts.queries.AnaliseDaConversa': AnaliseDaConversa$json,
+  '.smartcore.contracts.queries.IntencaoDaConversa': IntencaoDaConversa$json,
+  '.smartcore.contracts.queries.EntidadeDaConversa': EntidadeDaConversa$json,
+  '.smartcore.contracts.queries.DecisaoDaConversa': DecisaoDaConversa$json,
+  '.smartcore.contracts.queries.CreateEtiquetaRequest':
+      CreateEtiquetaRequest$json,
+  '.smartcore.contracts.queries.EtiquetaResponse': EtiquetaResponse$json,
+  '.smartcore.contracts.queries.AlternarEtiquetaRequest':
+      AlternarEtiquetaRequest$json,
+  '.smartcore.contracts.queries.SimpleOkResponse': SimpleOkResponse$json,
+  '.smartcore.contracts.queries.CreateNotaRequest': CreateNotaRequest$json,
+  '.smartcore.contracts.queries.NotaResponse': NotaResponse$json,
+  '.smartcore.contracts.queries.SendOutboundMessageRequest':
+      SendOutboundMessageRequest$json,
+  '.smartcore.contracts.queries.SendOutboundMessageResponse':
+      SendOutboundMessageResponse$json,
+  '.smartcore.contracts.queries.SolicitarUploadMidiaRequest':
+      SolicitarUploadMidiaRequest$json,
+  '.smartcore.contracts.queries.SolicitarUploadMidiaResponse':
+      SolicitarUploadMidiaResponse$json,
+  '.smartcore.contracts.queries.EnviarMidiaAtendimentoRequest':
+      EnviarMidiaAtendimentoRequest$json,
+  '.smartcore.contracts.queries.EnviarMidiaAtendimentoResponse':
+      EnviarMidiaAtendimentoResponse$json,
+  '.smartcore.contracts.queries.ListarMidiasAtendimentoRequest':
+      ListarMidiasAtendimentoRequest$json,
+  '.smartcore.contracts.queries.ListarMidiasAtendimentoResponse':
+      ListarMidiasAtendimentoResponse$json,
+  '.smartcore.contracts.queries.EnviarPresencaRequest':
+      EnviarPresencaRequest$json,
+  '.smartcore.contracts.queries.EnviarPresencaResponse':
+      EnviarPresencaResponse$json,
+  '.smartcore.contracts.queries.ListarTimelineRequest':
+      ListarTimelineRequest$json,
+  '.smartcore.contracts.queries.ListarTimelineResponse':
+      ListarTimelineResponse$json,
+  '.smartcore.contracts.queries.EventoDaTimeline': EventoDaTimeline$json,
+  '.smartcore.contracts.queries.ListarAtendimentosDoContatoRequest':
+      ListarAtendimentosDoContatoRequest$json,
+  '.smartcore.contracts.queries.ListarAtendimentosDoContatoResponse':
+      ListarAtendimentosDoContatoResponse$json,
+  '.smartcore.contracts.queries.RemoverNotaRequest': RemoverNotaRequest$json,
+  '.smartcore.contracts.queries.UpdateEtiquetaRequest':
+      UpdateEtiquetaRequest$json,
+  '.smartcore.contracts.queries.DesativarEtiquetaRequest':
+      DesativarEtiquetaRequest$json,
+  '.smartcore.contracts.queries.AtribuirAtendimentoRequest':
+      AtribuirAtendimentoRequest$json,
+  '.smartcore.contracts.queries.AtribuirAtendimentoResponse':
+      AtribuirAtendimentoResponse$json,
+  '.smartcore.contracts.queries.DefinirPrioridadeRequest':
+      DefinirPrioridadeRequest$json,
+  '.smartcore.contracts.queries.DefinirPrioridadeResponse':
+      DefinirPrioridadeResponse$json,
+  '.smartcore.contracts.queries.TransferirParaFluxoRequest':
+      TransferirParaFluxoRequest$json,
+  '.smartcore.contracts.queries.TransferirParaFluxoResponse':
+      TransferirParaFluxoResponse$json,
+  '.smartcore.contracts.queries.ExportarQuadroRequest':
+      ExportarQuadroRequest$json,
+  '.smartcore.contracts.queries.ExportarQuadroResponse':
+      ExportarQuadroResponse$json,
+  '.smartcore.contracts.queries.CreateInviteRequest': CreateInviteRequest$json,
+  '.smartcore.contracts.queries.CreateInviteResponse':
+      CreateInviteResponse$json,
+  '.smartcore.contracts.queries.TenantInviteCreated': TenantInviteCreated$json,
+  '.smartcore.contracts.queries.AcceptInviteRequest': AcceptInviteRequest$json,
+  '.smartcore.contracts.queries.AcceptInviteResponse':
+      AcceptInviteResponse$json,
+  '.smartcore.contracts.queries.AcceptedTenantUser': AcceptedTenantUser$json,
+  '.smartcore.contracts.queries.ListInvitesRequest': ListInvitesRequest$json,
+  '.smartcore.contracts.queries.ListInvitesResponse': ListInvitesResponse$json,
+  '.smartcore.contracts.queries.TenantInviteItem': TenantInviteItem$json,
+  '.smartcore.contracts.queries.RevokeInviteRequest': RevokeInviteRequest$json,
+  '.smartcore.contracts.queries.RevokeInviteResponse':
+      RevokeInviteResponse$json,
+  '.smartcore.contracts.queries.ReenviarConviteRequest':
+      ReenviarConviteRequest$json,
+  '.smartcore.contracts.queries.ReenviarConviteResponse':
+      ReenviarConviteResponse$json,
+  '.smartcore.contracts.queries.ListTenantUsersRequest':
+      ListTenantUsersRequest$json,
+  '.smartcore.contracts.queries.ListTenantUsersResponse':
+      ListTenantUsersResponse$json,
+  '.smartcore.contracts.queries.TenantUserItem': TenantUserItem$json,
+  '.smartcore.contracts.queries.UpdateTenantUserRequest':
+      UpdateTenantUserRequest$json,
+  '.smartcore.contracts.queries.UpdateTenantUserResponse':
+      UpdateTenantUserResponse$json,
+  '.smartcore.contracts.queries.GetMyTenantConfigRequest':
+      GetMyTenantConfigRequest$json,
+  '.smartcore.contracts.queries.UpdateMyTenantConfigRequest':
+      UpdateMyTenantConfigRequest$json,
+  '.smartcore.contracts.queries.UpdateMyConfigAvancadaRequest':
+      UpdateMyConfigAvancadaRequest$json,
+  '.smartcore.contracts.queries.ListMcpGrantsRequest':
+      ListMcpGrantsRequest$json,
+  '.smartcore.contracts.queries.ListMcpGrantsResponse':
+      ListMcpGrantsResponse$json,
+  '.smartcore.contracts.queries.McpGrantItem': McpGrantItem$json,
+  '.smartcore.contracts.queries.RevokeMcpGrantRequest':
+      RevokeMcpGrantRequest$json,
+  '.smartcore.contracts.queries.RevokeMcpGrantResponse':
+      RevokeMcpGrantResponse$json,
+  '.smartcore.contracts.queries.AjustarEscoposMcpGrantRequest':
+      AjustarEscoposMcpGrantRequest$json,
+  '.smartcore.contracts.queries.AjustarEscoposMcpGrantResponse':
+      AjustarEscoposMcpGrantResponse$json,
+  '.smartcore.contracts.queries.ListMyAuditLogRequest':
+      ListMyAuditLogRequest$json,
+  '.smartcore.contracts.queries.ListMyAuditLogResponse':
+      ListMyAuditLogResponse$json,
+  '.smartcore.contracts.queries.MyAuditLogEntry': MyAuditLogEntry$json,
+  '.smartcore.contracts.queries.CreateMyWhatsappInstanceRequest':
+      CreateMyWhatsappInstanceRequest$json,
+  '.smartcore.contracts.queries.CreateMyWhatsappInstanceResponse':
+      CreateMyWhatsappInstanceResponse$json,
+  '.smartcore.contracts.queries.GetMyWhatsappInstanceStatusRequest':
+      GetMyWhatsappInstanceStatusRequest$json,
+  '.smartcore.contracts.queries.GetMyWhatsappInstanceStatusResponse':
+      GetMyWhatsappInstanceStatusResponse$json,
+  '.smartcore.contracts.queries.CreateMyDepartamentoRequest':
+      CreateMyDepartamentoRequest$json,
+  '.smartcore.contracts.queries.CreateMyDepartamentoResponse':
+      CreateMyDepartamentoResponse$json,
+  '.smartcore.contracts.queries.SetMyBotPersonaRequest':
+      SetMyBotPersonaRequest$json,
+  '.smartcore.contracts.queries.SetMyBotPersonaResponse':
+      SetMyBotPersonaResponse$json,
+  '.smartcore.contracts.queries.SetOnboardingProgressRequest':
+      SetOnboardingProgressRequest$json,
+  '.smartcore.contracts.queries.SetOnboardingProgressResponse':
+      SetOnboardingProgressResponse$json,
+  '.smartcore.contracts.queries.GetMyOnboardingProgressRequest':
+      GetMyOnboardingProgressRequest$json,
+  '.smartcore.contracts.queries.GetMyOnboardingProgressResponse':
+      GetMyOnboardingProgressResponse$json,
+  '.smartcore.contracts.queries.QuitarMinhaAssinaturaRequest':
+      QuitarMinhaAssinaturaRequest$json,
+  '.smartcore.contracts.queries.QuitarMinhaAssinaturaResponse':
+      QuitarMinhaAssinaturaResponse$json,
+  '.smartcore.contracts.queries.CreateMyTreinamentoRequest':
+      CreateMyTreinamentoRequest$json,
+  '.smartcore.contracts.queries.MyTreinamentoResponse':
+      MyTreinamentoResponse$json,
+  '.smartcore.contracts.queries.MyTreinamento': MyTreinamento$json,
+  '.smartcore.contracts.queries.ListMyTreinamentosRequest':
+      ListMyTreinamentosRequest$json,
+  '.smartcore.contracts.queries.ListMyTreinamentosResponse':
+      ListMyTreinamentosResponse$json,
+  '.smartcore.contracts.queries.ListMyIntentsRequest':
+      ListMyIntentsRequest$json,
+  '.smartcore.contracts.queries.ListMyIntentsResponse':
+      ListMyIntentsResponse$json,
+  '.smartcore.contracts.queries.MyIntent': MyIntent$json,
+  '.smartcore.contracts.queries.MyIntentDados': MyIntentDados$json,
+  '.smartcore.contracts.queries.MyIntentResponse': MyIntentResponse$json,
+  '.smartcore.contracts.queries.UpdateMyIntentRequest':
+      UpdateMyIntentRequest$json,
+  '.smartcore.contracts.queries.MyIntentIdRequest': MyIntentIdRequest$json,
+  '.smartcore.contracts.queries.TestarPerguntaRequest':
+      TestarPerguntaRequest$json,
+  '.smartcore.contracts.queries.TestarPerguntaResponse':
+      TestarPerguntaResponse$json,
+  '.smartcore.contracts.queries.TrechoUsado': TrechoUsado$json,
+  '.smartcore.contracts.queries.SinalValor': SinalValor$json,
+  '.smartcore.contracts.queries.EtapaDoMotor': EtapaDoMotor$json,
+  '.smartcore.contracts.queries.SolicitarUploadTreinamentoRequest':
+      SolicitarUploadTreinamentoRequest$json,
+  '.smartcore.contracts.queries.SolicitarUploadTreinamentoResponse':
+      SolicitarUploadTreinamentoResponse$json,
+  '.smartcore.contracts.queries.CreateMyTreinamentoComArquivoRequest':
+      CreateMyTreinamentoComArquivoRequest$json,
+  '.smartcore.contracts.queries.RegistrarFeedbackTesteRequest':
+      RegistrarFeedbackTesteRequest$json,
+  '.smartcore.contracts.queries.RegistrarFeedbackTesteResponse':
+      RegistrarFeedbackTesteResponse$json,
+  '.smartcore.contracts.queries.ListMyAvaliacoesDeTesteRequest':
+      ListMyAvaliacoesDeTesteRequest$json,
+  '.smartcore.contracts.queries.ListMyAvaliacoesDeTesteResponse':
+      ListMyAvaliacoesDeTesteResponse$json,
+  '.smartcore.contracts.queries.AvaliacaoDeTeste': AvaliacaoDeTeste$json,
+  '.smartcore.contracts.queries.MarcarAvaliacaoTratadaRequest':
+      MarcarAvaliacaoTratadaRequest$json,
+  '.smartcore.contracts.queries.GetMyTreinamentoRequest':
+      GetMyTreinamentoRequest$json,
+  '.smartcore.contracts.queries.FinalizarMyTreinamentoRequest':
+      FinalizarMyTreinamentoRequest$json,
+  '.smartcore.contracts.queries.RemoverMyTreinamentoRequest':
+      RemoverMyTreinamentoRequest$json,
+  '.smartcore.contracts.queries.ListMyWhatsappInstancesRequest':
+      ListMyWhatsappInstancesRequest$json,
+  '.smartcore.contracts.queries.ListMyWhatsappInstancesResponse':
+      ListMyWhatsappInstancesResponse$json,
+  '.smartcore.contracts.queries.MyWhatsappInstance': MyWhatsappInstance$json,
+  '.smartcore.contracts.queries.DefinirRespostaBotInstanciaRequest':
+      DefinirRespostaBotInstanciaRequest$json,
+  '.smartcore.contracts.queries.DefinirRespostaBotInstanciaResponse':
+      DefinirRespostaBotInstanciaResponse$json,
+  '.smartcore.contracts.queries.DefinirBotDaConversaRequest':
+      DefinirBotDaConversaRequest$json,
+  '.smartcore.contracts.queries.DefinirBotDaConversaResponse':
+      DefinirBotDaConversaResponse$json,
+  '.smartcore.contracts.queries.MarcarAtendimentoLidoRequest':
+      MarcarAtendimentoLidoRequest$json,
+  '.smartcore.contracts.queries.MarcarAtendimentoLidoResponse':
+      MarcarAtendimentoLidoResponse$json,
+  '.smartcore.contracts.queries.MyWhatsappInstanceIdRequest':
+      MyWhatsappInstanceIdRequest$json,
+  '.smartcore.contracts.queries.ObterContatoDoAtendimentoRequest':
+      ObterContatoDoAtendimentoRequest$json,
+  '.smartcore.contracts.queries.ObterContatoDoAtendimentoResponse':
+      ObterContatoDoAtendimentoResponse$json,
+  '.smartcore.contracts.queries.MarcarRevisadoRequest':
+      MarcarRevisadoRequest$json,
+  '.smartcore.contracts.queries.GetVersaoDoAppRequest':
+      GetVersaoDoAppRequest$json,
+  '.smartcore.contracts.queries.GetVersaoDoAppResponse':
+      GetVersaoDoAppResponse$json,
+  '.smartcore.contracts.queries.GetWindowsDownloadLinkRequest':
+      GetWindowsDownloadLinkRequest$json,
+  '.smartcore.contracts.queries.GetWindowsDownloadLinkResponse':
+      GetWindowsDownloadLinkResponse$json,
+  '.smartcore.contracts.queries.DefinirDepartamentoDaConexaoRequest':
+      DefinirDepartamentoDaConexaoRequest$json,
+  '.smartcore.contracts.queries.DetalheDaConexaoRequest':
+      DetalheDaConexaoRequest$json,
+  '.smartcore.contracts.queries.DetalheDaConexaoResponse':
+      DetalheDaConexaoResponse$json,
+  '.smartcore.contracts.queries.ListMyMensagensNaoEntreguesRequest':
+      ListMyMensagensNaoEntreguesRequest$json,
+  '.smartcore.contracts.queries.ListMyMensagensNaoEntreguesResponse':
+      ListMyMensagensNaoEntreguesResponse$json,
+  '.smartcore.contracts.queries.MensagemNaoEntregue': MensagemNaoEntregue$json,
+  '.smartcore.contracts.queries.ReenviarMensagemNaoEntregueRequest':
+      ReenviarMensagemNaoEntregueRequest$json,
+  '.smartcore.contracts.queries.ReenviarMensagemNaoEntregueResponse':
+      ReenviarMensagemNaoEntregueResponse$json,
+  '.smartcore.contracts.queries.ListMyNumerosIgnoradosRequest':
+      ListMyNumerosIgnoradosRequest$json,
+  '.smartcore.contracts.queries.ListMyNumerosIgnoradosResponse':
+      ListMyNumerosIgnoradosResponse$json,
+  '.smartcore.contracts.queries.MyNumeroIgnorado': MyNumeroIgnorado$json,
+  '.smartcore.contracts.queries.CriarNumeroIgnoradoRequest':
+      CriarNumeroIgnoradoRequest$json,
+  '.smartcore.contracts.queries.MyNumeroIgnoradoResponse':
+      MyNumeroIgnoradoResponse$json,
+  '.smartcore.contracts.queries.AtualizarNumeroIgnoradoRequest':
+      AtualizarNumeroIgnoradoRequest$json,
+  '.smartcore.contracts.queries.NumeroIgnoradoIdRequest':
+      NumeroIgnoradoIdRequest$json,
+  '.smartcore.contracts.queries.ListMyDepartamentosRequest':
+      ListMyDepartamentosRequest$json,
+  '.smartcore.contracts.queries.ListMyDepartamentosResponse':
+      ListMyDepartamentosResponse$json,
+  '.smartcore.contracts.queries.MyDepartamento': MyDepartamento$json,
+  '.smartcore.contracts.queries.UpdateMyDepartamentoRequest':
+      UpdateMyDepartamentoRequest$json,
+  '.smartcore.contracts.queries.MyDepartamentoIdRequest':
+      MyDepartamentoIdRequest$json,
+  '.smartcore.contracts.queries.ListMyAtendentesRequest':
+      ListMyAtendentesRequest$json,
+  '.smartcore.contracts.queries.ListMyAtendentesResponse':
+      ListMyAtendentesResponse$json,
+  '.smartcore.contracts.queries.MyAtendente': MyAtendente$json,
+  '.smartcore.contracts.queries.CreateMyAtendenteRequest':
+      CreateMyAtendenteRequest$json,
+  '.smartcore.contracts.queries.MyAtendenteResponse': MyAtendenteResponse$json,
+  '.smartcore.contracts.queries.UpdateMyAtendenteRequest':
+      UpdateMyAtendenteRequest$json,
+  '.smartcore.contracts.queries.MyAtendenteIdRequest':
+      MyAtendenteIdRequest$json,
+  '.smartcore.contracts.queries.GetMyPainelRequest': GetMyPainelRequest$json,
+  '.smartcore.contracts.queries.GetMyPainelResponse': GetMyPainelResponse$json,
+  '.smartcore.contracts.queries.ListMyContatosRequest':
+      ListMyContatosRequest$json,
+  '.smartcore.contracts.queries.ListMyContatosResponse':
+      ListMyContatosResponse$json,
+  '.smartcore.contracts.queries.MyContato': MyContato$json,
+  '.smartcore.contracts.queries.CreateMyContatoRequest':
+      CreateMyContatoRequest$json,
+  '.smartcore.contracts.queries.MyContatoResponse': MyContatoResponse$json,
+  '.smartcore.contracts.queries.UpdateMyContatoRequest':
+      UpdateMyContatoRequest$json,
+  '.smartcore.contracts.queries.DefinirMyContatoAtivoRequest':
+      DefinirMyContatoAtivoRequest$json,
+  '.smartcore.contracts.queries.ExcluirMyItemRequest':
+      ExcluirMyItemRequest$json,
+  '.smartcore.contracts.queries.ExcluirMyItemResponse':
+      ExcluirMyItemResponse$json,
+  '.smartcore.contracts.queries.DefinirMyItemAtivoRequest':
+      DefinirMyItemAtivoRequest$json,
+  '.smartcore.contracts.queries.ListMyExcluidosRequest':
+      ListMyExcluidosRequest$json,
+  '.smartcore.contracts.queries.ListMyExcluidosResponse':
+      ListMyExcluidosResponse$json,
+  '.smartcore.contracts.queries.ItemExcluido': ItemExcluido$json,
+  '.smartcore.contracts.queries.ListMyClientesRequest':
+      ListMyClientesRequest$json,
+  '.smartcore.contracts.queries.ListMyClientesResponse':
+      ListMyClientesResponse$json,
+  '.smartcore.contracts.queries.MyCliente': MyCliente$json,
+  '.smartcore.contracts.queries.DadosMyCliente': DadosMyCliente$json,
+  '.smartcore.contracts.queries.CreateMyClienteRequest':
+      CreateMyClienteRequest$json,
+  '.smartcore.contracts.queries.MyClienteResponse': MyClienteResponse$json,
+  '.smartcore.contracts.queries.UpdateMyClienteRequest':
+      UpdateMyClienteRequest$json,
+  '.smartcore.contracts.queries.DefinirMyClienteAtivoRequest':
+      DefinirMyClienteAtivoRequest$json,
+  '.smartcore.contracts.queries.MyClienteIdRequest': MyClienteIdRequest$json,
+  '.smartcore.contracts.queries.ListMyContatosDoClienteResponse':
+      ListMyContatosDoClienteResponse$json,
+  '.smartcore.contracts.queries.ContatoDoCliente': ContatoDoCliente$json,
+  '.smartcore.contracts.queries.VincularMyContatoClienteRequest':
+      VincularMyContatoClienteRequest$json,
+  '.smartcore.contracts.queries.ListMyCamposRequest': ListMyCamposRequest$json,
+  '.smartcore.contracts.queries.ListMyCamposResponse':
+      ListMyCamposResponse$json,
+  '.smartcore.contracts.queries.MyCampoPersonalizado':
+      MyCampoPersonalizado$json,
+  '.smartcore.contracts.queries.CreateMyCampoRequest':
+      CreateMyCampoRequest$json,
+  '.smartcore.contracts.queries.MyCampoResponse': MyCampoResponse$json,
+  '.smartcore.contracts.queries.UpdateMyCampoRequest':
+      UpdateMyCampoRequest$json,
+  '.smartcore.contracts.queries.MyCampoIdRequest': MyCampoIdRequest$json,
+  '.smartcore.contracts.queries.SetMyValorCampoRequest':
+      SetMyValorCampoRequest$json,
+  '.smartcore.contracts.queries.ListMyFluxosRequest': ListMyFluxosRequest$json,
+  '.smartcore.contracts.queries.ListMyFluxosResponse':
+      ListMyFluxosResponse$json,
+  '.smartcore.contracts.queries.MyFluxo': MyFluxo$json,
+  '.smartcore.contracts.queries.CreateMyFluxoRequest':
+      CreateMyFluxoRequest$json,
+  '.smartcore.contracts.queries.MyFluxoResponse': MyFluxoResponse$json,
+  '.smartcore.contracts.queries.UpdateMyFluxoRequest':
+      UpdateMyFluxoRequest$json,
+  '.smartcore.contracts.queries.MyFluxoIdRequest': MyFluxoIdRequest$json,
+  '.smartcore.contracts.queries.ListMyEtapasFluxoResponse':
+      ListMyEtapasFluxoResponse$json,
+  '.smartcore.contracts.queries.MyEtapaFluxo': MyEtapaFluxo$json,
+  '.smartcore.contracts.queries.CreateMyEtapaFluxoRequest':
+      CreateMyEtapaFluxoRequest$json,
+  '.smartcore.contracts.queries.MyEtapaFluxoResponse':
+      MyEtapaFluxoResponse$json,
+  '.smartcore.contracts.queries.UpdateMyEtapaFluxoRequest':
+      UpdateMyEtapaFluxoRequest$json,
+  '.smartcore.contracts.queries.MyEtapaFluxoIdRequest':
+      MyEtapaFluxoIdRequest$json,
+  '.smartcore.contracts.queries.MoverMyEtapaFluxoRequest':
+      MoverMyEtapaFluxoRequest$json,
+  '.smartcore.contracts.queries.ListMyRegrasTransferenciaRequest':
+      ListMyRegrasTransferenciaRequest$json,
+  '.smartcore.contracts.queries.ListMyRegrasTransferenciaResponse':
+      ListMyRegrasTransferenciaResponse$json,
+  '.smartcore.contracts.queries.RegraTransferencia': RegraTransferencia$json,
+  '.smartcore.contracts.queries.SalvarMyRegraTransferenciaRequest':
+      SalvarMyRegraTransferenciaRequest$json,
+  '.smartcore.contracts.queries.SalvarMyRegraTransferenciaResponse':
+      SalvarMyRegraTransferenciaResponse$json,
+  '.smartcore.contracts.queries.SetMyRegraTransferenciaAtivaRequest':
+      SetMyRegraTransferenciaAtivaRequest$json,
+  '.smartcore.contracts.queries.SetMyRegraTransferenciaAtivaResponse':
+      SetMyRegraTransferenciaAtivaResponse$json,
+  '.smartcore.contracts.queries.GetMyConfigTransferenciaRequest':
+      GetMyConfigTransferenciaRequest$json,
+  '.smartcore.contracts.queries.ConfigTransferenciaResponse':
+      ConfigTransferenciaResponse$json,
+  '.smartcore.contracts.queries.ConfigTransferencia': ConfigTransferencia$json,
+  '.smartcore.contracts.queries.SinalTransferencia': SinalTransferencia$json,
+  '.smartcore.contracts.queries.SetMySinaisTransferenciaRequest':
+      SetMySinaisTransferenciaRequest$json,
+  '.smartcore.contracts.queries.ListMyTransferenciasRequest':
+      ListMyTransferenciasRequest$json,
+  '.smartcore.contracts.queries.ListMyTransferenciasResponse':
+      ListMyTransferenciasResponse$json,
+  '.smartcore.contracts.queries.TransferenciaIa': TransferenciaIa$json,
+  '.smartcore.contracts.queries.TestarMyRegraTransferenciaRequest':
+      TestarMyRegraTransferenciaRequest$json,
+  '.smartcore.contracts.queries.TestarMyRegraTransferenciaResponse':
+      TestarMyRegraTransferenciaResponse$json,
+  '.smartcore.contracts.queries.GerarMySugestoesTransferenciaRequest':
+      GerarMySugestoesTransferenciaRequest$json,
+  '.smartcore.contracts.queries.GerarMySugestoesTransferenciaResponse':
+      GerarMySugestoesTransferenciaResponse$json,
+  '.smartcore.contracts.queries.DefinirMotorTenantRequest':
+      DefinirMotorTenantRequest$json,
+  '.smartcore.contracts.queries.DefinirMotorTenantResponse':
+      DefinirMotorTenantResponse$json,
+};
+
+/// Descriptor for `AdminService`. Decode as a `google.protobuf.ServiceDescriptorProto`.
+final $typed_data.Uint8List adminServiceDescriptor = $convert.base64Decode(
+    'CgxBZG1pblNlcnZpY2USfwoQTGlzdENvcmVTZXR0aW5ncxI0LnNtYXJ0Y29yZS5jb250cmFjdH'
+    'MucXVlcmllcy5MaXN0Q29yZVNldHRpbmdzUmVxdWVzdBo1LnNtYXJ0Y29yZS5jb250cmFjdHMu'
+    'cXVlcmllcy5MaXN0Q29yZVNldHRpbmdzUmVzcG9uc2USggEKEVVwc2VydENvcmVTZXR0aW5nEj'
+    'Uuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlVwc2VydENvcmVTZXR0aW5nUmVxdWVzdBo2'
+    'LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5VcHNlcnRDb3JlU2V0dGluZ1Jlc3BvbnNlEo'
+    'IBChFEZWxldGVDb3JlU2V0dGluZxI1LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5EZWxl'
+    'dGVDb3JlU2V0dGluZ1JlcXVlc3QaNi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRGVsZX'
+    'RlQ29yZVNldHRpbmdSZXNwb25zZRJ8Cg9HZXRUZW5hbnRDb25maWcSMy5zbWFydGNvcmUuY29u'
+    'dHJhY3RzLnF1ZXJpZXMuR2V0VGVuYW50Q29uZmlnUmVxdWVzdBo0LnNtYXJ0Y29yZS5jb250cm'
+    'FjdHMucXVlcmllcy5HZXRUZW5hbnRDb25maWdSZXNwb25zZRKFAQoSVXBkYXRlVGVuYW50Q29u'
+    'ZmlnEjYuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlVwZGF0ZVRlbmFudENvbmZpZ1JlcX'
+    'Vlc3QaNy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuVXBkYXRlVGVuYW50Q29uZmlnUmVz'
+    'cG9uc2USeQoOQWRtaW5MaXN0VXNlcnMSMi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuQW'
+    'RtaW5MaXN0VXNlcnNSZXF1ZXN0GjMuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkFkbWlu'
+    'TGlzdFVzZXJzUmVzcG9uc2UShQEKEkFkbWluU2V0VXNlckFjdGl2ZRI2LnNtYXJ0Y29yZS5jb2'
+    '50cmFjdHMucXVlcmllcy5BZG1pblNldFVzZXJBY3RpdmVSZXF1ZXN0Gjcuc21hcnRjb3JlLmNv'
+    'bnRyYWN0cy5xdWVyaWVzLkFkbWluU2V0VXNlckFjdGl2ZVJlc3BvbnNlEpQBChdNaWdyYXJFc2'
+    'NvcG9zSW1wbGljaXRvcxI7LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5NaWdyYXJFc2Nv'
+    'cG9zSW1wbGljaXRvc1JlcXVlc3QaPC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTWlncm'
+    'FyRXNjb3Bvc0ltcGxpY2l0b3NSZXNwb25zZRJwCgtMaXN0VGVuYW50cxIvLnNtYXJ0Y29yZS5j'
+    'b250cmFjdHMucXVlcmllcy5MaXN0VGVuYW50c1JlcXVlc3QaMC5zbWFydGNvcmUuY29udHJhY3'
+    'RzLnF1ZXJpZXMuTGlzdFRlbmFudHNSZXNwb25zZRJqCglHZXRUZW5hbnQSLS5zbWFydGNvcmUu'
+    'Y29udHJhY3RzLnF1ZXJpZXMuR2V0VGVuYW50UmVxdWVzdBouLnNtYXJ0Y29yZS5jb250cmFjdH'
+    'MucXVlcmllcy5HZXRUZW5hbnRSZXNwb25zZRJzCgxDcmVhdGVUZW5hbnQSMC5zbWFydGNvcmUu'
+    'Y29udHJhY3RzLnF1ZXJpZXMuQ3JlYXRlVGVuYW50UmVxdWVzdBoxLnNtYXJ0Y29yZS5jb250cm'
+    'FjdHMucXVlcmllcy5DcmVhdGVUZW5hbnRSZXNwb25zZRJzCgxVcGRhdGVUZW5hbnQSMC5zbWFy'
+    'dGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuVXBkYXRlVGVuYW50UmVxdWVzdBoxLnNtYXJ0Y29yZS'
+    '5jb250cmFjdHMucXVlcmllcy5VcGRhdGVUZW5hbnRSZXNwb25zZRJ8Cg9TZXRUZW5hbnRBY3Rp'
+    'dmUSMy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2V0VGVuYW50QWN0aXZlUmVxdWVzdB'
+    'o0LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5TZXRUZW5hbnRBY3RpdmVSZXNwb25zZRKF'
+    'AQoSR2VuZXJhdGVBY2Nlc3NDb2RlEjYuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkdlbm'
+    'VyYXRlQWNjZXNzQ29kZVJlcXVlc3QaNy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuR2Vu'
+    'ZXJhdGVBY2Nlc3NDb2RlUmVzcG9uc2USagoJTGlzdFBsYW5zEi0uc21hcnRjb3JlLmNvbnRyYW'
+    'N0cy5xdWVyaWVzLkxpc3RQbGFuc1JlcXVlc3QaLi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJp'
+    'ZXMuTGlzdFBsYW5zUmVzcG9uc2USbQoKQ3JlYXRlUGxhbhIuLnNtYXJ0Y29yZS5jb250cmFjdH'
+    'MucXVlcmllcy5DcmVhdGVQbGFuUmVxdWVzdBovLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmll'
+    'cy5DcmVhdGVQbGFuUmVzcG9uc2USbQoKVXBkYXRlUGxhbhIuLnNtYXJ0Y29yZS5jb250cmFjdH'
+    'MucXVlcmllcy5VcGRhdGVQbGFuUmVxdWVzdBovLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmll'
+    'cy5VcGRhdGVQbGFuUmVzcG9uc2USggEKEUxpc3RTdWJzY3JpcHRpb25zEjUuc21hcnRjb3JlLm'
+    'NvbnRyYWN0cy5xdWVyaWVzLkxpc3RTdWJzY3JpcHRpb25zUmVxdWVzdBo2LnNtYXJ0Y29yZS5j'
+    'b250cmFjdHMucXVlcmllcy5MaXN0U3Vic2NyaXB0aW9uc1Jlc3BvbnNlEnwKD1JlZ2lzdGVyUG'
+    'F5bWVudBIzLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5SZWdpc3RlclBheW1lbnRSZXF1'
+    'ZXN0GjQuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlJlZ2lzdGVyUGF5bWVudFJlc3Bvbn'
+    'NlEnMKDExpc3RQYXltZW50cxIwLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0UGF5'
+    'bWVudHNSZXF1ZXN0GjEuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3RQYXltZW50c1'
+    'Jlc3BvbnNlEnMKDExpc3RWb3VjaGVycxIwLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5M'
+    'aXN0Vm91Y2hlcnNSZXF1ZXN0GjEuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3RWb3'
+    'VjaGVyc1Jlc3BvbnNlEnYKDUNyZWF0ZVZvdWNoZXISMS5zbWFydGNvcmUuY29udHJhY3RzLnF1'
+    'ZXJpZXMuQ3JlYXRlVm91Y2hlclJlcXVlc3QaMi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZX'
+    'MuQ3JlYXRlVm91Y2hlclJlc3BvbnNlEnYKDVJldm9rZVZvdWNoZXISMS5zbWFydGNvcmUuY29u'
+    'dHJhY3RzLnF1ZXJpZXMuUmV2b2tlVm91Y2hlclJlcXVlc3QaMi5zbWFydGNvcmUuY29udHJhY3'
+    'RzLnF1ZXJpZXMuUmV2b2tlVm91Y2hlclJlc3BvbnNlEpEBChZMaXN0Vm91Y2hlclJlZGVtcHRp'
+    'b25zEjouc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3RWb3VjaGVyUmVkZW1wdGlvbn'
+    'NSZXF1ZXN0Gjsuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3RWb3VjaGVyUmVkZW1w'
+    'dGlvbnNSZXNwb25zZRKUAQoXVGVzdEV2b2x1dGlvbkNvbm5lY3Rpb24SOy5zbWFydGNvcmUuY2'
+    '9udHJhY3RzLnF1ZXJpZXMuVGVzdEV2b2x1dGlvbkNvbm5lY3Rpb25SZXF1ZXN0Gjwuc21hcnRj'
+    'b3JlLmNvbnRyYWN0cy5xdWVyaWVzLlRlc3RFdm9sdXRpb25Db25uZWN0aW9uUmVzcG9uc2USfw'
+    'oQVGVzdGFyUHJvdmVkb3JJYRI0LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5UZXN0YXJQ'
+    'cm92ZWRvcklhUmVxdWVzdBo1LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5UZXN0YXJQcm'
+    '92ZWRvcklhUmVzcG9uc2USfwoQTGlzdEZlYXR1cmVGbGFncxI0LnNtYXJ0Y29yZS5jb250cmFj'
+    'dHMucXVlcmllcy5MaXN0RmVhdHVyZUZsYWdzUmVxdWVzdBo1LnNtYXJ0Y29yZS5jb250cmFjdH'
+    'MucXVlcmllcy5MaXN0RmVhdHVyZUZsYWdzUmVzcG9uc2USeQoOU2V0RmVhdHVyZUZsYWcSMi5z'
+    'bWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2V0RmVhdHVyZUZsYWdSZXF1ZXN0GjMuc21hcn'
+    'Rjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNldEZlYXR1cmVGbGFnUmVzcG9uc2USkQEKFlNldEZl'
+    'YXR1cmVGbGFnT3ZlcnJpZGUSOi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2V0RmVhdH'
+    'VyZUZsYWdPdmVycmlkZVJlcXVlc3QaOy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2V0'
+    'RmVhdHVyZUZsYWdPdmVycmlkZVJlc3BvbnNlEnYKDVF1ZXJ5QXVkaXRMb2cSMS5zbWFydGNvcm'
+    'UuY29udHJhY3RzLnF1ZXJpZXMuUXVlcnlBdWRpdExvZ1JlcXVlc3QaMi5zbWFydGNvcmUuY29u'
+    'dHJhY3RzLnF1ZXJpZXMuUXVlcnlBdWRpdExvZ1Jlc3BvbnNlEn8KEEdldFNlcnZpY2VIZWFsdG'
+    'gSNC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuR2V0U2VydmljZUhlYWx0aFJlcXVlc3Qa'
+    'NS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuR2V0U2VydmljZUhlYWx0aFJlc3BvbnNlEo'
+    'gBChNHZXREYXNoYm9hcmRTdW1tYXJ5Ejcuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkdl'
+    'dERhc2hib2FyZFN1bW1hcnlSZXF1ZXN0Gjguc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLk'
+    'dldERhc2hib2FyZFN1bW1hcnlSZXNwb25zZRKBAQoQRXhwb3J0VGVuYW50c0NzdhI0LnNtYXJ0'
+    'Y29yZS5jb250cmFjdHMucXVlcmllcy5FeHBvcnRUZW5hbnRzQ3N2UmVxdWVzdBo1LnNtYXJ0Y2'
+    '9yZS5jb250cmFjdHMucXVlcmllcy5FeHBvcnRUZW5hbnRzQ3N2UmVzcG9uc2UwARJ9ChJTdHJl'
+    'YW1BdGVuZGltZW50b3MSNi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU3RyZWFtQXRlbm'
+    'RpbWVudG9zUmVxdWVzdBotLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5BdGVuZGltZW50'
+    'b0V2ZW50MAESfwoQTGlzdEF0ZW5kaW1lbnRvcxI0LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcm'
+    'llcy5MaXN0QXRlbmRpbWVudG9zUmVxdWVzdBo1LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmll'
+    'cy5MaXN0QXRlbmRpbWVudG9zUmVzcG9uc2USagoJR2V0VGhyZWFkEi0uc21hcnRjb3JlLmNvbn'
+    'RyYWN0cy5xdWVyaWVzLkdldFRocmVhZFJlcXVlc3QaLi5zbWFydGNvcmUuY29udHJhY3RzLnF1'
+    'ZXJpZXMuR2V0VGhyZWFkUmVzcG9uc2USlwEKGEluaWNpYXJBdGVuZGltZW50b01hbnVhbBI8Ln'
+    'NtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5JbmljaWFyQXRlbmRpbWVudG9NYW51YWxSZXF1'
+    'ZXN0Gj0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkluaWNpYXJBdGVuZGltZW50b01hbn'
+    'VhbFJlc3BvbnNlEosBChRNb3ZlQXRlbmRpbWVudG9FdGFwYRI4LnNtYXJ0Y29yZS5jb250cmFj'
+    'dHMucXVlcmllcy5Nb3ZlQXRlbmRpbWVudG9FdGFwYVJlcXVlc3QaOS5zbWFydGNvcmUuY29udH'
+    'JhY3RzLnF1ZXJpZXMuTW92ZUF0ZW5kaW1lbnRvRXRhcGFSZXNwb25zZRKLAQoUU2V0QXRlbmRp'
+    'bWVudG9TdGF0dXMSOC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2V0QXRlbmRpbWVudG'
+    '9TdGF0dXNSZXF1ZXN0Gjkuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNldEF0ZW5kaW1l'
+    'bnRvU3RhdHVzUmVzcG9uc2USgwEKFUdldERldGFsaGVBdGVuZGltZW50bxIxLnNtYXJ0Y29yZS'
+    '5jb250cmFjdHMucXVlcmllcy5BdGVuZGltZW50b0lkUmVxdWVzdBo3LnNtYXJ0Y29yZS5jb250'
+    'cmFjdHMucXVlcmllcy5EZXRhbGhlQXRlbmRpbWVudG9SZXNwb25zZRJzCg5DcmVhdGVFdGlxdW'
+    'V0YRIyLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5DcmVhdGVFdGlxdWV0YVJlcXVlc3Qa'
+    'LS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRXRpcXVldGFSZXNwb25zZRJ3ChBBbHRlcm'
+    '5hckV0aXF1ZXRhEjQuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkFsdGVybmFyRXRpcXVl'
+    'dGFSZXF1ZXN0Gi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNpbXBsZU9rUmVzcG9uc2'
+    'USZwoKQ3JlYXRlTm90YRIuLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5DcmVhdGVOb3Rh'
+    'UmVxdWVzdBopLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5Ob3RhUmVzcG9uc2USiAEKE1'
+    'NlbmRPdXRib3VuZE1lc3NhZ2USNy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2VuZE91'
+    'dGJvdW5kTWVzc2FnZVJlcXVlc3QaOC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2VuZE'
+    '91dGJvdW5kTWVzc2FnZVJlc3BvbnNlEosBChRTb2xpY2l0YXJVcGxvYWRNaWRpYRI4LnNtYXJ0'
+    'Y29yZS5jb250cmFjdHMucXVlcmllcy5Tb2xpY2l0YXJVcGxvYWRNaWRpYVJlcXVlc3QaOS5zbW'
+    'FydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU29saWNpdGFyVXBsb2FkTWlkaWFSZXNwb25zZRKR'
+    'AQoWRW52aWFyTWlkaWFBdGVuZGltZW50bxI6LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy'
+    '5FbnZpYXJNaWRpYUF0ZW5kaW1lbnRvUmVxdWVzdBo7LnNtYXJ0Y29yZS5jb250cmFjdHMucXVl'
+    'cmllcy5FbnZpYXJNaWRpYUF0ZW5kaW1lbnRvUmVzcG9uc2USlAEKF0xpc3Rhck1pZGlhc0F0ZW'
+    '5kaW1lbnRvEjsuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3Rhck1pZGlhc0F0ZW5k'
+    'aW1lbnRvUmVxdWVzdBo8LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0YXJNaWRpYX'
+    'NBdGVuZGltZW50b1Jlc3BvbnNlEnkKDkVudmlhclByZXNlbmNhEjIuc21hcnRjb3JlLmNvbnRy'
+    'YWN0cy5xdWVyaWVzLkVudmlhclByZXNlbmNhUmVxdWVzdBozLnNtYXJ0Y29yZS5jb250cmFjdH'
+    'MucXVlcmllcy5FbnZpYXJQcmVzZW5jYVJlc3BvbnNlEoQBChlMaXN0YXJUaW1lbGluZUF0ZW5k'
+    'aW1lbnRvEjIuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3RhclRpbWVsaW5lUmVxdW'
+    'VzdBozLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0YXJUaW1lbGluZVJlc3BvbnNl'
+    'EqABChtMaXN0YXJBdGVuZGltZW50b3NEb0NvbnRhdG8SPy5zbWFydGNvcmUuY29udHJhY3RzLn'
+    'F1ZXJpZXMuTGlzdGFyQXRlbmRpbWVudG9zRG9Db250YXRvUmVxdWVzdBpALnNtYXJ0Y29yZS5j'
+    'b250cmFjdHMucXVlcmllcy5MaXN0YXJBdGVuZGltZW50b3NEb0NvbnRhdG9SZXNwb25zZRJtCg'
+    'tSZW1vdmVyTm90YRIvLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5SZW1vdmVyTm90YVJl'
+    'cXVlc3QaLS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2ltcGxlT2tSZXNwb25zZRJzCg'
+    '5VcGRhdGVFdGlxdWV0YRIyLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5VcGRhdGVFdGlx'
+    'dWV0YVJlcXVlc3QaLS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRXRpcXVldGFSZXNwb2'
+    '5zZRJ5ChFEZXNhdGl2YXJFdGlxdWV0YRI1LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5E'
+    'ZXNhdGl2YXJFdGlxdWV0YVJlcXVlc3QaLS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2'
+    'ltcGxlT2tSZXNwb25zZRKIAQoTQXRyaWJ1aXJBdGVuZGltZW50bxI3LnNtYXJ0Y29yZS5jb250'
+    'cmFjdHMucXVlcmllcy5BdHJpYnVpckF0ZW5kaW1lbnRvUmVxdWVzdBo4LnNtYXJ0Y29yZS5jb2'
+    '50cmFjdHMucXVlcmllcy5BdHJpYnVpckF0ZW5kaW1lbnRvUmVzcG9uc2USggEKEURlZmluaXJQ'
+    'cmlvcmlkYWRlEjUuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkRlZmluaXJQcmlvcmlkYW'
+    'RlUmVxdWVzdBo2LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5EZWZpbmlyUHJpb3JpZGFk'
+    'ZVJlc3BvbnNlEogBChNUcmFuc2ZlcmlyUGFyYUZsdXhvEjcuc21hcnRjb3JlLmNvbnRyYWN0cy'
+    '5xdWVyaWVzLlRyYW5zZmVyaXJQYXJhRmx1eG9SZXF1ZXN0Gjguc21hcnRjb3JlLmNvbnRyYWN0'
+    'cy5xdWVyaWVzLlRyYW5zZmVyaXJQYXJhRmx1eG9SZXNwb25zZRJ5Cg5FeHBvcnRhclF1YWRybx'
+    'IyLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5FeHBvcnRhclF1YWRyb1JlcXVlc3QaMy5z'
+    'bWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRXhwb3J0YXJRdWFkcm9SZXNwb25zZRJzCgxDcm'
+    'VhdGVJbnZpdGUSMC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuQ3JlYXRlSW52aXRlUmVx'
+    'dWVzdBoxLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5DcmVhdGVJbnZpdGVSZXNwb25zZR'
+    'JzCgxBY2NlcHRJbnZpdGUSMC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuQWNjZXB0SW52'
+    'aXRlUmVxdWVzdBoxLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5BY2NlcHRJbnZpdGVSZX'
+    'Nwb25zZRJwCgtMaXN0SW52aXRlcxIvLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0'
+    'SW52aXRlc1JlcXVlc3QaMC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlzdEludml0ZX'
+    'NSZXNwb25zZRJzCgxSZXZva2VJbnZpdGUSMC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMu'
+    'UmV2b2tlSW52aXRlUmVxdWVzdBoxLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5SZXZva2'
+    'VJbnZpdGVSZXNwb25zZRJ8Cg9SZWVudmlhckNvbnZpdGUSMy5zbWFydGNvcmUuY29udHJhY3Rz'
+    'LnF1ZXJpZXMuUmVlbnZpYXJDb252aXRlUmVxdWVzdBo0LnNtYXJ0Y29yZS5jb250cmFjdHMucX'
+    'Vlcmllcy5SZWVudmlhckNvbnZpdGVSZXNwb25zZRJ8Cg9MaXN0VGVuYW50VXNlcnMSMy5zbWFy'
+    'dGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlzdFRlbmFudFVzZXJzUmVxdWVzdBo0LnNtYXJ0Y2'
+    '9yZS5jb250cmFjdHMucXVlcmllcy5MaXN0VGVuYW50VXNlcnNSZXNwb25zZRJ/ChBVcGRhdGVU'
+    'ZW5hbnRVc2VyEjQuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlVwZGF0ZVRlbmFudFVzZX'
+    'JSZXF1ZXN0GjUuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlVwZGF0ZVRlbmFudFVzZXJS'
+    'ZXNwb25zZRKAAQoRR2V0TXlUZW5hbnRDb25maWcSNS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
+    'JpZXMuR2V0TXlUZW5hbnRDb25maWdSZXF1ZXN0GjQuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVy'
+    'aWVzLkdldFRlbmFudENvbmZpZ1Jlc3BvbnNlEokBChRVcGRhdGVNeVRlbmFudENvbmZpZxI4Ln'
+    'NtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5VcGRhdGVNeVRlbmFudENvbmZpZ1JlcXVlc3Qa'
+    'Ny5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuVXBkYXRlVGVuYW50Q29uZmlnUmVzcG9uc2'
+    'USgwEKFlVwZGF0ZU15Q29uZmlnQXZhbmNhZGESOi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJp'
+    'ZXMuVXBkYXRlTXlDb25maWdBdmFuY2FkYVJlcXVlc3QaLS5zbWFydGNvcmUuY29udHJhY3RzLn'
+    'F1ZXJpZXMuU2ltcGxlT2tSZXNwb25zZRJ2Cg1MaXN0TWNwR3JhbnRzEjEuc21hcnRjb3JlLmNv'
+    'bnRyYWN0cy5xdWVyaWVzLkxpc3RNY3BHcmFudHNSZXF1ZXN0GjIuc21hcnRjb3JlLmNvbnRyYW'
+    'N0cy5xdWVyaWVzLkxpc3RNY3BHcmFudHNSZXNwb25zZRJ5Cg5SZXZva2VNY3BHcmFudBIyLnNt'
+    'YXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5SZXZva2VNY3BHcmFudFJlcXVlc3QaMy5zbWFydG'
+    'NvcmUuY29udHJhY3RzLnF1ZXJpZXMuUmV2b2tlTWNwR3JhbnRSZXNwb25zZRKRAQoWQWp1c3Rh'
+    'ckVzY29wb3NNY3BHcmFudBI6LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5BanVzdGFyRX'
+    'Njb3Bvc01jcEdyYW50UmVxdWVzdBo7LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5BanVz'
+    'dGFyRXNjb3Bvc01jcEdyYW50UmVzcG9uc2USeQoOTGlzdE15QXVkaXRMb2cSMi5zbWFydGNvcm'
+    'UuY29udHJhY3RzLnF1ZXJpZXMuTGlzdE15QXVkaXRMb2dSZXF1ZXN0GjMuc21hcnRjb3JlLmNv'
+    'bnRyYWN0cy5xdWVyaWVzLkxpc3RNeUF1ZGl0TG9nUmVzcG9uc2USlwEKGENyZWF0ZU15V2hhdH'
+    'NhcHBJbnN0YW5jZRI8LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5DcmVhdGVNeVdoYXRz'
+    'YXBwSW5zdGFuY2VSZXF1ZXN0Gj0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkNyZWF0ZU'
+    '15V2hhdHNhcHBJbnN0YW5jZVJlc3BvbnNlEqABChtHZXRNeVdoYXRzYXBwSW5zdGFuY2VTdGF0'
+    'dXMSPy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuR2V0TXlXaGF0c2FwcEluc3RhbmNlU3'
+    'RhdHVzUmVxdWVzdBpALnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5HZXRNeVdoYXRzYXBw'
+    'SW5zdGFuY2VTdGF0dXNSZXNwb25zZRKLAQoUQ3JlYXRlTXlEZXBhcnRhbWVudG8SOC5zbWFydG'
+    'NvcmUuY29udHJhY3RzLnF1ZXJpZXMuQ3JlYXRlTXlEZXBhcnRhbWVudG9SZXF1ZXN0Gjkuc21h'
+    'cnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkNyZWF0ZU15RGVwYXJ0YW1lbnRvUmVzcG9uc2USfA'
+    'oPU2V0TXlCb3RQZXJzb25hEjMuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNldE15Qm90'
+    'UGVyc29uYVJlcXVlc3QaNC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2V0TXlCb3RQZX'
+    'Jzb25hUmVzcG9uc2USjgEKFVNldE9uYm9hcmRpbmdQcm9ncmVzcxI5LnNtYXJ0Y29yZS5jb250'
+    'cmFjdHMucXVlcmllcy5TZXRPbmJvYXJkaW5nUHJvZ3Jlc3NSZXF1ZXN0Gjouc21hcnRjb3JlLm'
+    'NvbnRyYWN0cy5xdWVyaWVzLlNldE9uYm9hcmRpbmdQcm9ncmVzc1Jlc3BvbnNlEpQBChdHZXRN'
+    'eU9uYm9hcmRpbmdQcm9ncmVzcxI7LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5HZXRNeU'
+    '9uYm9hcmRpbmdQcm9ncmVzc1JlcXVlc3QaPC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMu'
+    'R2V0TXlPbmJvYXJkaW5nUHJvZ3Jlc3NSZXNwb25zZRKOAQoVUXVpdGFyTWluaGFBc3NpbmF0dX'
+    'JhEjkuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlF1aXRhck1pbmhhQXNzaW5hdHVyYVJl'
+    'cXVlc3QaOi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuUXVpdGFyTWluaGFBc3NpbmF0dX'
+    'JhUmVzcG9uc2USggEKE0NyZWF0ZU15VHJlaW5hbWVudG8SNy5zbWFydGNvcmUuY29udHJhY3Rz'
+    'LnF1ZXJpZXMuQ3JlYXRlTXlUcmVpbmFtZW50b1JlcXVlc3QaMi5zbWFydGNvcmUuY29udHJhY3'
+    'RzLnF1ZXJpZXMuTXlUcmVpbmFtZW50b1Jlc3BvbnNlEoUBChJMaXN0TXlUcmVpbmFtZW50b3MS'
+    'Ni5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlzdE15VHJlaW5hbWVudG9zUmVxdWVzdB'
+    'o3LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0TXlUcmVpbmFtZW50b3NSZXNwb25z'
+    'ZRJ2Cg1MaXN0TXlJbnRlbnRzEjEuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3RNeU'
+    'ludGVudHNSZXF1ZXN0GjIuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3RNeUludGVu'
+    'dHNSZXNwb25zZRJrCg5DcmVhdGVNeUludGVudBIqLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcm'
+    'llcy5NeUludGVudERhZG9zGi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLk15SW50ZW50'
+    'UmVzcG9uc2UScwoOVXBkYXRlTXlJbnRlbnQSMi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZX'
+    'MuVXBkYXRlTXlJbnRlbnRSZXF1ZXN0Gi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNp'
+    'bXBsZU9rUmVzcG9uc2USbwoOUmVtb3ZlTXlJbnRlbnQSLi5zbWFydGNvcmUuY29udHJhY3RzLn'
+    'F1ZXJpZXMuTXlJbnRlbnRJZFJlcXVlc3QaLS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMu'
+    'U2ltcGxlT2tSZXNwb25zZRJ5Cg5UZXN0YXJQZXJndW50YRIyLnNtYXJ0Y29yZS5jb250cmFjdH'
+    'MucXVlcmllcy5UZXN0YXJQZXJndW50YVJlcXVlc3QaMy5zbWFydGNvcmUuY29udHJhY3RzLnF1'
+    'ZXJpZXMuVGVzdGFyUGVyZ3VudGFSZXNwb25zZRKdAQoaU29saWNpdGFyVXBsb2FkVHJlaW5hbW'
+    'VudG8SPi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU29saWNpdGFyVXBsb2FkVHJlaW5h'
+    'bWVudG9SZXF1ZXN0Gj8uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNvbGljaXRhclVwbG'
+    '9hZFRyZWluYW1lbnRvUmVzcG9uc2USlgEKHUNyZWF0ZU15VHJlaW5hbWVudG9Db21BcnF1aXZv'
+    'EkEuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkNyZWF0ZU15VHJlaW5hbWVudG9Db21Bcn'
+    'F1aXZvUmVxdWVzdBoyLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5NeVRyZWluYW1lbnRv'
+    'UmVzcG9uc2USkQEKFlJlZ2lzdHJhckZlZWRiYWNrVGVzdGUSOi5zbWFydGNvcmUuY29udHJhY3'
+    'RzLnF1ZXJpZXMuUmVnaXN0cmFyRmVlZGJhY2tUZXN0ZVJlcXVlc3QaOy5zbWFydGNvcmUuY29u'
+    'dHJhY3RzLnF1ZXJpZXMuUmVnaXN0cmFyRmVlZGJhY2tUZXN0ZVJlc3BvbnNlEpQBChdMaXN0TX'
+    'lBdmFsaWFjb2VzRGVUZXN0ZRI7LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0TXlB'
+    'dmFsaWFjb2VzRGVUZXN0ZVJlcXVlc3QaPC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTG'
+    'lzdE15QXZhbGlhY29lc0RlVGVzdGVSZXNwb25zZRKDAQoWTWFyY2FyQXZhbGlhY2FvVHJhdGFk'
+    'YRI6LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5NYXJjYXJBdmFsaWFjYW9UcmF0YWRhUm'
+    'VxdWVzdBotLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5TaW1wbGVPa1Jlc3BvbnNlEnwK'
+    'EEdldE15VHJlaW5hbWVudG8SNC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuR2V0TXlUcm'
+    'VpbmFtZW50b1JlcXVlc3QaMi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlUcmVpbmFt'
+    'ZW50b1Jlc3BvbnNlEoMBChZGaW5hbGl6YXJNeVRyZWluYW1lbnRvEjouc21hcnRjb3JlLmNvbn'
+    'RyYWN0cy5xdWVyaWVzLkZpbmFsaXphck15VHJlaW5hbWVudG9SZXF1ZXN0Gi0uc21hcnRjb3Jl'
+    'LmNvbnRyYWN0cy5xdWVyaWVzLlNpbXBsZU9rUmVzcG9uc2USfwoUUmVtb3Zlck15VHJlaW5hbW'
+    'VudG8SOC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuUmVtb3Zlck15VHJlaW5hbWVudG9S'
+    'ZXF1ZXN0Gi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNpbXBsZU9rUmVzcG9uc2USlA'
+    'EKF0xpc3RNeVdoYXRzYXBwSW5zdGFuY2VzEjsuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVz'
+    'Lkxpc3RNeVdoYXRzYXBwSW5zdGFuY2VzUmVxdWVzdBo8LnNtYXJ0Y29yZS5jb250cmFjdHMucX'
+    'Vlcmllcy5MaXN0TXlXaGF0c2FwcEluc3RhbmNlc1Jlc3BvbnNlEqABChtEZWZpbmlyUmVzcG9z'
+    'dGFCb3RJbnN0YW5jaWESPy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRGVmaW5pclJlc3'
+    'Bvc3RhQm90SW5zdGFuY2lhUmVxdWVzdBpALnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5E'
+    'ZWZpbmlyUmVzcG9zdGFCb3RJbnN0YW5jaWFSZXNwb25zZRKLAQoURGVmaW5pckJvdERhQ29udm'
+    'Vyc2ESOC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRGVmaW5pckJvdERhQ29udmVyc2FS'
+    'ZXF1ZXN0Gjkuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkRlZmluaXJCb3REYUNvbnZlcn'
+    'NhUmVzcG9uc2USjgEKFU1hcmNhckF0ZW5kaW1lbnRvTGlkbxI5LnNtYXJ0Y29yZS5jb250cmFj'
+    'dHMucXVlcmllcy5NYXJjYXJBdGVuZGltZW50b0xpZG9SZXF1ZXN0Gjouc21hcnRjb3JlLmNvbn'
+    'RyYWN0cy5xdWVyaWVzLk1hcmNhckF0ZW5kaW1lbnRvTGlkb1Jlc3BvbnNlEoYBChtSZWNvbm5l'
+    'Y3RNeVdoYXRzYXBwSW5zdGFuY2USOC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlXaG'
+    'F0c2FwcEluc3RhbmNlSWRSZXF1ZXN0Gi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNp'
+    'bXBsZU9rUmVzcG9uc2USgwEKGERlbGV0ZU15V2hhdHNhcHBJbnN0YW5jZRI4LnNtYXJ0Y29yZS'
+    '5jb250cmFjdHMucXVlcmllcy5NeVdoYXRzYXBwSW5zdGFuY2VJZFJlcXVlc3QaLS5zbWFydGNv'
+    'cmUuY29udHJhY3RzLnF1ZXJpZXMuU2ltcGxlT2tSZXNwb25zZRKIAQodRGVzY29uZWN0YXJNeV'
+    'doYXRzYXBwSW5zdGFuY2USOC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlXaGF0c2Fw'
+    'cEluc3RhbmNlSWRSZXF1ZXN0Gi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNpbXBsZU'
+    '9rUmVzcG9uc2USmgEKGU9idGVyQ29udGF0b0RvQXRlbmRpbWVudG8SPS5zbWFydGNvcmUuY29u'
+    'dHJhY3RzLnF1ZXJpZXMuT2J0ZXJDb250YXRvRG9BdGVuZGltZW50b1JlcXVlc3QaPi5zbWFydG'
+    'NvcmUuY29udHJhY3RzLnF1ZXJpZXMuT2J0ZXJDb250YXRvRG9BdGVuZGltZW50b1Jlc3BvbnNl'
+    'EnMKDk1hcmNhclJldmlzYWRvEjIuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLk1hcmNhcl'
+    'JldmlzYWRvUmVxdWVzdBotLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5TaW1wbGVPa1Jl'
+    'c3BvbnNlEnkKDkdldFZlcnNhb0RvQXBwEjIuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLk'
+    'dldFZlcnNhb0RvQXBwUmVxdWVzdBozLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5HZXRW'
+    'ZXJzYW9Eb0FwcFJlc3BvbnNlEpEBChZHZXRXaW5kb3dzRG93bmxvYWRMaW5rEjouc21hcnRjb3'
+    'JlLmNvbnRyYWN0cy5xdWVyaWVzLkdldFdpbmRvd3NEb3dubG9hZExpbmtSZXF1ZXN0Gjsuc21h'
+    'cnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkdldFdpbmRvd3NEb3dubG9hZExpbmtSZXNwb25zZR'
+    'KPAQocRGVmaW5pckRlcGFydGFtZW50b0RhQ29uZXhhbxJALnNtYXJ0Y29yZS5jb250cmFjdHMu'
+    'cXVlcmllcy5EZWZpbmlyRGVwYXJ0YW1lbnRvRGFDb25leGFvUmVxdWVzdBotLnNtYXJ0Y29yZS'
+    '5jb250cmFjdHMucXVlcmllcy5TaW1wbGVPa1Jlc3BvbnNlEn8KEERldGFsaGVEYUNvbmV4YW8S'
+    'NC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRGV0YWxoZURhQ29uZXhhb1JlcXVlc3QaNS'
+    '5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRGV0YWxoZURhQ29uZXhhb1Jlc3BvbnNlEqAB'
+    'ChtMaXN0TXlNZW5zYWdlbnNOYW9FbnRyZWd1ZXMSPy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
+    'JpZXMuTGlzdE15TWVuc2FnZW5zTmFvRW50cmVndWVzUmVxdWVzdBpALnNtYXJ0Y29yZS5jb250'
+    'cmFjdHMucXVlcmllcy5MaXN0TXlNZW5zYWdlbnNOYW9FbnRyZWd1ZXNSZXNwb25zZRKgAQobUm'
+    'VlbnZpYXJNZW5zYWdlbU5hb0VudHJlZ3VlEj8uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVz'
+    'LlJlZW52aWFyTWVuc2FnZW1OYW9FbnRyZWd1ZVJlcXVlc3QaQC5zbWFydGNvcmUuY29udHJhY3'
+    'RzLnF1ZXJpZXMuUmVlbnZpYXJNZW5zYWdlbU5hb0VudHJlZ3VlUmVzcG9uc2USkQEKFkxpc3RN'
+    'eU51bWVyb3NJZ25vcmFkb3MSOi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlzdE15Tn'
+    'VtZXJvc0lnbm9yYWRvc1JlcXVlc3QaOy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlz'
+    'dE15TnVtZXJvc0lnbm9yYWRvc1Jlc3BvbnNlEoUBChNDcmlhck51bWVyb0lnbm9yYWRvEjcuc2'
+    '1hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkNyaWFyTnVtZXJvSWdub3JhZG9SZXF1ZXN0GjUu'
+    'c21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLk15TnVtZXJvSWdub3JhZG9SZXNwb25zZRKFAQ'
+    'oXQXR1YWxpemFyTnVtZXJvSWdub3JhZG8SOy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMu'
+    'QXR1YWxpemFyTnVtZXJvSWdub3JhZG9SZXF1ZXN0Gi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdW'
+    'VyaWVzLlNpbXBsZU9rUmVzcG9uc2USfAoVUmVtb3Zlck51bWVyb0lnbm9yYWRvEjQuc21hcnRj'
+    'b3JlLmNvbnRyYWN0cy5xdWVyaWVzLk51bWVyb0lnbm9yYWRvSWRSZXF1ZXN0Gi0uc21hcnRjb3'
+    'JlLmNvbnRyYWN0cy5xdWVyaWVzLlNpbXBsZU9rUmVzcG9uc2USiAEKE0xpc3RNeURlcGFydGFt'
+    'ZW50b3MSNy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlzdE15RGVwYXJ0YW1lbnRvc1'
+    'JlcXVlc3QaOC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlzdE15RGVwYXJ0YW1lbnRv'
+    'c1Jlc3BvbnNlEn8KFFVwZGF0ZU15RGVwYXJ0YW1lbnRvEjguc21hcnRjb3JlLmNvbnRyYWN0cy'
+    '5xdWVyaWVzLlVwZGF0ZU15RGVwYXJ0YW1lbnRvUmVxdWVzdBotLnNtYXJ0Y29yZS5jb250cmFj'
+    'dHMucXVlcmllcy5TaW1wbGVPa1Jlc3BvbnNlEn4KF0Rlc2F0aXZhck15RGVwYXJ0YW1lbnRvEj'
+    'Quc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLk15RGVwYXJ0YW1lbnRvSWRSZXF1ZXN0Gi0u'
+    'c21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNpbXBsZU9rUmVzcG9uc2USfwoQTGlzdE15QX'
+    'RlbmRlbnRlcxI0LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0TXlBdGVuZGVudGVz'
+    'UmVxdWVzdBo1LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0TXlBdGVuZGVudGVzUm'
+    'VzcG9uc2USfAoRQ3JlYXRlTXlBdGVuZGVudGUSNS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJp'
+    'ZXMuQ3JlYXRlTXlBdGVuZGVudGVSZXF1ZXN0GjAuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaW'
+    'VzLk15QXRlbmRlbnRlUmVzcG9uc2USeQoRVXBkYXRlTXlBdGVuZGVudGUSNS5zbWFydGNvcmUu'
+    'Y29udHJhY3RzLnF1ZXJpZXMuVXBkYXRlTXlBdGVuZGVudGVSZXF1ZXN0Gi0uc21hcnRjb3JlLm'
+    'NvbnRyYWN0cy5xdWVyaWVzLlNpbXBsZU9rUmVzcG9uc2USeAoURGVzYXRpdmFyTXlBdGVuZGVu'
+    'dGUSMS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlBdGVuZGVudGVJZFJlcXVlc3QaLS'
+    '5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2ltcGxlT2tSZXNwb25zZRJwCgtHZXRNeVBh'
+    'aW5lbBIvLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5HZXRNeVBhaW5lbFJlcXVlc3QaMC'
+    '5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuR2V0TXlQYWluZWxSZXNwb25zZRJ5Cg5MaXN0'
+    'TXlDb250YXRvcxIyLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0TXlDb250YXRvc1'
+    'JlcXVlc3QaMy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlzdE15Q29udGF0b3NSZXNw'
+    'b25zZRJ2Cg9DcmVhdGVNeUNvbnRhdG8SMy5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuQ3'
+    'JlYXRlTXlDb250YXRvUmVxdWVzdBouLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5NeUNv'
+    'bnRhdG9SZXNwb25zZRJ1Cg9VcGRhdGVNeUNvbnRhdG8SMy5zbWFydGNvcmUuY29udHJhY3RzLn'
+    'F1ZXJpZXMuVXBkYXRlTXlDb250YXRvUmVxdWVzdBotLnNtYXJ0Y29yZS5jb250cmFjdHMucXVl'
+    'cmllcy5TaW1wbGVPa1Jlc3BvbnNlEoEBChVEZWZpbmlyTXlDb250YXRvQXRpdm8SOS5zbWFydG'
+    'NvcmUuY29udHJhY3RzLnF1ZXJpZXMuRGVmaW5pck15Q29udGF0b0F0aXZvUmVxdWVzdBotLnNt'
+    'YXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5TaW1wbGVPa1Jlc3BvbnNlEnYKDUV4Y2x1aXJNeU'
+    'l0ZW0SMS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRXhjbHVpck15SXRlbVJlcXVlc3Qa'
+    'Mi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuRXhjbHVpck15SXRlbVJlc3BvbnNlEnsKEk'
+    'RlZmluaXJNeUl0ZW1BdGl2bxI2LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5EZWZpbmly'
+    'TXlJdGVtQXRpdm9SZXF1ZXN0Gi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNpbXBsZU'
+    '9rUmVzcG9uc2USfAoPTGlzdE15RXhjbHVpZG9zEjMuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVy'
+    'aWVzLkxpc3RNeUV4Y2x1aWRvc1JlcXVlc3QaNC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZX'
+    'MuTGlzdE15RXhjbHVpZG9zUmVzcG9uc2USeQoOTGlzdE15Q2xpZW50ZXMSMi5zbWFydGNvcmUu'
+    'Y29udHJhY3RzLnF1ZXJpZXMuTGlzdE15Q2xpZW50ZXNSZXF1ZXN0GjMuc21hcnRjb3JlLmNvbn'
+    'RyYWN0cy5xdWVyaWVzLkxpc3RNeUNsaWVudGVzUmVzcG9uc2USdgoPQ3JlYXRlTXlDbGllbnRl'
+    'EjMuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkNyZWF0ZU15Q2xpZW50ZVJlcXVlc3QaLi'
+    '5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlDbGllbnRlUmVzcG9uc2USdQoPVXBkYXRl'
+    'TXlDbGllbnRlEjMuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlVwZGF0ZU15Q2xpZW50ZV'
+    'JlcXVlc3QaLS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2ltcGxlT2tSZXNwb25zZRKB'
+    'AQoVRGVmaW5pck15Q2xpZW50ZUF0aXZvEjkuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLk'
+    'RlZmluaXJNeUNsaWVudGVBdGl2b1JlcXVlc3QaLS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJp'
+    'ZXMuU2ltcGxlT2tSZXNwb25zZRKIAQoXTGlzdE15Q29udGF0b3NEb0NsaWVudGUSLy5zbWFydG'
+    'NvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlDbGllbnRlSWRSZXF1ZXN0Gjwuc21hcnRjb3JlLmNv'
+    'bnRyYWN0cy5xdWVyaWVzLkxpc3RNeUNvbnRhdG9zRG9DbGllbnRlUmVzcG9uc2UShwEKGFZpbm'
+    'N1bGFyTXlDb250YXRvQ2xpZW50ZRI8LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5WaW5j'
+    'dWxhck15Q29udGF0b0NsaWVudGVSZXF1ZXN0Gi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaW'
+    'VzLlNpbXBsZU9rUmVzcG9uc2UScwoMTGlzdE15Q2FtcG9zEjAuc21hcnRjb3JlLmNvbnRyYWN0'
+    'cy5xdWVyaWVzLkxpc3RNeUNhbXBvc1JlcXVlc3QaMS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
+    'JpZXMuTGlzdE15Q2FtcG9zUmVzcG9uc2UScAoNQ3JlYXRlTXlDYW1wbxIxLnNtYXJ0Y29yZS5j'
+    'b250cmFjdHMucXVlcmllcy5DcmVhdGVNeUNhbXBvUmVxdWVzdBosLnNtYXJ0Y29yZS5jb250cm'
+    'FjdHMucXVlcmllcy5NeUNhbXBvUmVzcG9uc2UScQoNVXBkYXRlTXlDYW1wbxIxLnNtYXJ0Y29y'
+    'ZS5jb250cmFjdHMucXVlcmllcy5VcGRhdGVNeUNhbXBvUmVxdWVzdBotLnNtYXJ0Y29yZS5jb2'
+    '50cmFjdHMucXVlcmllcy5TaW1wbGVPa1Jlc3BvbnNlEnAKEERlc2F0aXZhck15Q2FtcG8SLS5z'
+    'bWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlDYW1wb0lkUmVxdWVzdBotLnNtYXJ0Y29yZS'
+    '5jb250cmFjdHMucXVlcmllcy5TaW1wbGVPa1Jlc3BvbnNlEnUKD1NldE15VmFsb3JDYW1wbxIz'
+    'LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5TZXRNeVZhbG9yQ2FtcG9SZXF1ZXN0Gi0uc2'
+    '1hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlNpbXBsZU9rUmVzcG9uc2UScwoMTGlzdE15Rmx1'
+    'eG9zEjAuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3RNeUZsdXhvc1JlcXVlc3QaMS'
+    '5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlzdE15Rmx1eG9zUmVzcG9uc2UScAoNQ3Jl'
+    'YXRlTXlGbHV4bxIxLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5DcmVhdGVNeUZsdXhvUm'
+    'VxdWVzdBosLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5NeUZsdXhvUmVzcG9uc2UScQoN'
+    'VXBkYXRlTXlGbHV4bxIxLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5VcGRhdGVNeUZsdX'
+    'hvUmVxdWVzdBotLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5TaW1wbGVPa1Jlc3BvbnNl'
+    'EnAKEERlc2F0aXZhck15Rmx1eG8SLS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlGbH'
+    'V4b0lkUmVxdWVzdBotLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5TaW1wbGVPa1Jlc3Bv'
+    'bnNlEnoKEUxpc3RNeUV0YXBhc0ZsdXhvEi0uc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLk'
+    '15Rmx1eG9JZFJlcXVlc3QaNi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTGlzdE15RXRh'
+    'cGFzRmx1eG9SZXNwb25zZRJ/ChJDcmVhdGVNeUV0YXBhRmx1eG8SNi5zbWFydGNvcmUuY29udH'
+    'JhY3RzLnF1ZXJpZXMuQ3JlYXRlTXlFdGFwYUZsdXhvUmVxdWVzdBoxLnNtYXJ0Y29yZS5jb250'
+    'cmFjdHMucXVlcmllcy5NeUV0YXBhRmx1eG9SZXNwb25zZRJ7ChJVcGRhdGVNeUV0YXBhRmx1eG'
+    '8SNi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuVXBkYXRlTXlFdGFwYUZsdXhvUmVxdWVz'
+    'dBotLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5TaW1wbGVPa1Jlc3BvbnNlEnoKFURlc2'
+    'F0aXZhck15RXRhcGFGbHV4bxIyLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5NeUV0YXBh'
+    'Rmx1eG9JZFJlcXVlc3QaLS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2ltcGxlT2tSZX'
+    'Nwb25zZRJ5ChFNb3Zlck15RXRhcGFGbHV4bxI1LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmll'
+    'cy5Nb3Zlck15RXRhcGFGbHV4b1JlcXVlc3QaLS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZX'
+    'MuU2ltcGxlT2tSZXNwb25zZRKaAQoZTGlzdE15UmVncmFzVHJhbnNmZXJlbmNpYRI9LnNtYXJ0'
+    'Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0TXlSZWdyYXNUcmFuc2ZlcmVuY2lhUmVxdWVzdB'
+    'o+LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0TXlSZWdyYXNUcmFuc2ZlcmVuY2lh'
+    'UmVzcG9uc2USnQEKGlNhbHZhck15UmVncmFUcmFuc2ZlcmVuY2lhEj4uc21hcnRjb3JlLmNvbn'
+    'RyYWN0cy5xdWVyaWVzLlNhbHZhck15UmVncmFUcmFuc2ZlcmVuY2lhUmVxdWVzdBo/LnNtYXJ0'
+    'Y29yZS5jb250cmFjdHMucXVlcmllcy5TYWx2YXJNeVJlZ3JhVHJhbnNmZXJlbmNpYVJlc3Bvbn'
+    'NlEqMBChxTZXRNeVJlZ3JhVHJhbnNmZXJlbmNpYUF0aXZhEkAuc21hcnRjb3JlLmNvbnRyYWN0'
+    'cy5xdWVyaWVzLlNldE15UmVncmFUcmFuc2ZlcmVuY2lhQXRpdmFSZXF1ZXN0GkEuc21hcnRjb3'
+    'JlLmNvbnRyYWN0cy5xdWVyaWVzLlNldE15UmVncmFUcmFuc2ZlcmVuY2lhQXRpdmFSZXNwb25z'
+    'ZRKSAQoYR2V0TXlDb25maWdUcmFuc2ZlcmVuY2lhEjwuc21hcnRjb3JlLmNvbnRyYWN0cy5xdW'
+    'VyaWVzLkdldE15Q29uZmlnVHJhbnNmZXJlbmNpYVJlcXVlc3QaOC5zbWFydGNvcmUuY29udHJh'
+    'Y3RzLnF1ZXJpZXMuQ29uZmlnVHJhbnNmZXJlbmNpYVJlc3BvbnNlEpIBChhTZXRNeVNpbmFpc1'
+    'RyYW5zZmVyZW5jaWESPC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuU2V0TXlTaW5haXNU'
+    'cmFuc2ZlcmVuY2lhUmVxdWVzdBo4LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5Db25maW'
+    'dUcmFuc2ZlcmVuY2lhUmVzcG9uc2USiwEKFExpc3RNeVRyYW5zZmVyZW5jaWFzEjguc21hcnRj'
+    'b3JlLmNvbnRyYWN0cy5xdWVyaWVzLkxpc3RNeVRyYW5zZmVyZW5jaWFzUmVxdWVzdBo5LnNtYX'
+    'J0Y29yZS5jb250cmFjdHMucXVlcmllcy5MaXN0TXlUcmFuc2ZlcmVuY2lhc1Jlc3BvbnNlEp0B'
+    'ChpUZXN0YXJNeVJlZ3JhVHJhbnNmZXJlbmNpYRI+LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcm'
+    'llcy5UZXN0YXJNeVJlZ3JhVHJhbnNmZXJlbmNpYVJlcXVlc3QaPy5zbWFydGNvcmUuY29udHJh'
+    'Y3RzLnF1ZXJpZXMuVGVzdGFyTXlSZWdyYVRyYW5zZmVyZW5jaWFSZXNwb25zZRKmAQodR2VyYX'
+    'JNeVN1Z2VzdG9lc1RyYW5zZmVyZW5jaWESQS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMu'
+    'R2VyYXJNeVN1Z2VzdG9lc1RyYW5zZmVyZW5jaWFSZXF1ZXN0GkIuc21hcnRjb3JlLmNvbnRyYW'
+    'N0cy5xdWVyaWVzLkdlcmFyTXlTdWdlc3RvZXNUcmFuc2ZlcmVuY2lhUmVzcG9uc2UShQEKEkRl'
+    'ZmluaXJNb3RvclRlbmFudBI2LnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5EZWZpbmlyTW'
+    '90b3JUZW5hbnRSZXF1ZXN0Gjcuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkRlZmluaXJN'
+    'b3RvclRlbmFudFJlc3BvbnNl');

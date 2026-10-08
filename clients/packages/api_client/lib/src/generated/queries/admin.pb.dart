@@ -8,8 +8,9 @@
 // ignore_for_file: constant_identifier_names
 // ignore_for_file: curly_braces_in_flow_control_structures
 // ignore_for_file: deprecated_member_use_from_same_package, library_prefixes
-// ignore_for_file: non_constant_identifier_names, prefer_relative_imports
+// ignore_for_file: non_constant_identifier_names
 
+import 'dart:async' as $async;
 import 'dart:core' as $core;
 
 import 'package:fixnum/fixnum.dart' as $fixnum;
@@ -622,6 +623,9 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
     $core.int? minutosInatividadeEncerra,
     $core.bool? transcriptionEnabled,
     $core.String? motorAnalise,
+    $core.bool? pesquisaSatisfacaoEfetiva,
+    $core.bool? analisePreviaEfetiva,
+    $core.bool? transcricaoEfetiva,
   }) {
     final result = create();
     if (dadosEmpresa != null) result.dadosEmpresa = dadosEmpresa;
@@ -670,6 +674,12 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
     if (transcriptionEnabled != null)
       result.transcriptionEnabled = transcriptionEnabled;
     if (motorAnalise != null) result.motorAnalise = motorAnalise;
+    if (pesquisaSatisfacaoEfetiva != null)
+      result.pesquisaSatisfacaoEfetiva = pesquisaSatisfacaoEfetiva;
+    if (analisePreviaEfetiva != null)
+      result.analisePreviaEfetiva = analisePreviaEfetiva;
+    if (transcricaoEfetiva != null)
+      result.transcricaoEfetiva = transcricaoEfetiva;
     return result;
   }
 
@@ -724,6 +734,9 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
     ..aI(33, _omitFieldNames ? '' : 'minutosInatividadeEncerra')
     ..aOB(34, _omitFieldNames ? '' : 'transcriptionEnabled')
     ..aOS(35, _omitFieldNames ? '' : 'motorAnalise')
+    ..aOB(36, _omitFieldNames ? '' : 'pesquisaSatisfacaoEfetiva')
+    ..aOB(37, _omitFieldNames ? '' : 'analisePreviaEfetiva')
+    ..aOB(38, _omitFieldNames ? '' : 'transcricaoEfetiva')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1057,6 +1070,35 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
   $core.bool hasMotorAnalise() => $_has(34);
   @$pb.TagNumber(35)
   void clearMotorAnalise() => $_clearField(35);
+
+  /// B1: valores efetivos (tenant ou global) dos 3 settings com interruptor
+  /// Mostram ao painel o que realmente está ativo, resolvendo tenant (se presente) com global
+  @$pb.TagNumber(36)
+  $core.bool get pesquisaSatisfacaoEfetiva => $_getBF(35);
+  @$pb.TagNumber(36)
+  set pesquisaSatisfacaoEfetiva($core.bool value) => $_setBool(35, value);
+  @$pb.TagNumber(36)
+  $core.bool hasPesquisaSatisfacaoEfetiva() => $_has(35);
+  @$pb.TagNumber(36)
+  void clearPesquisaSatisfacaoEfetiva() => $_clearField(36);
+
+  @$pb.TagNumber(37)
+  $core.bool get analisePreviaEfetiva => $_getBF(36);
+  @$pb.TagNumber(37)
+  set analisePreviaEfetiva($core.bool value) => $_setBool(36, value);
+  @$pb.TagNumber(37)
+  $core.bool hasAnalisePreviaEfetiva() => $_has(36);
+  @$pb.TagNumber(37)
+  void clearAnalisePreviaEfetiva() => $_clearField(37);
+
+  @$pb.TagNumber(38)
+  $core.bool get transcricaoEfetiva => $_getBF(37);
+  @$pb.TagNumber(38)
+  set transcricaoEfetiva($core.bool value) => $_setBool(37, value);
+  @$pb.TagNumber(38)
+  $core.bool hasTranscricaoEfetiva() => $_has(37);
+  @$pb.TagNumber(38)
+  void clearTranscricaoEfetiva() => $_clearField(38);
 }
 
 class UpdateTenantConfigRequest extends $pb.GeneratedMessage {
@@ -7103,6 +7145,7 @@ class MensagemThread extends $pb.GeneratedMessage {
     $core.String? citadaPreview,
     $core.Iterable<ReacaoDaMensagem>? reacoes,
     $core.String? metadadosJson,
+    $core.String? analiseMidia,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -7122,6 +7165,7 @@ class MensagemThread extends $pb.GeneratedMessage {
     if (citadaPreview != null) result.citadaPreview = citadaPreview;
     if (reacoes != null) result.reacoes.addAll(reacoes);
     if (metadadosJson != null) result.metadadosJson = metadadosJson;
+    if (analiseMidia != null) result.analiseMidia = analiseMidia;
     return result;
   }
 
@@ -7158,6 +7202,7 @@ class MensagemThread extends $pb.GeneratedMessage {
     ..pPM<ReacaoDaMensagem>(16, _omitFieldNames ? '' : 'reacoes',
         subBuilder: ReacaoDaMensagem.create)
     ..aOS(17, _omitFieldNames ? '' : 'metadadosJson')
+    ..aOS(18, _omitFieldNames ? '' : 'analiseMidia')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -7337,6 +7382,16 @@ class MensagemThread extends $pb.GeneratedMessage {
   $core.bool hasMetadadosJson() => $_has(16);
   @$pb.TagNumber(17)
   void clearMetadadosJson() => $_clearField(17);
+
+  /// C4 — análise de mídia (transcrição de áudio, descrição de imagem)
+  @$pb.TagNumber(18)
+  $core.String get analiseMidia => $_getSZ(17);
+  @$pb.TagNumber(18)
+  set analiseMidia($core.String value) => $_setString(17, value);
+  @$pb.TagNumber(18)
+  $core.bool hasAnaliseMidia() => $_has(17);
+  @$pb.TagNumber(18)
+  void clearAnaliseMidia() => $_clearField(18);
 }
 
 /// P8 — quem reagiu e com quê.
@@ -27729,6 +27784,850 @@ class NotaResponse extends $pb.GeneratedMessage {
   void clearNota() => $_clearField(1);
   @$pb.TagNumber(1)
   Nota ensureNota() => $_ensure(0);
+}
+
+/// --- Serviço Admin ---
+class AdminServiceApi {
+  final $pb.RpcClient _client;
+
+  AdminServiceApi(this._client);
+
+  $async.Future<ListCoreSettingsResponse> listCoreSettings(
+          $pb.ClientContext? ctx, ListCoreSettingsRequest request) =>
+      _client.invoke<ListCoreSettingsResponse>(ctx, 'AdminService',
+          'ListCoreSettings', request, ListCoreSettingsResponse());
+  $async.Future<UpsertCoreSettingResponse> upsertCoreSetting(
+          $pb.ClientContext? ctx, UpsertCoreSettingRequest request) =>
+      _client.invoke<UpsertCoreSettingResponse>(ctx, 'AdminService',
+          'UpsertCoreSetting', request, UpsertCoreSettingResponse());
+  $async.Future<DeleteCoreSettingResponse> deleteCoreSetting(
+          $pb.ClientContext? ctx, DeleteCoreSettingRequest request) =>
+      _client.invoke<DeleteCoreSettingResponse>(ctx, 'AdminService',
+          'DeleteCoreSetting', request, DeleteCoreSettingResponse());
+  $async.Future<GetTenantConfigResponse> getTenantConfig(
+          $pb.ClientContext? ctx, GetTenantConfigRequest request) =>
+      _client.invoke<GetTenantConfigResponse>(ctx, 'AdminService',
+          'GetTenantConfig', request, GetTenantConfigResponse());
+  $async.Future<UpdateTenantConfigResponse> updateTenantConfig(
+          $pb.ClientContext? ctx, UpdateTenantConfigRequest request) =>
+      _client.invoke<UpdateTenantConfigResponse>(ctx, 'AdminService',
+          'UpdateTenantConfig', request, UpdateTenantConfigResponse());
+
+  /// Fase 2: Tenants
+  $async.Future<AdminListUsersResponse> adminListUsers(
+          $pb.ClientContext? ctx, AdminListUsersRequest request) =>
+      _client.invoke<AdminListUsersResponse>(ctx, 'AdminService',
+          'AdminListUsers', request, AdminListUsersResponse());
+  $async.Future<AdminSetUserActiveResponse> adminSetUserActive(
+          $pb.ClientContext? ctx, AdminSetUserActiveRequest request) =>
+      _client.invoke<AdminSetUserActiveResponse>(ctx, 'AdminService',
+          'AdminSetUserActive', request, AdminSetUserActiveResponse());
+
+  /// P18 — torna explícitos os escopos que cada vínculo tem hoje pelo papel.
+  /// Não muda o acesso de ninguém; dry_run só conta.
+  $async.Future<MigrarEscoposImplicitosResponse> migrarEscoposImplicitos(
+          $pb.ClientContext? ctx, MigrarEscoposImplicitosRequest request) =>
+      _client.invoke<MigrarEscoposImplicitosResponse>(
+          ctx,
+          'AdminService',
+          'MigrarEscoposImplicitos',
+          request,
+          MigrarEscoposImplicitosResponse());
+  $async.Future<ListTenantsResponse> listTenants(
+          $pb.ClientContext? ctx, ListTenantsRequest request) =>
+      _client.invoke<ListTenantsResponse>(
+          ctx, 'AdminService', 'ListTenants', request, ListTenantsResponse());
+  $async.Future<GetTenantResponse> getTenant(
+          $pb.ClientContext? ctx, GetTenantRequest request) =>
+      _client.invoke<GetTenantResponse>(
+          ctx, 'AdminService', 'GetTenant', request, GetTenantResponse());
+  $async.Future<CreateTenantResponse> createTenant(
+          $pb.ClientContext? ctx, CreateTenantRequest request) =>
+      _client.invoke<CreateTenantResponse>(
+          ctx, 'AdminService', 'CreateTenant', request, CreateTenantResponse());
+  $async.Future<UpdateTenantResponse> updateTenant(
+          $pb.ClientContext? ctx, UpdateTenantRequest request) =>
+      _client.invoke<UpdateTenantResponse>(
+          ctx, 'AdminService', 'UpdateTenant', request, UpdateTenantResponse());
+  $async.Future<SetTenantActiveResponse> setTenantActive(
+          $pb.ClientContext? ctx, SetTenantActiveRequest request) =>
+      _client.invoke<SetTenantActiveResponse>(ctx, 'AdminService',
+          'SetTenantActive', request, SetTenantActiveResponse());
+  $async.Future<GenerateAccessCodeResponse> generateAccessCode(
+          $pb.ClientContext? ctx, GenerateAccessCodeRequest request) =>
+      _client.invoke<GenerateAccessCodeResponse>(ctx, 'AdminService',
+          'GenerateAccessCode', request, GenerateAccessCodeResponse());
+
+  /// Fase 2: Billing
+  $async.Future<ListPlansResponse> listPlans(
+          $pb.ClientContext? ctx, ListPlansRequest request) =>
+      _client.invoke<ListPlansResponse>(
+          ctx, 'AdminService', 'ListPlans', request, ListPlansResponse());
+  $async.Future<CreatePlanResponse> createPlan(
+          $pb.ClientContext? ctx, CreatePlanRequest request) =>
+      _client.invoke<CreatePlanResponse>(
+          ctx, 'AdminService', 'CreatePlan', request, CreatePlanResponse());
+  $async.Future<UpdatePlanResponse> updatePlan(
+          $pb.ClientContext? ctx, UpdatePlanRequest request) =>
+      _client.invoke<UpdatePlanResponse>(
+          ctx, 'AdminService', 'UpdatePlan', request, UpdatePlanResponse());
+  $async.Future<ListSubscriptionsResponse> listSubscriptions(
+          $pb.ClientContext? ctx, ListSubscriptionsRequest request) =>
+      _client.invoke<ListSubscriptionsResponse>(ctx, 'AdminService',
+          'ListSubscriptions', request, ListSubscriptionsResponse());
+  $async.Future<RegisterPaymentResponse> registerPayment(
+          $pb.ClientContext? ctx, RegisterPaymentRequest request) =>
+      _client.invoke<RegisterPaymentResponse>(ctx, 'AdminService',
+          'RegisterPayment', request, RegisterPaymentResponse());
+  $async.Future<ListPaymentsResponse> listPayments(
+          $pb.ClientContext? ctx, ListPaymentsRequest request) =>
+      _client.invoke<ListPaymentsResponse>(
+          ctx, 'AdminService', 'ListPayments', request, ListPaymentsResponse());
+
+  /// Vouchers de ativação
+  $async.Future<ListVouchersResponse> listVouchers(
+          $pb.ClientContext? ctx, ListVouchersRequest request) =>
+      _client.invoke<ListVouchersResponse>(
+          ctx, 'AdminService', 'ListVouchers', request, ListVouchersResponse());
+  $async.Future<CreateVoucherResponse> createVoucher(
+          $pb.ClientContext? ctx, CreateVoucherRequest request) =>
+      _client.invoke<CreateVoucherResponse>(ctx, 'AdminService',
+          'CreateVoucher', request, CreateVoucherResponse());
+  $async.Future<RevokeVoucherResponse> revokeVoucher(
+          $pb.ClientContext? ctx, RevokeVoucherRequest request) =>
+      _client.invoke<RevokeVoucherResponse>(ctx, 'AdminService',
+          'RevokeVoucher', request, RevokeVoucherResponse());
+  $async.Future<ListVoucherRedemptionsResponse> listVoucherRedemptions(
+          $pb.ClientContext? ctx, ListVoucherRedemptionsRequest request) =>
+      _client.invoke<ListVoucherRedemptionsResponse>(ctx, 'AdminService',
+          'ListVoucherRedemptions', request, ListVoucherRedemptionsResponse());
+
+  /// Fase 3: Evolution Connection
+  $async.Future<TestEvolutionConnectionResponse> testEvolutionConnection(
+          $pb.ClientContext? ctx, TestEvolutionConnectionRequest request) =>
+      _client.invoke<TestEvolutionConnectionResponse>(
+          ctx,
+          'AdminService',
+          'TestEvolutionConnection',
+          request,
+          TestEvolutionConnectionResponse());
+
+  /// P9 — o `test-connection` da v1 para o provedor de IA: um embedding de
+  /// ensaio com a configuração do tenant. Hoje só se descobria que a chave do
+  /// provedor tinha expirado quando o bot parava de responder.
+  $async.Future<TestarProvedorIaResponse> testarProvedorIa(
+          $pb.ClientContext? ctx, TestarProvedorIaRequest request) =>
+      _client.invoke<TestarProvedorIaResponse>(ctx, 'AdminService',
+          'TestarProvedorIa', request, TestarProvedorIaResponse());
+
+  /// Fase 4: Feature Flags
+  $async.Future<ListFeatureFlagsResponse> listFeatureFlags(
+          $pb.ClientContext? ctx, ListFeatureFlagsRequest request) =>
+      _client.invoke<ListFeatureFlagsResponse>(ctx, 'AdminService',
+          'ListFeatureFlags', request, ListFeatureFlagsResponse());
+  $async.Future<SetFeatureFlagResponse> setFeatureFlag(
+          $pb.ClientContext? ctx, SetFeatureFlagRequest request) =>
+      _client.invoke<SetFeatureFlagResponse>(ctx, 'AdminService',
+          'SetFeatureFlag', request, SetFeatureFlagResponse());
+  $async.Future<SetFeatureFlagOverrideResponse> setFeatureFlagOverride(
+          $pb.ClientContext? ctx, SetFeatureFlagOverrideRequest request) =>
+      _client.invoke<SetFeatureFlagOverrideResponse>(ctx, 'AdminService',
+          'SetFeatureFlagOverride', request, SetFeatureFlagOverrideResponse());
+
+  /// Fase 5: Auditoria & Saúde
+  $async.Future<QueryAuditLogResponse> queryAuditLog(
+          $pb.ClientContext? ctx, QueryAuditLogRequest request) =>
+      _client.invoke<QueryAuditLogResponse>(ctx, 'AdminService',
+          'QueryAuditLog', request, QueryAuditLogResponse());
+  $async.Future<GetServiceHealthResponse> getServiceHealth(
+          $pb.ClientContext? ctx, GetServiceHealthRequest request) =>
+      _client.invoke<GetServiceHealthResponse>(ctx, 'AdminService',
+          'GetServiceHealth', request, GetServiceHealthResponse());
+  $async.Future<GetDashboardSummaryResponse> getDashboardSummary(
+          $pb.ClientContext? ctx, GetDashboardSummaryRequest request) =>
+      _client.invoke<GetDashboardSummaryResponse>(ctx, 'AdminService',
+          'GetDashboardSummary', request, GetDashboardSummaryResponse());
+  $async.Future<ExportTenantsCsvResponse> exportTenantsCsv(
+          $pb.ClientContext? ctx, ExportTenantsCsvRequest request) =>
+      _client.invoke<ExportTenantsCsvResponse>(ctx, 'AdminService',
+          'ExportTenantsCsv', request, ExportTenantsCsvResponse());
+
+  /// Realtime
+  $async.Future<AtendimentoEvent> streamAtendimentos(
+          $pb.ClientContext? ctx, StreamAtendimentosRequest request) =>
+      _client.invoke<AtendimentoEvent>(ctx, 'AdminService',
+          'StreamAtendimentos', request, AtendimentoEvent());
+
+  /// Fase 6: Operacional (fila/Kanban/chat — WS-6). RBAC fino por fluxo (flow_permissions)
+  /// já é aplicado no data_postgres (WS-5a); estas rotas exigem só autenticação, não superuser.
+  $async.Future<ListAtendimentosResponse> listAtendimentos(
+          $pb.ClientContext? ctx, ListAtendimentosRequest request) =>
+      _client.invoke<ListAtendimentosResponse>(ctx, 'AdminService',
+          'ListAtendimentos', request, ListAtendimentosResponse());
+  $async.Future<GetThreadResponse> getThread(
+          $pb.ClientContext? ctx, GetThreadRequest request) =>
+      _client.invoke<GetThreadResponse>(
+          ctx, 'AdminService', 'GetThread', request, GetThreadResponse());
+  $async.Future<IniciarAtendimentoManualResponse> iniciarAtendimentoManual(
+          $pb.ClientContext? ctx, IniciarAtendimentoManualRequest request) =>
+      _client.invoke<IniciarAtendimentoManualResponse>(
+          ctx,
+          'AdminService',
+          'IniciarAtendimentoManual',
+          request,
+          IniciarAtendimentoManualResponse());
+  $async.Future<MoveAtendimentoEtapaResponse> moveAtendimentoEtapa(
+          $pb.ClientContext? ctx, MoveAtendimentoEtapaRequest request) =>
+      _client.invoke<MoveAtendimentoEtapaResponse>(ctx, 'AdminService',
+          'MoveAtendimentoEtapa', request, MoveAtendimentoEtapaResponse());
+  $async.Future<SetAtendimentoStatusResponse> setAtendimentoStatus(
+          $pb.ClientContext? ctx, SetAtendimentoStatusRequest request) =>
+      _client.invoke<SetAtendimentoStatusResponse>(ctx, 'AdminService',
+          'SetAtendimentoStatus', request, SetAtendimentoStatusResponse());
+
+  /// Ficha do atendimento: etiquetas e anotacoes internas. As tabelas
+  /// existiam desde o comeco e nenhum app as alcancava.
+  $async.Future<DetalheAtendimentoResponse> getDetalheAtendimento(
+          $pb.ClientContext? ctx, AtendimentoIdRequest request) =>
+      _client.invoke<DetalheAtendimentoResponse>(ctx, 'AdminService',
+          'GetDetalheAtendimento', request, DetalheAtendimentoResponse());
+  $async.Future<EtiquetaResponse> createEtiqueta(
+          $pb.ClientContext? ctx, CreateEtiquetaRequest request) =>
+      _client.invoke<EtiquetaResponse>(
+          ctx, 'AdminService', 'CreateEtiqueta', request, EtiquetaResponse());
+  $async.Future<SimpleOkResponse> alternarEtiqueta(
+          $pb.ClientContext? ctx, AlternarEtiquetaRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'AlternarEtiqueta', request, SimpleOkResponse());
+  $async.Future<NotaResponse> createNota(
+          $pb.ClientContext? ctx, CreateNotaRequest request) =>
+      _client.invoke<NotaResponse>(
+          ctx, 'AdminService', 'CreateNota', request, NotaResponse());
+  $async.Future<SendOutboundMessageResponse> sendOutboundMessage(
+          $pb.ClientContext? ctx, SendOutboundMessageRequest request) =>
+      _client.invoke<SendOutboundMessageResponse>(ctx, 'AdminService',
+          'SendOutboundMessage', request, SendOutboundMessageResponse());
+
+  /// N9a — mídia na conversa. Upload em duas etapas (presign + confirmação) para
+  /// o binário não passar pelo envelope.
+  $async.Future<SolicitarUploadMidiaResponse> solicitarUploadMidia(
+          $pb.ClientContext? ctx, SolicitarUploadMidiaRequest request) =>
+      _client.invoke<SolicitarUploadMidiaResponse>(ctx, 'AdminService',
+          'SolicitarUploadMidia', request, SolicitarUploadMidiaResponse());
+  $async.Future<EnviarMidiaAtendimentoResponse> enviarMidiaAtendimento(
+          $pb.ClientContext? ctx, EnviarMidiaAtendimentoRequest request) =>
+      _client.invoke<EnviarMidiaAtendimentoResponse>(ctx, 'AdminService',
+          'EnviarMidiaAtendimento', request, EnviarMidiaAtendimentoResponse());
+  $async.Future<ListarMidiasAtendimentoResponse> listarMidiasAtendimento(
+          $pb.ClientContext? ctx, ListarMidiasAtendimentoRequest request) =>
+      _client.invoke<ListarMidiasAtendimentoResponse>(
+          ctx,
+          'AdminService',
+          'ListarMidiasAtendimento',
+          request,
+          ListarMidiasAtendimentoResponse());
+
+  /// P3 — presenca do atendente na conversa (efemera).
+  $async.Future<EnviarPresencaResponse> enviarPresenca(
+          $pb.ClientContext? ctx, EnviarPresencaRequest request) =>
+      _client.invoke<EnviarPresencaResponse>(ctx, 'AdminService',
+          'EnviarPresenca', request, EnviarPresencaResponse());
+
+  /// P5 — a ficha completa.
+  $async.Future<ListarTimelineResponse> listarTimelineAtendimento(
+          $pb.ClientContext? ctx, ListarTimelineRequest request) =>
+      _client.invoke<ListarTimelineResponse>(ctx, 'AdminService',
+          'ListarTimelineAtendimento', request, ListarTimelineResponse());
+  $async.Future<ListarAtendimentosDoContatoResponse>
+      listarAtendimentosDoContato($pb.ClientContext? ctx,
+              ListarAtendimentosDoContatoRequest request) =>
+          _client.invoke<ListarAtendimentosDoContatoResponse>(
+              ctx,
+              'AdminService',
+              'ListarAtendimentosDoContato',
+              request,
+              ListarAtendimentosDoContatoResponse());
+  $async.Future<SimpleOkResponse> removerNota(
+          $pb.ClientContext? ctx, RemoverNotaRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'RemoverNota', request, SimpleOkResponse());
+  $async.Future<EtiquetaResponse> updateEtiqueta(
+          $pb.ClientContext? ctx, UpdateEtiquetaRequest request) =>
+      _client.invoke<EtiquetaResponse>(
+          ctx, 'AdminService', 'UpdateEtiqueta', request, EtiquetaResponse());
+  $async.Future<SimpleOkResponse> desativarEtiqueta(
+          $pb.ClientContext? ctx, DesativarEtiquetaRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService', 'DesativarEtiqueta',
+          request, SimpleOkResponse());
+
+  /// P4 — operacao do quadro pelo supervisor.
+  $async.Future<AtribuirAtendimentoResponse> atribuirAtendimento(
+          $pb.ClientContext? ctx, AtribuirAtendimentoRequest request) =>
+      _client.invoke<AtribuirAtendimentoResponse>(ctx, 'AdminService',
+          'AtribuirAtendimento', request, AtribuirAtendimentoResponse());
+  $async.Future<DefinirPrioridadeResponse> definirPrioridade(
+          $pb.ClientContext? ctx, DefinirPrioridadeRequest request) =>
+      _client.invoke<DefinirPrioridadeResponse>(ctx, 'AdminService',
+          'DefinirPrioridade', request, DefinirPrioridadeResponse());
+  $async.Future<TransferirParaFluxoResponse> transferirParaFluxo(
+          $pb.ClientContext? ctx, TransferirParaFluxoRequest request) =>
+      _client.invoke<TransferirParaFluxoResponse>(ctx, 'AdminService',
+          'TransferirParaFluxo', request, TransferirParaFluxoResponse());
+  $async.Future<ExportarQuadroResponse> exportarQuadro(
+          $pb.ClientContext? ctx, ExportarQuadroRequest request) =>
+      _client.invoke<ExportarQuadroResponse>(ctx, 'AdminService',
+          'ExportarQuadro', request, ExportarQuadroResponse());
+
+  /// Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
+  /// `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).
+  $async.Future<CreateInviteResponse> createInvite(
+          $pb.ClientContext? ctx, CreateInviteRequest request) =>
+      _client.invoke<CreateInviteResponse>(
+          ctx, 'AdminService', 'CreateInvite', request, CreateInviteResponse());
+  $async.Future<AcceptInviteResponse> acceptInvite(
+          $pb.ClientContext? ctx, AcceptInviteRequest request) =>
+      _client.invoke<AcceptInviteResponse>(
+          ctx, 'AdminService', 'AcceptInvite', request, AcceptInviteResponse());
+  $async.Future<ListInvitesResponse> listInvites(
+          $pb.ClientContext? ctx, ListInvitesRequest request) =>
+      _client.invoke<ListInvitesResponse>(
+          ctx, 'AdminService', 'ListInvites', request, ListInvitesResponse());
+  $async.Future<RevokeInviteResponse> revokeInvite(
+          $pb.ClientContext? ctx, RevokeInviteRequest request) =>
+      _client.invoke<RevokeInviteResponse>(
+          ctx, 'AdminService', 'RevokeInvite', request, RevokeInviteResponse());
+  $async.Future<ReenviarConviteResponse> reenviarConvite(
+          $pb.ClientContext? ctx, ReenviarConviteRequest request) =>
+      _client.invoke<ReenviarConviteResponse>(ctx, 'AdminService',
+          'ReenviarConvite', request, ReenviarConviteResponse());
+  $async.Future<ListTenantUsersResponse> listTenantUsers(
+          $pb.ClientContext? ctx, ListTenantUsersRequest request) =>
+      _client.invoke<ListTenantUsersResponse>(ctx, 'AdminService',
+          'ListTenantUsers', request, ListTenantUsersResponse());
+  $async.Future<UpdateTenantUserResponse> updateTenantUser(
+          $pb.ClientContext? ctx, UpdateTenantUserRequest request) =>
+      _client.invoke<UpdateTenantUserResponse>(ctx, 'AdminService',
+          'UpdateTenantUser', request, UpdateTenantUserResponse());
+  $async.Future<GetTenantConfigResponse> getMyTenantConfig(
+          $pb.ClientContext? ctx, GetMyTenantConfigRequest request) =>
+      _client.invoke<GetTenantConfigResponse>(ctx, 'AdminService',
+          'GetMyTenantConfig', request, GetTenantConfigResponse());
+  $async.Future<UpdateTenantConfigResponse> updateMyTenantConfig(
+          $pb.ClientContext? ctx, UpdateMyTenantConfigRequest request) =>
+      _client.invoke<UpdateTenantConfigResponse>(ctx, 'AdminService',
+          'UpdateMyTenantConfig', request, UpdateTenantConfigResponse());
+
+  /// Paridade MCP — atualização PARCIAL da configuração avançada (prompts por
+  /// tenant, tipos de entidade, marca, fuso, idioma, pesquisa de satisfação,
+  /// inatividade, análise prévia, transcrição). Campo ausente não é tocado.
+  $async.Future<SimpleOkResponse> updateMyConfigAvancada(
+          $pb.ClientContext? ctx, UpdateMyConfigAvancadaRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'UpdateMyConfigAvancada', request, SimpleOkResponse());
+
+  /// Fase N13: aplicativos de IA conectados por OAuth 2.1 (servidor MCP).
+  /// Cada usuário enxerga e revoga APENAS os próprios consentimentos — nem um
+  /// `tenant:admin` vê o do colega. Por isso não há variante administrativa.
+  $async.Future<ListMcpGrantsResponse> listMcpGrants(
+          $pb.ClientContext? ctx, ListMcpGrantsRequest request) =>
+      _client.invoke<ListMcpGrantsResponse>(ctx, 'AdminService',
+          'ListMcpGrants', request, ListMcpGrantsResponse());
+  $async.Future<RevokeMcpGrantResponse> revokeMcpGrant(
+          $pb.ClientContext? ctx, RevokeMcpGrantRequest request) =>
+      _client.invoke<RevokeMcpGrantResponse>(ctx, 'AdminService',
+          'RevokeMcpGrant', request, RevokeMcpGrantResponse());
+  $async.Future<AjustarEscoposMcpGrantResponse> ajustarEscoposMcpGrant(
+          $pb.ClientContext? ctx, AjustarEscoposMcpGrantRequest request) =>
+      _client.invoke<AjustarEscoposMcpGrantResponse>(ctx, 'AdminService',
+          'AjustarEscoposMcpGrant', request, AjustarEscoposMcpGrantResponse());
+  $async.Future<ListMyAuditLogResponse> listMyAuditLog(
+          $pb.ClientContext? ctx, ListMyAuditLogRequest request) =>
+      _client.invoke<ListMyAuditLogResponse>(ctx, 'AdminService',
+          'ListMyAuditLog', request, ListMyAuditLogResponse());
+
+  /// Configuração inicial guiada (passos 5 a 8)
+  $async.Future<CreateMyWhatsappInstanceResponse> createMyWhatsappInstance(
+          $pb.ClientContext? ctx, CreateMyWhatsappInstanceRequest request) =>
+      _client.invoke<CreateMyWhatsappInstanceResponse>(
+          ctx,
+          'AdminService',
+          'CreateMyWhatsappInstance',
+          request,
+          CreateMyWhatsappInstanceResponse());
+  $async.Future<GetMyWhatsappInstanceStatusResponse>
+      getMyWhatsappInstanceStatus($pb.ClientContext? ctx,
+              GetMyWhatsappInstanceStatusRequest request) =>
+          _client.invoke<GetMyWhatsappInstanceStatusResponse>(
+              ctx,
+              'AdminService',
+              'GetMyWhatsappInstanceStatus',
+              request,
+              GetMyWhatsappInstanceStatusResponse());
+  $async.Future<CreateMyDepartamentoResponse> createMyDepartamento(
+          $pb.ClientContext? ctx, CreateMyDepartamentoRequest request) =>
+      _client.invoke<CreateMyDepartamentoResponse>(ctx, 'AdminService',
+          'CreateMyDepartamento', request, CreateMyDepartamentoResponse());
+  $async.Future<SetMyBotPersonaResponse> setMyBotPersona(
+          $pb.ClientContext? ctx, SetMyBotPersonaRequest request) =>
+      _client.invoke<SetMyBotPersonaResponse>(ctx, 'AdminService',
+          'SetMyBotPersona', request, SetMyBotPersonaResponse());
+  $async.Future<SetOnboardingProgressResponse> setOnboardingProgress(
+          $pb.ClientContext? ctx, SetOnboardingProgressRequest request) =>
+      _client.invoke<SetOnboardingProgressResponse>(ctx, 'AdminService',
+          'SetOnboardingProgress', request, SetOnboardingProgressResponse());
+  $async.Future<GetMyOnboardingProgressResponse> getMyOnboardingProgress(
+          $pb.ClientContext? ctx, GetMyOnboardingProgressRequest request) =>
+      _client.invoke<GetMyOnboardingProgressResponse>(
+          ctx,
+          'AdminService',
+          'GetMyOnboardingProgress',
+          request,
+          GetMyOnboardingProgressResponse());
+  $async.Future<QuitarMinhaAssinaturaResponse> quitarMinhaAssinatura(
+          $pb.ClientContext? ctx, QuitarMinhaAssinaturaRequest request) =>
+      _client.invoke<QuitarMinhaAssinaturaResponse>(ctx, 'AdminService',
+          'QuitarMinhaAssinatura', request, QuitarMinhaAssinaturaResponse());
+
+  /// Treinamento da IA (o tenant treina o próprio assistente)
+  $async.Future<MyTreinamentoResponse> createMyTreinamento(
+          $pb.ClientContext? ctx, CreateMyTreinamentoRequest request) =>
+      _client.invoke<MyTreinamentoResponse>(ctx, 'AdminService',
+          'CreateMyTreinamento', request, MyTreinamentoResponse());
+  $async.Future<ListMyTreinamentosResponse> listMyTreinamentos(
+          $pb.ClientContext? ctx, ListMyTreinamentosRequest request) =>
+      _client.invoke<ListMyTreinamentosResponse>(ctx, 'AdminService',
+          'ListMyTreinamentos', request, ListMyTreinamentosResponse());
+
+  /// Curadoria de intencoes: o que a IA deve FAZER quando a pergunta se parecer
+  /// com um exemplo. Complementa o material treinado, que diz o que ela SABE.
+  $async.Future<ListMyIntentsResponse> listMyIntents(
+          $pb.ClientContext? ctx, ListMyIntentsRequest request) =>
+      _client.invoke<ListMyIntentsResponse>(ctx, 'AdminService',
+          'ListMyIntents', request, ListMyIntentsResponse());
+  $async.Future<MyIntentResponse> createMyIntent(
+          $pb.ClientContext? ctx, MyIntentDados request) =>
+      _client.invoke<MyIntentResponse>(
+          ctx, 'AdminService', 'CreateMyIntent', request, MyIntentResponse());
+  $async.Future<SimpleOkResponse> updateMyIntent(
+          $pb.ClientContext? ctx, UpdateMyIntentRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'UpdateMyIntent', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> removeMyIntent(
+          $pb.ClientContext? ctx, MyIntentIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'RemoveMyIntent', request, SimpleOkResponse());
+
+  /// Ensaio: a pergunta percorre o MESMO caminho de uma mensagem real (embed ->
+  /// RAG -> LLM), sem gravar atendimento nenhum. Validar o treinamento pelo
+  /// WhatsApp de verdade obrigaria a usar um numero real e sujar o historico.
+  $async.Future<TestarPerguntaResponse> testarPergunta(
+          $pb.ClientContext? ctx, TestarPerguntaRequest request) =>
+      _client.invoke<TestarPerguntaResponse>(ctx, 'AdminService',
+          'TestarPergunta', request, TestarPerguntaResponse());
+  $async.Future<SolicitarUploadTreinamentoResponse> solicitarUploadTreinamento(
+          $pb.ClientContext? ctx, SolicitarUploadTreinamentoRequest request) =>
+      _client.invoke<SolicitarUploadTreinamentoResponse>(
+          ctx,
+          'AdminService',
+          'SolicitarUploadTreinamento',
+          request,
+          SolicitarUploadTreinamentoResponse());
+  $async.Future<MyTreinamentoResponse> createMyTreinamentoComArquivo(
+          $pb.ClientContext? ctx,
+          CreateMyTreinamentoComArquivoRequest request) =>
+      _client.invoke<MyTreinamentoResponse>(ctx, 'AdminService',
+          'CreateMyTreinamentoComArquivo', request, MyTreinamentoResponse());
+  $async.Future<RegistrarFeedbackTesteResponse> registrarFeedbackTeste(
+          $pb.ClientContext? ctx, RegistrarFeedbackTesteRequest request) =>
+      _client.invoke<RegistrarFeedbackTesteResponse>(ctx, 'AdminService',
+          'RegistrarFeedbackTeste', request, RegistrarFeedbackTesteResponse());
+
+  /// P17 — revisar as avaliações acumuladas: a correção feita no teste vira
+  /// material de treinamento (pela criação normal) e sai da lista.
+  $async.Future<ListMyAvaliacoesDeTesteResponse> listMyAvaliacoesDeTeste(
+          $pb.ClientContext? ctx, ListMyAvaliacoesDeTesteRequest request) =>
+      _client.invoke<ListMyAvaliacoesDeTesteResponse>(
+          ctx,
+          'AdminService',
+          'ListMyAvaliacoesDeTeste',
+          request,
+          ListMyAvaliacoesDeTesteResponse());
+  $async.Future<SimpleOkResponse> marcarAvaliacaoTratada(
+          $pb.ClientContext? ctx, MarcarAvaliacaoTratadaRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'MarcarAvaliacaoTratada', request, SimpleOkResponse());
+  $async.Future<MyTreinamentoResponse> getMyTreinamento(
+          $pb.ClientContext? ctx, GetMyTreinamentoRequest request) =>
+      _client.invoke<MyTreinamentoResponse>(ctx, 'AdminService',
+          'GetMyTreinamento', request, MyTreinamentoResponse());
+  $async.Future<SimpleOkResponse> finalizarMyTreinamento(
+          $pb.ClientContext? ctx, FinalizarMyTreinamentoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'FinalizarMyTreinamento', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> removerMyTreinamento(
+          $pb.ClientContext? ctx, RemoverMyTreinamentoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'RemoverMyTreinamento', request, SimpleOkResponse());
+
+  /// Gestão das conexões de WhatsApp DEPOIS de conectadas.
+  ///
+  /// O onboarding cria a primeira; sem estas, uma conexão que cai deixa o tenant
+  /// sem saída — não há como ver o estado, reconectar nem trocar de aparelho.
+  $async.Future<ListMyWhatsappInstancesResponse> listMyWhatsappInstances(
+          $pb.ClientContext? ctx, ListMyWhatsappInstancesRequest request) =>
+      _client.invoke<ListMyWhatsappInstancesResponse>(
+          ctx,
+          'AdminService',
+          'ListMyWhatsappInstances',
+          request,
+          ListMyWhatsappInstancesResponse());
+  $async.Future<DefinirRespostaBotInstanciaResponse>
+      definirRespostaBotInstancia($pb.ClientContext? ctx,
+              DefinirRespostaBotInstanciaRequest request) =>
+          _client.invoke<DefinirRespostaBotInstanciaResponse>(
+              ctx,
+              'AdminService',
+              'DefinirRespostaBotInstancia',
+              request,
+              DefinirRespostaBotInstanciaResponse());
+  $async.Future<DefinirBotDaConversaResponse> definirBotDaConversa(
+          $pb.ClientContext? ctx, DefinirBotDaConversaRequest request) =>
+      _client.invoke<DefinirBotDaConversaResponse>(ctx, 'AdminService',
+          'DefinirBotDaConversa', request, DefinirBotDaConversaResponse());
+
+  /// B6 (N9/E4): abrir a conversa e chegar ao fim dela marca o que o contato mandou.
+  $async.Future<MarcarAtendimentoLidoResponse> marcarAtendimentoLido(
+          $pb.ClientContext? ctx, MarcarAtendimentoLidoRequest request) =>
+      _client.invoke<MarcarAtendimentoLidoResponse>(ctx, 'AdminService',
+          'MarcarAtendimentoLido', request, MarcarAtendimentoLidoResponse());
+  $async.Future<SimpleOkResponse> reconnectMyWhatsappInstance(
+          $pb.ClientContext? ctx, MyWhatsappInstanceIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'ReconnectMyWhatsappInstance', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> deleteMyWhatsappInstance(
+          $pb.ClientContext? ctx, MyWhatsappInstanceIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'DeleteMyWhatsappInstance', request, SimpleOkResponse());
+
+  /// P7 — encerra a SESSÃO sem apagar a conexão: o histórico e o cadastro ficam,
+  /// e o mesmo registro volta com um QR novo. Remover era a única saída, e ela
+  /// custava o cadastro inteiro para trocar de aparelho.
+  $async.Future<SimpleOkResponse> desconectarMyWhatsappInstance(
+          $pb.ClientContext? ctx, MyWhatsappInstanceIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'DesconectarMyWhatsappInstance', request, SimpleOkResponse());
+
+  /// P13 — o contato da conversa, com a foto buscada no WhatsApp sob demanda.
+  $async.Future<ObterContatoDoAtendimentoResponse> obterContatoDoAtendimento(
+          $pb.ClientContext? ctx, ObterContatoDoAtendimentoRequest request) =>
+      _client.invoke<ObterContatoDoAtendimentoResponse>(
+          ctx,
+          'AdminService',
+          'ObterContatoDoAtendimento',
+          request,
+          ObterContatoDoAtendimentoResponse());
+
+  /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+  $async.Future<SimpleOkResponse> marcarRevisado(
+          $pb.ClientContext? ctx, MarcarRevisadoRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'MarcarRevisado', request, SimpleOkResponse());
+
+  /// P11 — a última versão publicada do app. Até aqui o zip era trocado à mão,
+  /// e ninguém sabia que estava numa versão velha até um bug já corrigido
+  /// aparecer de novo.
+  $async.Future<GetVersaoDoAppResponse> getVersaoDoApp(
+          $pb.ClientContext? ctx, GetVersaoDoAppRequest request) =>
+      _client.invoke<GetVersaoDoAppResponse>(ctx, 'AdminService',
+          'GetVersaoDoApp', request, GetVersaoDoAppResponse());
+
+  /// P11 — download seguro do instalador Windows (apenas superusuário, beta).
+  $async.Future<GetWindowsDownloadLinkResponse> getWindowsDownloadLink(
+          $pb.ClientContext? ctx, GetWindowsDownloadLinkRequest request) =>
+      _client.invoke<GetWindowsDownloadLinkResponse>(ctx, 'AdminService',
+          'GetWindowsDownloadLink', request, GetWindowsDownloadLinkResponse());
+  $async.Future<SimpleOkResponse> definirDepartamentoDaConexao(
+          $pb.ClientContext? ctx,
+          DefinirDepartamentoDaConexaoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'DefinirDepartamentoDaConexao', request, SimpleOkResponse());
+  $async.Future<DetalheDaConexaoResponse> detalheDaConexao(
+          $pb.ClientContext? ctx, DetalheDaConexaoRequest request) =>
+      _client.invoke<DetalheDaConexaoResponse>(ctx, 'AdminService',
+          'DetalheDaConexao', request, DetalheDaConexaoResponse());
+
+  /// P9 — mensagens que o atendente mandou e que não tinham para onde ir. O
+  /// reprocessamento existia desde a N7.2 e não era alcançável de tela nenhuma:
+  /// a mensagem ficava parada para sempre sem ninguém saber.
+  $async.Future<ListMyMensagensNaoEntreguesResponse>
+      listMyMensagensNaoEntregues($pb.ClientContext? ctx,
+              ListMyMensagensNaoEntreguesRequest request) =>
+          _client.invoke<ListMyMensagensNaoEntreguesResponse>(
+              ctx,
+              'AdminService',
+              'ListMyMensagensNaoEntregues',
+              request,
+              ListMyMensagensNaoEntreguesResponse());
+  $async.Future<ReenviarMensagemNaoEntregueResponse>
+      reenviarMensagemNaoEntregue($pb.ClientContext? ctx,
+              ReenviarMensagemNaoEntregueRequest request) =>
+          _client.invoke<ReenviarMensagemNaoEntregueResponse>(
+              ctx,
+              'AdminService',
+              'ReenviarMensagemNaoEntregue',
+              request,
+              ReenviarMensagemNaoEntregueResponse());
+
+  /// P7 — os números que o sistema ignora (a "whitelist" da v1).
+  $async.Future<ListMyNumerosIgnoradosResponse> listMyNumerosIgnorados(
+          $pb.ClientContext? ctx, ListMyNumerosIgnoradosRequest request) =>
+      _client.invoke<ListMyNumerosIgnoradosResponse>(ctx, 'AdminService',
+          'ListMyNumerosIgnorados', request, ListMyNumerosIgnoradosResponse());
+  $async.Future<MyNumeroIgnoradoResponse> criarNumeroIgnorado(
+          $pb.ClientContext? ctx, CriarNumeroIgnoradoRequest request) =>
+      _client.invoke<MyNumeroIgnoradoResponse>(ctx, 'AdminService',
+          'CriarNumeroIgnorado', request, MyNumeroIgnoradoResponse());
+  $async.Future<SimpleOkResponse> atualizarNumeroIgnorado(
+          $pb.ClientContext? ctx, AtualizarNumeroIgnoradoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'AtualizarNumeroIgnorado', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> removerNumeroIgnorado(
+          $pb.ClientContext? ctx, NumeroIgnoradoIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'RemoverNumeroIgnorado', request, SimpleOkResponse());
+
+  /// Departamentos e atendentes — a estrutura para onde a fila manda conversa.
+  $async.Future<ListMyDepartamentosResponse> listMyDepartamentos(
+          $pb.ClientContext? ctx, ListMyDepartamentosRequest request) =>
+      _client.invoke<ListMyDepartamentosResponse>(ctx, 'AdminService',
+          'ListMyDepartamentos', request, ListMyDepartamentosResponse());
+  $async.Future<SimpleOkResponse> updateMyDepartamento(
+          $pb.ClientContext? ctx, UpdateMyDepartamentoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'UpdateMyDepartamento', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> desativarMyDepartamento(
+          $pb.ClientContext? ctx, MyDepartamentoIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'DesativarMyDepartamento', request, SimpleOkResponse());
+  $async.Future<ListMyAtendentesResponse> listMyAtendentes(
+          $pb.ClientContext? ctx, ListMyAtendentesRequest request) =>
+      _client.invoke<ListMyAtendentesResponse>(ctx, 'AdminService',
+          'ListMyAtendentes', request, ListMyAtendentesResponse());
+  $async.Future<MyAtendenteResponse> createMyAtendente(
+          $pb.ClientContext? ctx, CreateMyAtendenteRequest request) =>
+      _client.invoke<MyAtendenteResponse>(ctx, 'AdminService',
+          'CreateMyAtendente', request, MyAtendenteResponse());
+  $async.Future<SimpleOkResponse> updateMyAtendente(
+          $pb.ClientContext? ctx, UpdateMyAtendenteRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService', 'UpdateMyAtendente',
+          request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> desativarMyAtendente(
+          $pb.ClientContext? ctx, MyAtendenteIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'DesativarMyAtendente', request, SimpleOkResponse());
+  $async.Future<GetMyPainelResponse> getMyPainel(
+          $pb.ClientContext? ctx, GetMyPainelRequest request) =>
+      _client.invoke<GetMyPainelResponse>(
+          ctx, 'AdminService', 'GetMyPainel', request, GetMyPainelResponse());
+  $async.Future<ListMyContatosResponse> listMyContatos(
+          $pb.ClientContext? ctx, ListMyContatosRequest request) =>
+      _client.invoke<ListMyContatosResponse>(ctx, 'AdminService',
+          'ListMyContatos', request, ListMyContatosResponse());
+
+  /// C4 — cadastro de contato pela tela. Ate aqui um contato so existia
+  /// porque mandou mensagem, e o "iniciar atendimento" do C3 nao achava
+  /// ninguem para escolher.
+  $async.Future<MyContatoResponse> createMyContato(
+          $pb.ClientContext? ctx, CreateMyContatoRequest request) =>
+      _client.invoke<MyContatoResponse>(
+          ctx, 'AdminService', 'CreateMyContato', request, MyContatoResponse());
+  $async.Future<SimpleOkResponse> updateMyContato(
+          $pb.ClientContext? ctx, UpdateMyContatoRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'UpdateMyContato', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> definirMyContatoAtivo(
+          $pb.ClientContext? ctx, DefinirMyContatoAtivoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'DefinirMyContatoAtivo', request, SimpleOkResponse());
+
+  /// Doc 39 — excluir é DEFINITIVO: o item some do painel, das seleções, da IA e
+  /// das estatísticas, não volta, e a linha fica só para a auditoria. Desativar
+  /// é o reversível. Os tipos: contato, cliente, atendimento, departamento,
+  /// fluxo, etapa, atendente, campo, etiqueta, nota, intencao, treinamento,
+  /// numero_ignorado (conexão se exclui por DeleteMyWhatsappInstance, que apaga
+  /// no provedor antes).
+  $async.Future<ExcluirMyItemResponse> excluirMyItem(
+          $pb.ClientContext? ctx, ExcluirMyItemRequest request) =>
+      _client.invoke<ExcluirMyItemResponse>(ctx, 'AdminService',
+          'ExcluirMyItem', request, ExcluirMyItemResponse());
+  $async.Future<SimpleOkResponse> definirMyItemAtivo(
+          $pb.ClientContext? ctx, DefinirMyItemAtivoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'DefinirMyItemAtivo', request, SimpleOkResponse());
+
+  /// Somente leitura, só tenant:admin — a aba "Excluídos" da auditoria.
+  $async.Future<ListMyExcluidosResponse> listMyExcluidos(
+          $pb.ClientContext? ctx, ListMyExcluidosRequest request) =>
+      _client.invoke<ListMyExcluidosResponse>(ctx, 'AdminService',
+          'ListMyExcluidos', request, ListMyExcluidosResponse());
+
+  /// B10 (N11 E5): clientes (PJ/PF) e o vinculo com os contatos.
+  $async.Future<ListMyClientesResponse> listMyClientes(
+          $pb.ClientContext? ctx, ListMyClientesRequest request) =>
+      _client.invoke<ListMyClientesResponse>(ctx, 'AdminService',
+          'ListMyClientes', request, ListMyClientesResponse());
+  $async.Future<MyClienteResponse> createMyCliente(
+          $pb.ClientContext? ctx, CreateMyClienteRequest request) =>
+      _client.invoke<MyClienteResponse>(
+          ctx, 'AdminService', 'CreateMyCliente', request, MyClienteResponse());
+  $async.Future<SimpleOkResponse> updateMyCliente(
+          $pb.ClientContext? ctx, UpdateMyClienteRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'UpdateMyCliente', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> definirMyClienteAtivo(
+          $pb.ClientContext? ctx, DefinirMyClienteAtivoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'DefinirMyClienteAtivo', request, SimpleOkResponse());
+  $async.Future<ListMyContatosDoClienteResponse> listMyContatosDoCliente(
+          $pb.ClientContext? ctx, MyClienteIdRequest request) =>
+      _client.invoke<ListMyContatosDoClienteResponse>(
+          ctx,
+          'AdminService',
+          'ListMyContatosDoCliente',
+          request,
+          ListMyContatosDoClienteResponse());
+  $async.Future<SimpleOkResponse> vincularMyContatoCliente(
+          $pb.ClientContext? ctx, VincularMyContatoClienteRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'VincularMyContatoCliente', request, SimpleOkResponse());
+
+  /// N9 E13 — o catalogo de campos do cartao, por tenant.
+  $async.Future<ListMyCamposResponse> listMyCampos(
+          $pb.ClientContext? ctx, ListMyCamposRequest request) =>
+      _client.invoke<ListMyCamposResponse>(
+          ctx, 'AdminService', 'ListMyCampos', request, ListMyCamposResponse());
+  $async.Future<MyCampoResponse> createMyCampo(
+          $pb.ClientContext? ctx, CreateMyCampoRequest request) =>
+      _client.invoke<MyCampoResponse>(
+          ctx, 'AdminService', 'CreateMyCampo', request, MyCampoResponse());
+  $async.Future<SimpleOkResponse> updateMyCampo(
+          $pb.ClientContext? ctx, UpdateMyCampoRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'UpdateMyCampo', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> desativarMyCampo(
+          $pb.ClientContext? ctx, MyCampoIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'DesativarMyCampo', request, SimpleOkResponse());
+
+  /// Preenchimento manual na ficha do atendimento.
+  $async.Future<SimpleOkResponse> setMyValorCampo(
+          $pb.ClientContext? ctx, SetMyValorCampoRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'SetMyValorCampo', request, SimpleOkResponse());
+
+  /// Fluxos de atendimento e suas etapas — o quadro por onde a conversa anda.
+  $async.Future<ListMyFluxosResponse> listMyFluxos(
+          $pb.ClientContext? ctx, ListMyFluxosRequest request) =>
+      _client.invoke<ListMyFluxosResponse>(
+          ctx, 'AdminService', 'ListMyFluxos', request, ListMyFluxosResponse());
+  $async.Future<MyFluxoResponse> createMyFluxo(
+          $pb.ClientContext? ctx, CreateMyFluxoRequest request) =>
+      _client.invoke<MyFluxoResponse>(
+          ctx, 'AdminService', 'CreateMyFluxo', request, MyFluxoResponse());
+  $async.Future<SimpleOkResponse> updateMyFluxo(
+          $pb.ClientContext? ctx, UpdateMyFluxoRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'UpdateMyFluxo', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> desativarMyFluxo(
+          $pb.ClientContext? ctx, MyFluxoIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(
+          ctx, 'AdminService', 'DesativarMyFluxo', request, SimpleOkResponse());
+  $async.Future<ListMyEtapasFluxoResponse> listMyEtapasFluxo(
+          $pb.ClientContext? ctx, MyFluxoIdRequest request) =>
+      _client.invoke<ListMyEtapasFluxoResponse>(ctx, 'AdminService',
+          'ListMyEtapasFluxo', request, ListMyEtapasFluxoResponse());
+  $async.Future<MyEtapaFluxoResponse> createMyEtapaFluxo(
+          $pb.ClientContext? ctx, CreateMyEtapaFluxoRequest request) =>
+      _client.invoke<MyEtapaFluxoResponse>(ctx, 'AdminService',
+          'CreateMyEtapaFluxo', request, MyEtapaFluxoResponse());
+  $async.Future<SimpleOkResponse> updateMyEtapaFluxo(
+          $pb.ClientContext? ctx, UpdateMyEtapaFluxoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'UpdateMyEtapaFluxo', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> desativarMyEtapaFluxo(
+          $pb.ClientContext? ctx, MyEtapaFluxoIdRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
+          'DesativarMyEtapaFluxo', request, SimpleOkResponse());
+  $async.Future<SimpleOkResponse> moverMyEtapaFluxo(
+          $pb.ClientContext? ctx, MoverMyEtapaFluxoRequest request) =>
+      _client.invoke<SimpleOkResponse>(ctx, 'AdminService', 'MoverMyEtapaFluxo',
+          request, SimpleOkResponse());
+
+  /// Plano ia-engine-jev — "Transferência para atendente": o cadastro de regras
+  /// do tenant, os sinais automáticos, o teste de uma regra contra uma frase e
+  /// as últimas transferências com o motivo. A transferência é decisão do
+  /// tenant: este cadastro é a única fonte de quando o bot transfere no motor Jev.
+  $async.Future<ListMyRegrasTransferenciaResponse> listMyRegrasTransferencia(
+          $pb.ClientContext? ctx, ListMyRegrasTransferenciaRequest request) =>
+      _client.invoke<ListMyRegrasTransferenciaResponse>(
+          ctx,
+          'AdminService',
+          'ListMyRegrasTransferencia',
+          request,
+          ListMyRegrasTransferenciaResponse());
+  $async.Future<SalvarMyRegraTransferenciaResponse> salvarMyRegraTransferencia(
+          $pb.ClientContext? ctx, SalvarMyRegraTransferenciaRequest request) =>
+      _client.invoke<SalvarMyRegraTransferenciaResponse>(
+          ctx,
+          'AdminService',
+          'SalvarMyRegraTransferencia',
+          request,
+          SalvarMyRegraTransferenciaResponse());
+  $async.Future<SetMyRegraTransferenciaAtivaResponse>
+      setMyRegraTransferenciaAtiva($pb.ClientContext? ctx,
+              SetMyRegraTransferenciaAtivaRequest request) =>
+          _client.invoke<SetMyRegraTransferenciaAtivaResponse>(
+              ctx,
+              'AdminService',
+              'SetMyRegraTransferenciaAtiva',
+              request,
+              SetMyRegraTransferenciaAtivaResponse());
+  $async.Future<ConfigTransferenciaResponse> getMyConfigTransferencia(
+          $pb.ClientContext? ctx, GetMyConfigTransferenciaRequest request) =>
+      _client.invoke<ConfigTransferenciaResponse>(ctx, 'AdminService',
+          'GetMyConfigTransferencia', request, ConfigTransferenciaResponse());
+  $async.Future<ConfigTransferenciaResponse> setMySinaisTransferencia(
+          $pb.ClientContext? ctx, SetMySinaisTransferenciaRequest request) =>
+      _client.invoke<ConfigTransferenciaResponse>(ctx, 'AdminService',
+          'SetMySinaisTransferencia', request, ConfigTransferenciaResponse());
+  $async.Future<ListMyTransferenciasResponse> listMyTransferencias(
+          $pb.ClientContext? ctx, ListMyTransferenciasRequest request) =>
+      _client.invoke<ListMyTransferenciasResponse>(ctx, 'AdminService',
+          'ListMyTransferencias', request, ListMyTransferenciasResponse());
+  $async.Future<TestarMyRegraTransferenciaResponse> testarMyRegraTransferencia(
+          $pb.ClientContext? ctx, TestarMyRegraTransferenciaRequest request) =>
+      _client.invoke<TestarMyRegraTransferenciaResponse>(
+          ctx,
+          'AdminService',
+          'TestarMyRegraTransferencia',
+          request,
+          TestarMyRegraTransferenciaResponse());
+  $async.Future<GerarMySugestoesTransferenciaResponse>
+      gerarMySugestoesTransferencia($pb.ClientContext? ctx,
+              GerarMySugestoesTransferenciaRequest request) =>
+          _client.invoke<GerarMySugestoesTransferenciaResponse>(
+              ctx,
+              'AdminService',
+              'GerarMySugestoesTransferencia',
+              request,
+              GerarMySugestoesTransferenciaResponse());
+
+  /// Superusuário: o motor das decisões da IA de um tenant (llm | sombra | jev;
+  /// vazio herda o global MOTOR_ANALISE). Auditado como tenant_config.motor_alterado.
+  $async.Future<DefinirMotorTenantResponse> definirMotorTenant(
+          $pb.ClientContext? ctx, DefinirMotorTenantRequest request) =>
+      _client.invoke<DefinirMotorTenantResponse>(ctx, 'AdminService',
+          'DefinirMotorTenant', request, DefinirMotorTenantResponse());
 }
 
 const $core.bool _omitFieldNames =

@@ -2,6 +2,7 @@ import 'package:design_system_module/design_system_module.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/mensagem_thread.dart';
 import 'midia_da_bolha.dart';
 
@@ -102,8 +103,14 @@ class ChatMessageBubble extends StatelessWidget {
     final midia = mensagem.midia;
     if (midia == null) return true;
     final texto = mensagem.conteudo.trim();
-    return texto.isNotEmpty && texto != midia.nomeArquivo.trim();
+    if (texto.isEmpty || texto == midia.nomeArquivo.trim()) return false;
+    // Mídia gravada antes da limpeza ainda traz o link da CDN no conteúdo.
+    return !texto.startsWith('http');
   }
+
+  bool get _temAnalise =>
+      (mensagem.analiseMidia?.trim().isNotEmpty ?? false) ||
+      (mensagem.resumoMidia?.trim().isNotEmpty ?? false);
 
   /// Canto "cheio" e canto reduzido do lado de quem falou.
   static const _raio = Radius.circular(10);
@@ -189,9 +196,15 @@ class ChatMessageBubble extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               _Extras(itens: _extras, icone: _iconeDoTipo, fg: fg),
             ],
-            if (mensagem.resumoMidia case final resumo?) ...[
+            if (_temAnalise) ...[
               const SizedBox(height: AppSpacing.xs),
-              _ResumoMidia(resumo: resumo, colors: colors, fg: fg),
+              _AnaliseIa(
+                tipo: mensagem.midia?.tipo,
+                transcricao: mensagem.analiseMidia,
+                resumo: mensagem.resumoMidia,
+                colors: colors,
+                fg: fg,
+              ),
             ],
             // P1.1-D — hora e ticks fecham o bloco: só a última bolha diz
             // quando o bloco terminou e como ele foi entregue.
@@ -461,55 +474,103 @@ class _IndicadorIa extends StatelessWidget {
 
 /// Bloco secundário com o resumo/análise da mídia (áudio/imagem/documento),
 /// visualmente destacado do texto principal da mensagem.
-class _ResumoMidia extends StatelessWidget {
-  final String resumo;
+class _AnaliseIa extends StatefulWidget {
+  final TipoMidia? tipo;
+  final String? transcricao;
+  final String? resumo;
   final AppColors colors;
   final Color fg;
 
-  const _ResumoMidia({
+  const _AnaliseIa({
+    required this.tipo,
+    required this.transcricao,
     required this.resumo,
     required this.colors,
     required this.fg,
   });
 
   @override
+  State<_AnaliseIa> createState() => _AnaliseIaState();
+}
+
+class _AnaliseIaState extends State<_AnaliseIa> {
+  bool _aberto = false;
+
+  @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final fg = widget.fg;
+    final transcricao = widget.transcricao?.trim() ?? '';
+    final resumo = widget.resumo?.trim() ?? '';
+    final ehAudio = widget.tipo == TipoMidia.audio;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.xs),
       decoration: BoxDecoration(
         color: fg.withValues(alpha: 0.06),
         borderRadius: AppRadius.sm,
-        border: Border(left: BorderSide(color: colors.accent, width: 3)),
+        border: Border(left: BorderSide(color: widget.colors.accent, width: 3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.summarize_outlined,
-                size: 12,
-                color: fg.withValues(alpha: 0.7),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'Resumo da mídia',
-                style: textTheme.labelSmall?.copyWith(
+          InkWell(
+            onTap: () => setState(() => _aberto = !_aberto),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.auto_awesome_outlined,
+                  size: 12,
                   color: fg.withValues(alpha: 0.7),
-                  fontWeight: FontWeight.w600,
                 ),
-              ),
-            ],
+                const SizedBox(width: 4),
+                Text(
+                  'Análise IA',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: fg.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Icon(
+                  _aberto ? Icons.expand_less : Icons.expand_more,
+                  size: 14,
+                  color: fg.withValues(alpha: 0.7),
+                ),
+              ],
+            ),
+          ),
+          if (_aberto) ...[
+            if (ehAudio && transcricao.isNotEmpty)
+              _secao('Transcrição', transcricao, textTheme),
+            if (resumo.isNotEmpty)
+              _secao(ehAudio ? 'Resumo' : 'Descrição', resumo, textTheme),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _secao(String rotulo, String texto, TextTheme textTheme) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            rotulo,
+            style: textTheme.labelSmall?.copyWith(
+              color: widget.fg.withValues(alpha: 0.7),
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
-            resumo,
+            texto,
             style: textTheme.bodySmall?.copyWith(
-              color: fg.withValues(alpha: 0.9),
+              color: widget.fg.withValues(alpha: 0.9),
             ),
           ),
         ],

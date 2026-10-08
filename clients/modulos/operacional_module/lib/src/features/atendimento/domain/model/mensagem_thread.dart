@@ -104,6 +104,9 @@ final class MensagemThread {
   /// quando o backend produziu um. `null` quando não há mídia analisada.
   final String? resumoMidia;
 
+  /// Transcrição do áudio (só áudio). `null` quando não há transcrição.
+  final String? analiseMidia;
+
   /// Anexo da mensagem (N9/E2). `null` em mensagem de texto puro — e também
   /// quando a mídia existiu mas já foi purgada pela retenção: nesse caso o
   /// servidor omite o bloco em vez de mandar um player que não toca nada.
@@ -139,6 +142,7 @@ final class MensagemThread {
     required this.statusEnvio,
     this.geradoPorIa = false,
     this.resumoMidia,
+    this.analiseMidia,
     this.midia,
     this.entregueEm,
     this.lidaEm,
@@ -183,6 +187,7 @@ final class MensagemThread {
     statusEnvio: statusEnvio ?? this.statusEnvio,
     geradoPorIa: geradoPorIa,
     resumoMidia: resumoMidia,
+    analiseMidia: analiseMidia,
     midia: midia ?? this.midia,
     entregueEm: entregueEm ?? this.entregueEm,
     lidaEm: lidaEm ?? this.lidaEm,

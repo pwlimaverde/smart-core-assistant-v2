@@ -137,6 +137,8 @@ class AtendimentoCardContent extends StatelessWidget {
 /// (servidor antigo, conversa aberta pela equipe), fica o assunto.
 String previaDaUltimaMensagem(AtendimentoResumo a) {
   var texto = a.ultimaMensagem.trim();
+  // Mídia gravada antes da limpeza ainda traz o link da CDN como texto.
+  if (texto.startsWith('http')) texto = '';
   if (texto.isEmpty) texto = _rotuloDoTipo(a.ultimaMensagemTipo);
   if (texto.isEmpty) return a.assunto;
   final saiuDaqui =
