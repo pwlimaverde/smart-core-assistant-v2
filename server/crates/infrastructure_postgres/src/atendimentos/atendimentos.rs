@@ -702,6 +702,21 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                   AND COALESCE(a.data_ultima_mensagem, a.data_inicio)
                       < NOW() - (COALESCE(tc.minutos_inatividade_encerra, p.minutos)
                                  || ' minutes')::interval
+                  -- Cliente que escreveu e ninguém respondeu não está "parado": está
+                  -- esperando. Arquivar agora faria a conversa sumir da tela justamente
+                  -- quando alguém precisa responder.
+                  AND NOT EXISTS (
+                      SELECT 1 FROM oraculo_mensagem c
+                       WHERE c.tenant_id = a.tenant_id
+                         AND c.atendimento_id = a.id
+                         AND c.remetente = 'contato'
+                         AND c."timestamp" > COALESCE(
+                             (SELECT max(r."timestamp") FROM oraculo_mensagem r
+                               WHERE r.tenant_id = a.tenant_id
+                                 AND r.atendimento_id = a.id
+                                 AND r.remetente <> 'contato'),
+                             'epoch'::timestamptz)
+                  )
                 ORDER BY COALESCE(a.data_ultima_mensagem, a.data_inicio) ASC
                 LIMIT $2"#,
         )
