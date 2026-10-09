@@ -3,6 +3,8 @@ name: Espelho de imagens da CI
 # Copia as imagens de serviço da CI (Docker Hub) para o GHCR da conta. O runner
 # do GitHub toma timeout e limite de taxa no Docker Hub; o GHCR não.
 on:
+  push:
+    branches: [ci/espelho-imagens]
   workflow_dispatch:
 
 permissions:
