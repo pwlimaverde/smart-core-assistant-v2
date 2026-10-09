@@ -1,0 +1,35 @@
+name: Espelho de imagens da CI
+
+# Copia as imagens de serviço da CI (Docker Hub) para o GHCR da conta. O runner
+# do GitHub toma timeout e limite de taxa no Docker Hub; o GHCR não.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  espelhar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login no GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Copia pgvector e redis para o GHCR
+        run: |
+          for par in "pgvector/pgvector:pg16 pgvector:pg16" "redis:7 redis:7"; do
+            set -- $par
+            origem=$1
+            destino="ghcr.io/${{ github.repository_owner }}/$2"
+            ok=0
+            for tentativa in 1 2 3 4 5; do
+              if docker pull "$origem" && docker tag "$origem" "$destino" && docker push "$destino"; then
+                ok=1
+                break
+              fi
+              echo "tentativa $tentativa de $origem falhou"
+              sleep $((tentativa * 20))
+            done
+            [ "$ok" -eq 1 ] || { echo "falha ao espelhar $origem"; exit 1; }
+          done
