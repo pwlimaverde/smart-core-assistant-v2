@@ -381,10 +381,21 @@ class _CartaoDeVideo extends StatelessWidget {
           children: [
             _PrevisaoDeVideo(url: midia.urlAssinada, fg: fg),
             Center(
-              child: Icon(
-                Icons.play_circle_outline,
-                size: 48,
-                color: Colors.white.withValues(alpha: 0.9),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.play_circle_outline,
+                    size: 48,
+                    color: Colors.white.withValues(alpha: 0.9),
+                  ),
+                  Text(
+                    'Vídeo',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelMedium?.copyWith(color: Colors.white),
+                  ),
+                ],
               ),
             ),
             if (detalhe.isNotEmpty)
