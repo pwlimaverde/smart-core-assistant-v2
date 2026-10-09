@@ -249,7 +249,7 @@ jobs:
 
       - name: uv sync (dev)
         working-directory: ia_engine
-        run: uv sync --dev
+        run: uv sync --dev --python 3.13
 
       # Stubs gRPC gerados a partir do .proto canônico compartilhado com o Rust
       # (server/crates/contracts/schemas/ai/ai_engine.proto); necessários para
@@ -304,7 +304,7 @@ jobs:
 
       - name: uv sync (dev)
         working-directory: ia_engine_jev
-        run: uv sync --dev
+        run: uv sync --dev --python 3.13
 
       - name: Gera stubs gRPC (proto canônico)
         working-directory: ia_engine_jev
@@ -348,7 +348,7 @@ jobs:
 
       - name: uv sync (dev)
         working-directory: mcp_server
-        run: uv sync --dev
+        run: uv sync --dev --python 3.13
 
       # Stubs gRPC a partir do .proto canônico compartilhado com o Rust
       # (server/crates/contracts/schemas/queries/{admin,auth}.proto). Sem eles
