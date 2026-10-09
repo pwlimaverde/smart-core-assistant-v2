@@ -375,23 +375,80 @@ class _CartaoDeVideo extends StatelessWidget {
           color: fg.withValues(alpha: 0.08),
           borderRadius: AppRadius.sm,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            Icon(Icons.play_circle_outline, size: 48, color: fg),
-            const SizedBox(height: 4),
-            Text('Vídeo', style: TextStyle(color: fg)),
+            _PrevisaoDeVideo(url: midia.urlAssinada, fg: fg),
+            Center(
+              child: Icon(
+                Icons.play_circle_outline,
+                size: 48,
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
             if (detalhe.isNotEmpty)
-              Text(
-                detalhe,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: fg.withValues(alpha: 0.7),
+              Positioned(
+                left: AppSpacing.xs,
+                bottom: AppSpacing.xs,
+                child: Text(
+                  detalhe,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(color: Colors.white),
                 ),
               ),
           ],
         ),
       ),
     );
+  }
+}
+
+/// Primeiro quadro do vídeo, sem som e sem controles. Abre pausado: quem quer
+/// assistir toca no cartão e o diálogo cuida da reprodução. Falha cai no fundo
+/// neutro do cartão, sem quebrar a bolha.
+class _PrevisaoDeVideo extends StatefulWidget {
+  final String url;
+  final Color fg;
+
+  const _PrevisaoDeVideo({required this.url, required this.fg});
+
+  @override
+  State<_PrevisaoDeVideo> createState() => _PrevisaoDeVideoState();
+}
+
+class _PrevisaoDeVideoState extends State<_PrevisaoDeVideo> {
+  late final Player _player = Player();
+  late final VideoController _controller = VideoController(_player);
+  bool _falhou = false;
+  StreamSubscription<String>? _erros;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_player.setVolume(0));
+    _erros = _player.stream.error.listen((_) {
+      if (mounted) setState(() => _falhou = true);
+    });
+    _player.open(Media(widget.url), play: false).catchError((_) {
+      if (mounted) setState(() => _falhou = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_erros?.cancel());
+    unawaited(_player.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_falhou) {
+      return ColoredBox(color: widget.fg.withValues(alpha: 0.08));
+    }
+    return Video(controller: _controller, controls: NoVideoControls);
   }
 }
 
