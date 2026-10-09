@@ -419,36 +419,44 @@ class _PrevisaoDeVideo extends StatefulWidget {
 }
 
 class _PrevisaoDeVideoState extends State<_PrevisaoDeVideo> {
-  late final Player _player = Player();
-  late final VideoController _controller = VideoController(_player);
+  Player? _player;
+  VideoController? _controller;
   bool _falhou = false;
   StreamSubscription<String>? _erros;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_player.setVolume(0));
-    _erros = _player.stream.error.listen((_) {
-      if (mounted) setState(() => _falhou = true);
-    });
-    _player.open(Media(widget.url), play: false).catchError((_) {
-      if (mounted) setState(() => _falhou = true);
-    });
+    try {
+      final player = Player();
+      _player = player;
+      _controller = VideoController(player);
+      unawaited(player.setVolume(0));
+      _erros = player.stream.error.listen((_) {
+        if (mounted) setState(() => _falhou = true);
+      });
+      player.open(Media(widget.url), play: false).catchError((_) {
+        if (mounted) setState(() => _falhou = true);
+      });
+    } catch (_) {
+      _falhou = true;
+    }
   }
 
   @override
   void dispose() {
     unawaited(_erros?.cancel());
-    unawaited(_player.dispose());
+    unawaited(_player?.dispose());
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_falhou) {
+    final controller = _controller;
+    if (_falhou || controller == null) {
       return ColoredBox(color: widget.fg.withValues(alpha: 0.08));
     }
-    return Video(controller: _controller, controls: NoVideoControls);
+    return Video(controller: controller, controls: NoVideoControls);
   }
 }
 
