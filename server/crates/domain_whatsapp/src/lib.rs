@@ -283,8 +283,12 @@ impl NormalizedMessage {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
                 content = format!("Latitude: {}, Longitude: {}", lat, lng);
-            } else if let Some(_sticker) = msg_obj.get("stickerMessage") {
+            } else if let Some(sticker) = msg_obj.get("stickerMessage") {
                 media_type = MediaType::Sticker;
+                let (mime, size) = extrair_meta_midia(sticker);
+                media_payload = Some(sticker.clone());
+                media_mime = mime;
+                media_file_size = size;
             } else if let Some(contact) = msg_obj.get("contactMessage") {
                 media_type = MediaType::Contact;
                 content = contact

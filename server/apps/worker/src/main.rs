@@ -2627,6 +2627,12 @@ async fn processar_mensagem_recebida(
     // `de_mim` entra no pipeline para gravar o binário e o ponteiro (sem eles o
     // atendente não consegue reouvir o próprio áudio), mas não é analisado:
     // transcrever o que ele mesmo enviou custa por minuto sem ganho.
+    // Figurinha só precisa de arquivo: descrever uma figurinha com IA não tem valor.
+    let analisar = !de_mim
+        && !matches!(
+            msg_normalized.media_type,
+            domain_whatsapp::MediaType::Sticker
+        );
     if let (Some(media_payload), Some(mensagem_id)) =
         (msg_normalized.media_payload.clone(), mensagem_id)
     {
@@ -2651,7 +2657,7 @@ async fn processar_mensagem_recebida(
                 &raw_event,
                 &causation,
                 &traceparent,
-                !de_mim,
+                analisar,
             )
             .await;
         });
@@ -3499,6 +3505,8 @@ fn rotulo_media_type(t: &domain_whatsapp::MediaType) -> &'static str {
         domain_whatsapp::MediaType::Audio => "audio",
         domain_whatsapp::MediaType::Video => "video",
         domain_whatsapp::MediaType::Document => "document",
+        // Figurinha é imagem para o atendente; o app só reconhece os quatro tipos acima.
+        domain_whatsapp::MediaType::Sticker => "image",
         _ => "other",
     }
 }

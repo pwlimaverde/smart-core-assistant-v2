@@ -35,9 +35,10 @@ use redis::aio::ConnectionManager;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-/// Janela de agregação padrão, em milissegundos. 5 s para bater com o `TIME_CACHE`
-/// default da v1 — é tempo de digitação humana, não número arbitrário.
-const JANELA_PADRAO_MS: u64 = 5_000;
+/// Janela de agregação padrão, em milissegundos. 15 s: o cliente costuma mandar
+/// a rajada (texto, áudio, foto) em vários envios seguidos, e a resposta do bot
+/// tem de vir depois da rajada inteira, não no meio dela.
+const JANELA_PADRAO_MS: u64 = 15_000;
 
 /// Teto do TTL do buffer, em segundos (mesmo valor da v1). Buffer órfão — worker
 /// que morreu no meio da janela — não pode viver para sempre carregando PII.
