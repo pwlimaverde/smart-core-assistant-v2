@@ -1663,8 +1663,6 @@ async fn processar_contato_atualizado(
     };
 
     let tenant_uuid = Uuid::parse_str(&evt.tenant_id)?;
-    // P6 — a conexão por onde o evento chegou: é por ela que a foto é buscada.
-    let instance_id = payload.get("instance_id").and_then(|v| v.as_i64());
     for contato in contatos {
         // Só a parte numérica, como na ingestão de mensagem: o telefone é a
         // chave do contato, e o sufixo do JID não faz parte dele. Contato
@@ -1679,14 +1677,7 @@ async fn processar_contato_atualizado(
             .or_else(|| contato.get("notify"))
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        // P6 — a URL do CDN do WhatsApp NÃO é mais gravada (expira em horas e
-        // carrega token). Ela só sinaliza que vale sincronizar a foto no R2.
-        let trouxe_foto = contato
-            .get("profilePicUrl")
-            .or_else(|| contato.get("profilePictureUrl"))
-            .and_then(|v| v.as_str())
-            .is_some_and(|u| !u.trim().is_empty());
-        if nome.is_empty() && !trouxe_foto {
+        if nome.is_empty() {
             continue;
         }
 
@@ -1702,22 +1693,8 @@ async fn processar_contato_atualizado(
             &evt.traceparent,
         )
         .await;
-        let contato_id = match resposta {
-            Ok(r) => r.get("contato_id").and_then(|v| v.as_i64()),
-            Err(e) => {
-                tracing::warn!(erro = %e, "falha ao atualizar o perfil do contato");
-                continue;
-            }
-        };
-        if let (true, Some(contato_id)) = (trouxe_foto, contato_id) {
-            pedir_sincronizacao_da_foto(
-                state,
-                tenant_uuid,
-                contato_id as i32,
-                instance_id,
-                &evt.traceparent,
-            )
-            .await;
+        if let Err(e) = resposta {
+            tracing::warn!(erro = %e, "falha ao atualizar o perfil do contato");
         }
     }
 
@@ -1755,30 +1732,6 @@ const TRAVA_FOTO_S: u64 = 600;
 
 /// P6 — prazo do `BaixarFotoDoContato` (provedor + CDN).
 const PRAZO_BAIXAR_FOTO: Duration = Duration::from_secs(15);
-
-/// P6 — publica `contato.foto.sincronizar` no barramento. Best-effort: sem
-/// barramento, a próxima abertura do contato pede de novo.
-async fn pedir_sincronizacao_da_foto(
-    state: &AppState,
-    tenant_id: Uuid,
-    contato_id: i32,
-    instance_id: Option<i64>,
-    traceparent: &str,
-) {
-    let Some(ref bus) = state.bus_conn else {
-        return;
-    };
-    let mut conn = bus.clone();
-    let evento = contracts::TenantEnvelope::novo(
-        tenant_id,
-        EVENTO_FOTO_SINCRONIZAR,
-        serde_json::json!({ "contato_id": contato_id, "instance_id": instance_id }),
-    )
-    .com_traceparent(traceparent);
-    if let Err(e) = transport::bus::publicar_evento(&mut conn, &evento).await {
-        tracing::warn!(erro = %e, "falha ao pedir a sincronização da foto do contato");
-    }
-}
 
 /// P6 — chave Redis da trava de sincronização. Só ids: nome de chave aparece
 /// em `SLOWLOG`/`MONITOR`.
