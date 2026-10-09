@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart' hide AuthService;
 import 'package:login_module/login_module.dart';
 
+import '../../features/versao/domain/versao_do_app.dart';
 import '../../../permissoes_de_tela.dart';
 
 /// Menu do app do tenant, **por escopo** (B2).
@@ -112,6 +113,21 @@ class TenantDrawer extends StatelessWidget {
             ),
           ),
           const Divider(),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Sobre'),
+            onTap: () {
+              final navegador = Navigator.of(context);
+              navegador.pop();
+              showAboutDialog(
+                context: navegador.context,
+                applicationName: 'Smart Core Tenant',
+                applicationVersion: versaoLocal.isEmpty
+                    ? 'desenvolvimento'
+                    : '$versaoLocal (build $buildLocal)',
+              );
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Sair'),

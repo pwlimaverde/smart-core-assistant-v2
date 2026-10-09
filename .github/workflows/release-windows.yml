@@ -128,6 +128,7 @@ jobs:
             --dart-define=SMARTCORE_MCP_ENDPOINT=${{ steps.v.outputs.mcp }} `
             --dart-define=SMARTCORE_APP_PUBLIC_URL=${{ steps.v.outputs.app }} `
             --dart-define=SMARTCORE_APP_BUILD=${{ steps.v.outputs.build }} `
+            --dart-define=SMARTCORE_APP_VERSAO=${{ steps.v.outputs.versao }} `
             --dart-define=SMARTCORE_UPDATE_FEED_URL=${{ env.RELEASES_URL }}/feed/${{ steps.v.outputs.canal }}
 
       # Um --dart-define esquecido não falha o build: gera um app que aponta para
@@ -137,7 +138,7 @@ jobs:
           $snap = "clients/apps/smart-core-tenant/build/windows/x64/runner/Release/data/app.so"
           if (-not (Test-Path $snap)) { Write-Error "snapshot $snap ausente"; exit 1 }
           $texto = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($snap))
-          foreach ($e in @('${{ steps.v.outputs.api }}', '${{ steps.v.outputs.mcp }}', '${{ steps.v.outputs.app }}', '${{ env.RELEASES_URL }}/feed/${{ steps.v.outputs.canal }}')) {
+          foreach ($e in @('${{ steps.v.outputs.api }}', '${{ steps.v.outputs.mcp }}', '${{ steps.v.outputs.app }}', '${{ env.RELEASES_URL }}/feed/${{ steps.v.outputs.canal }}', '${{ steps.v.outputs.versao }}')) {
             if (-not $texto.Contains($e)) { Write-Error "endereço ausente no binário: $e"; exit 1 }
             Write-Host "ok $e"
           }

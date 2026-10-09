@@ -7,6 +7,9 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 /// exemplo): sem saber a própria versão, ele não tem como dizer que está velho.
 const int buildLocal = int.fromEnvironment('SMARTCORE_APP_BUILD');
 
+/// A versão publicada deste binário (ex.: `0.2.0-beta.4`). Vazia fora do script.
+const String versaoLocal = String.fromEnvironment('SMARTCORE_APP_VERSAO');
+
 /// P11 — a última versão publicada.
 @immutable
 final class VersaoPublicada {
