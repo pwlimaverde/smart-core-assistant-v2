@@ -10,6 +10,7 @@ import 'package:treinamento_module/treinamento_module.dart';
 
 import 'app.dart';
 import 'platform/auto_update.dart';
+import 'platform/migracao_de_sessao.dart';
 import 'platform/url_strategy.dart';
 
 /// Compõe os módulos, registra os serviços globais e sobe o app.
@@ -39,6 +40,10 @@ Future<void> bootstrap(AppConfig config, {String updateFeedUrl = ''}) async {
   // refresh/deep-link em /v2/tenant/login retornaria 404. Só faz sentido na
   // Web — no desktop (Windows) é no-op (import condicional).
   usePlatformUrlStrategy();
+
+  // A sessão da versão anterior precisa estar na pasta nova antes de o
+  // LoginModule ler o cofre (BootStage.infra).
+  await migrarSessaoDaVersaoAntiga();
 
   // Ordem importa: InfraModule primeiro (registra SessionService/ApiClient);
   // LoginModule depois (registra AuthService/LocalStorageService reais).
