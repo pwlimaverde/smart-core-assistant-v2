@@ -641,16 +641,6 @@ async fn presign_em_lote(
 /// reaproveita a URL do mesmo objeto enquanto fresca (regra do C17).
 const TTL_URL_FOTO_S: u64 = 3600;
 
-/// P6 — sem nova sincronização da foto antes disto (a não ser com `forcar`).
-const PRAZO_FOTO_DIAS: i64 = 7;
-
-/// P6 — piso do `forcar`: uma tela em laço não pede sincronização a cada quadro.
-const PISO_FOTO_FORCADA_MIN: i64 = 10;
-
-/// P6 — no máximo tantos pedidos de sincronização por listagem do quadro: o
-/// quadro recarrega a cada evento, e o worker já trava por contato.
-const TETO_SYNC_FOTO_POR_LISTAGEM: usize = 20;
-
 /// P6 — chave do avatar no R2, ou `None` para o que não é uma (vazio ou
 /// legado anterior ao P6 — nunca uma URL).
 fn chave_de_foto(valor: &str) -> Option<&str> {
@@ -658,56 +648,13 @@ fn chave_de_foto(valor: &str) -> Option<&str> {
     (v.starts_with("contatos/") && !v.contains("://")).then_some(v)
 }
 
-/// P6 — a foto do contato precisa ser sincronizada de novo? Nunca verificada,
-/// mais de 7 dias, ou `forcar` com mais de 10 minutos da última verificação.
-///
-/// É uma decisão pura: quem sincroniza é o worker, pelo barramento — o
-/// `runtime_api` nunca chama o provedor no caminho da requisição.
-fn precisa_sincronizar_foto(verificada_ha: Option<chrono::Duration>, forcar: bool) -> bool {
-    let prazo = if forcar {
-        chrono::Duration::minutes(PISO_FOTO_FORCADA_MIN)
+/// P6 — o `origem` do span de `ObterContatoDoAtendimento`: `r2` quando devolve
+/// a foto guardada, `cache` quando não há foto.
+fn origem_da_foto(tem_chave: bool) -> &'static str {
+    if tem_chave {
+        "r2"
     } else {
-        chrono::Duration::days(PRAZO_FOTO_DIAS)
-    };
-    verificada_ha.is_none_or(|idade| idade > prazo)
-}
-
-/// P6 — idade da última verificação da foto (`foto_verificada_em` RFC3339).
-fn idade_da_verificacao(v: &serde_json::Value, campo: &str) -> Option<chrono::Duration> {
-    v.get(campo)
-        .and_then(|x| x.as_str())
-        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-        .map(|d| chrono::Utc::now().signed_duration_since(d))
-}
-
-/// P6 — o `origem` do span de `ObterContatoDoAtendimento`: `agendada` quando
-/// pediu sincronização, `r2` quando devolve a foto guardada, `cache` quando
-/// não há foto e a verificação está em dia.
-fn origem_da_foto(agendada: bool, tem_chave: bool) -> &'static str {
-    match (agendada, tem_chave) {
-        (true, _) => "agendada",
-        (false, true) => "r2",
-        (false, false) => "cache",
-    }
-}
-
-/// P6 — publica `contato.foto.sincronizar` no barramento; o worker baixa a
-/// foto e grava no R2. Best-effort: falhar aqui só adia a foto.
-async fn pedir_sincronizacao_da_foto(
-    bus: &redis::aio::ConnectionManager,
-    tenant_uuid: Uuid,
-    contato_id: i32,
-    traceparent: &str,
-) {
-    let evento = contracts::TenantEnvelope::novo(
-        tenant_uuid,
-        "contato.foto.sincronizar",
-        serde_json::json!({ "contato_id": contato_id, "instance_id": null }),
-    )
-    .com_traceparent(traceparent);
-    let mut conn = bus.clone();
-    if let Err(e) = transport::bus::publicar_evento(&mut conn, &evento).await {
-        tracing::warn!(erro = %e, "falha ao pedir a sincronização da foto do contato");
+        "cache"
     }
 }
 
@@ -1919,13 +1866,12 @@ impl AdminFacade {
     ///
     /// Assina as chaves do R2 (`contato_foto_chave`) numa chamada
     /// `PresignFiles` (TTL de 3600 s) e grava `contato_foto_url` em cada item.
-    /// Para os contatos com a verificação vencida (ou nunca feita), pede ao
-    /// worker a sincronização — no máximo [`TETO_SYNC_FOTO_POR_LISTAGEM`] por
-    /// chamada; o provedor nunca é chamado aqui.
+    /// O provedor nunca é chamado aqui; sem foto guardada, o app mostra as
+    /// iniciais do contato.
     #[tracing::instrument(
         skip_all,
         name = "runtime.fotos_do_quadro",
-        fields(tenant_id = %tenant_uuid, qtd = itens.len(), agendadas = tracing::field::Empty)
+        fields(tenant_id = %tenant_uuid, qtd = itens.len())
     )]
     async fn preparar_fotos_do_quadro(
         &self,
@@ -1933,7 +1879,6 @@ impl AdminFacade {
         traceparent: &str,
         itens: &mut [serde_json::Value],
     ) {
-        let mut agendar: Vec<i32> = Vec::new();
         let mut vistas = std::collections::HashSet::new();
         let mut pedidos: Vec<serde_json::Value> = Vec::new();
         for item in itens.iter() {
@@ -1942,22 +1887,6 @@ impl AdminFacade {
                     pedidos.push(serde_json::json!({ "file_name": chave }));
                 }
             }
-            let contato_id = item.get("contato_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            if contato_id > 0
-                && agendar.len() < TETO_SYNC_FOTO_POR_LISTAGEM
-                && !agendar.contains(&contato_id)
-                && item.get("contato_foto_chave").is_some()
-                && precisa_sincronizar_foto(
-                    idade_da_verificacao(item, "contato_foto_verificada_em"),
-                    false,
-                )
-            {
-                agendar.push(contato_id);
-            }
-        }
-        tracing::Span::current().record("agendadas", agendar.len());
-        for contato_id in agendar {
-            pedir_sincronizacao_da_foto(&self.bus, tenant_uuid, contato_id, traceparent).await;
         }
 
         if pedidos.is_empty() {
@@ -6663,12 +6592,9 @@ impl AdminService for AdminFacade {
     /// P13/P6 — o contato da conversa, com a foto guardada no R2.
     ///
     /// `foto_url` é a URL assinada do avatar no R2 (TTL de 3600 s), vazia quando
-    /// não há foto. A foto é sincronizada pelo worker (`contato.foto.sincronizar`):
-    /// no máximo a cada 7 dias por contato, ou com `forcar` (a tela o usa quando
-    /// a imagem não abre) a partir de 10 minutos da última verificação. A
-    /// resposta sai com o que já está guardado — **o provedor nunca é chamado no
-    /// caminho da requisição**; quando a foto nova chega, o realtime avisa com
-    /// `contato.foto_atualizada { contato_id }`.
+    /// não há foto. **O provedor nunca é chamado**: a sincronização de foto foi
+    /// desligada porque o Evolution não responde ao pedido de avatar, e o app
+    /// mostra as iniciais quando não há foto.
     #[tracing::instrument(
         skip_all,
         fields(service = "runtime_api", rpc = "ObterContatoDoAtendimento", origem = tracing::field::Empty, traceparent)
@@ -6696,18 +6622,9 @@ impl AdminService for AdminFacade {
             .unwrap_or(0) as i32;
         let foto_chave = texto_do(&contato, "foto_chave");
         let chave = chave_de_foto(&foto_chave);
-        let agendar = contato_id > 0
-            && precisa_sincronizar_foto(
-                idade_da_verificacao(&contato, "foto_verificada_em"),
-                inner.forcar,
-            );
-
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = tenant_do_token(&req);
-        if let (true, Some(tenant_uuid)) = (agendar, tenant_uuid) {
-            pedir_sincronizacao_da_foto(&self.bus, tenant_uuid, contato_id, &traceparent).await;
-        }
-        tracing::Span::current().record("origem", origem_da_foto(agendar, chave.is_some()));
+        tracing::Span::current().record("origem", origem_da_foto(chave.is_some()));
 
         // URL assinada do avatar. Storage fora do ar = sem foto, nunca erro.
         let mut foto_url = String::new();
@@ -12528,24 +12445,6 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn precisa_sincronizar_foto_respeita_prazo_e_piso_do_forcar() {
-        let horas = chrono::Duration::hours;
-        let minutos = chrono::Duration::minutes;
-        // Nunca verificada: sempre sincroniza.
-        assert!(precisa_sincronizar_foto(None, false));
-        assert!(precisa_sincronizar_foto(None, true));
-        // Dentro dos 7 dias: não sincroniza sem `forcar`.
-        assert!(!precisa_sincronizar_foto(Some(horas(24)), false));
-        assert!(precisa_sincronizar_foto(
-            Some(chrono::Duration::days(8)),
-            false
-        ));
-        // `forcar` respeita o piso de 10 minutos.
-        assert!(!precisa_sincronizar_foto(Some(minutos(5)), true));
-        assert!(precisa_sincronizar_foto(Some(minutos(11)), true));
-    }
-
-    #[test]
     fn chave_de_foto_aceita_so_chave_do_r2() {
         assert_eq!(
             chave_de_foto(" contatos/7/avatar-0a1b2c3d.jpg "),
@@ -12558,11 +12457,9 @@ mod tests {
     }
 
     #[test]
-    fn origem_da_foto_distingue_agendada_r2_e_cache() {
-        assert_eq!(origem_da_foto(true, true), "agendada");
-        assert_eq!(origem_da_foto(true, false), "agendada");
-        assert_eq!(origem_da_foto(false, true), "r2");
-        assert_eq!(origem_da_foto(false, false), "cache");
+    fn origem_da_foto_distingue_r2_e_cache() {
+        assert_eq!(origem_da_foto(true), "r2");
+        assert_eq!(origem_da_foto(false), "cache");
     }
 
     /// P6 — `ObterContatoDoAtendimento` responde com a foto do R2 assinada por
