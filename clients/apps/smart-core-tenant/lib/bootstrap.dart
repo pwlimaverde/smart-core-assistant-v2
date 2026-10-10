@@ -9,6 +9,7 @@ import 'package:treinamento_module/treinamento_module.dart';
 import 'app.dart';
 import 'platform/auto_update.dart';
 import 'platform/migracao_de_sessao.dart';
+import 'platform/splash_atualizacao.dart';
 import 'platform/url_strategy.dart';
 
 /// Compõe os módulos, registra os serviços globais e sobe o app.
@@ -31,62 +32,78 @@ Future<void> bootstrap(AppConfig config, {String updateFeedUrl = ''}) async {
   // o app com `--veloapp-install`/`--veloapp-uninstall`, o processo precisa
   // encerrar já, sem subir UI.
   final updateChecker = criarUpdateChecker(updateFeedUrl);
+  await updateChecker.preparar();
+
+  Future<Widget> montarApp() async {
+    // Path URL strategy: URLs limpas sob /v2/tenant/ (sem '#'); combina com
+    // --base-href /v2/tenant/ e o SPA fallback (try_files) do Caddy. Sem isso,
+    // refresh/deep-link em /v2/tenant/login retornaria 404. Só faz sentido na
+    // Web — no desktop (Windows) é no-op (import condicional).
+    usePlatformUrlStrategy();
+
+    // A sessão da versão anterior precisa estar na pasta nova antes de o
+    // LoginModule ler o cofre (BootStage.infra).
+    await migrarSessaoDaVersaoAntiga();
+
+    // Ordem importa: InfraModule primeiro (registra SessionService/ApiClient);
+    // LoginModule depois (registra AuthService/LocalStorageService reais).
+    final modules = <AppModule>[
+      InfraModule(config),
+      // `rotaDeCadastro`: este app é instalado no computador do tenant, e quem
+      // acabou de instalá-lo não tem conta. Sem um caminho visível na tela de
+      // login, o cadastro seria inalcançável — num app de desktop não há URL
+      // para digitar.
+      LoginModule(rotaDeCadastro: '/cadastro'),
+      // Depois do LoginModule: o passo final do wizard entra na conta pelo
+      // `AuthService` que aquele módulo registra.
+      OnboardingModule(),
+      // O menu do tenant vai junto: o quadro é a primeira tela depois do login,
+      // e sem ele não havia caminho para nenhuma configuração.
+      OperacionalModule(
+        drawerBuilder: TenantDrawer.new,
+        // Assinatura pendente e WhatsApp fora do ar aparecem na primeira tela:
+        // sem isso, a fila só para de encher e ninguém entende por quê.
+        avisoBuilder: AvisosDoQuadro.new,
+        // C3: sem isto o quadro não oferece "iniciar atendimento" — um app que
+        // não sabe listar clientes não deve abrir esse caminho.
+        buscarContatos: buscarContatosDoTenant,
+        // B5: para o quadro reconhecer a conversa que o rodízio atribuiu a quem
+        // está logado e avisar só essa pessoa.
+        usuarioAtual: usuarioDaSessao,
+        // P16: quem só lê não vê enviar, mover nem atribuir.
+        podeEscrever: sessaoPodeAtender,
+      ),
+      TenantModule(),
+      TreinamentoModule(
+        drawerBuilder: TenantDrawer.new,
+        // B2: o módulo não conhece a sessão; a pergunta vem pronta daqui.
+        podeAlterar: () => sessaoPodeAlterar('/tenant/treinamento'),
+      ),
+      InitialLoadingModule(),
+    ];
+
+    // Registro síncrono dos serviços globais no escopo-base.
+    installModules(modules);
+    // Disponibiliza a lista de módulos ao splash (InitialLoadingRoute).
+    GetIt.instance.registerSingleton<List<AppModule>>(modules);
+
+    return SmartCoreTenantApp(modules: modules);
+  }
+
+  if (!updateChecker.suportado) {
+    runApp(await montarApp());
+    return;
+  }
+
   // Antes da primeira tela: havendo versão nova, o Velopack baixa, aplica e
-  // reinicia o processo aqui dentro. Sem rede, a consulta tem prazo e o app
-  // abre na versão atual.
-  await updateChecker.verificar();
-
-  // Path URL strategy: URLs limpas sob /v2/tenant/ (sem '#'); combina com
-  // --base-href /v2/tenant/ e o SPA fallback (try_files) do Caddy. Sem isso,
-  // refresh/deep-link em /v2/tenant/login retornaria 404. Só faz sentido na
-  // Web — no desktop (Windows) é no-op (import condicional).
-  usePlatformUrlStrategy();
-
-  // A sessão da versão anterior precisa estar na pasta nova antes de o
-  // LoginModule ler o cofre (BootStage.infra).
-  await migrarSessaoDaVersaoAntiga();
-
-  // Ordem importa: InfraModule primeiro (registra SessionService/ApiClient);
-  // LoginModule depois (registra AuthService/LocalStorageService reais).
-  final modules = <AppModule>[
-    InfraModule(config),
-    // `rotaDeCadastro`: este app é instalado no computador do tenant, e quem
-    // acabou de instalá-lo não tem conta. Sem um caminho visível na tela de
-    // login, o cadastro seria inalcançável — num app de desktop não há URL
-    // para digitar.
-    LoginModule(rotaDeCadastro: '/cadastro'),
-    // Depois do LoginModule: o passo final do wizard entra na conta pelo
-    // `AuthService` que aquele módulo registra.
-    OnboardingModule(),
-    // O menu do tenant vai junto: o quadro é a primeira tela depois do login,
-    // e sem ele não havia caminho para nenhuma configuração.
-    OperacionalModule(
-      drawerBuilder: TenantDrawer.new,
-      // Assinatura pendente e WhatsApp fora do ar aparecem na primeira tela:
-      // sem isso, a fila só para de encher e ninguém entende por quê.
-      avisoBuilder: AvisosDoQuadro.new,
-      // C3: sem isto o quadro não oferece "iniciar atendimento" — um app que
-      // não sabe listar clientes não deve abrir esse caminho.
-      buscarContatos: buscarContatosDoTenant,
-      // B5: para o quadro reconhecer a conversa que o rodízio atribuiu a quem
-      // está logado e avisar só essa pessoa.
-      usuarioAtual: usuarioDaSessao,
-      // P16: quem só lê não vê enviar, mover nem atribuir.
-      podeEscrever: sessaoPodeAtender,
+  // reinicia o processo dentro da checagem. Sem rede, a consulta tem prazo e
+  // o app abre na versão atual.
+  runApp(
+    SplashAtualizacao(
+      verificacao: () async {
+        await updateChecker.verificar();
+      },
+      depois: montarApp,
     ),
-    TenantModule(),
-    TreinamentoModule(
-      drawerBuilder: TenantDrawer.new,
-      // B2: o módulo não conhece a sessão; a pergunta vem pronta daqui.
-      podeAlterar: () => sessaoPodeAlterar('/tenant/treinamento'),
-    ),
-    InitialLoadingModule(),
-  ];
-
-  // Registro síncrono dos serviços globais no escopo-base.
-  installModules(modules);
-  // Disponibiliza a lista de módulos ao splash (InitialLoadingRoute).
-  GetIt.instance.registerSingleton<List<AppModule>>(modules);
-
-  runApp(SmartCoreTenantApp(modules: modules));
+  );
 }
