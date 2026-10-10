@@ -13,7 +13,7 @@ void main() {
     await tester.pumpWidget(
       SplashAtualizacao(
         verificacao: () => verificacao.future,
-        depois: () async => const Text('app pronto'),
+        depois: () async => const MaterialApp(home: Text('app pronto')),
       ),
     );
 
