@@ -1440,12 +1440,10 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
                     // Redis fora não pode travar o pareamento: segue com o
                     // `connect`, como era antes da trava.
                     if !matches!(primeira, Ok(None)) {
-                        // Sessão desfeita pelo WhatsApp: sem encerrá-la, o provedor
-                        // tenta retomar o aparelho antigo e nunca gera QR. Encerrar
-                        // antes faz o `connect` pedir um pareamento novo.
-                        if let Err(e) = p.disconnect_instance(name, &api_key_sec).await {
-                            tracing::warn!(instance_id = db_id, erro = %e, "falha ao encerrar a sessão antiga antes do QR");
-                        }
+                        // Sessão desfeita pelo WhatsApp: o provedor tenta retomar o
+                        // aparelho antigo e nunca gera QR. Recriar a instância (mesmo
+                        // nome e token) abre um pareamento novo.
+                        cancelar_pareamento(p.as_ref(), name, &api_key_sec, &state).await;
                         let webhook = webhook_da_instancia(provider_name, &env.tenant_id, db_id);
                         if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook).await {
                             tracing::warn!(instance_id = db_id, erro = %e, "falha ao preparar a instância para o QR");
