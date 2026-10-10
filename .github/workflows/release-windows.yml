@@ -284,9 +284,13 @@ jobs:
           Get-ChildItem $feed | Format-Table Name, Length
 
           $srv = Start-Process python -ArgumentList '-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', $feed -PassThru -WindowStyle Hidden
-          Start-Sleep -Seconds 3
           $feedUrl = 'http://127.0.0.1:8765'
-          $null = Invoke-WebRequest "$feedUrl/releases.e2e.json" -UseBasicParsing
+          $noAr = $false
+          for ($i = 0; $i -lt 30 -and -not $noAr; $i++) {
+            try { $null = Invoke-WebRequest "$feedUrl/releases.e2e.json" -UseBasicParsing; $noAr = $true }
+            catch { Start-Sleep -Seconds 1 }
+          }
+          if (-not $noAr) { Write-Error "feed local não subiu em 30 s"; exit 1 }
           $env:SMARTCORE_UPDATE_FEED_URL = $feedUrl
 
           $setup = Start-Process "$env:RUNNER_TEMP/e2e-setup-v1.exe" -ArgumentList '--silent' -Wait -PassThru
