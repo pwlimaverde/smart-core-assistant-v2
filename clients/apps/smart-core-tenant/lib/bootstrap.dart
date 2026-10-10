@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dependencies_module/dependencies_module.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
 import 'package:login_module/login_module.dart';
@@ -33,7 +31,10 @@ Future<void> bootstrap(AppConfig config, {String updateFeedUrl = ''}) async {
   // o app com `--veloapp-install`/`--veloapp-uninstall`, o processo precisa
   // encerrar já, sem subir UI.
   final updateChecker = criarUpdateChecker(updateFeedUrl);
-  await updateChecker.preparar();
+  // Antes da primeira tela: havendo versão nova, o Velopack baixa, aplica e
+  // reinicia o processo aqui dentro. Sem rede, a consulta tem prazo e o app
+  // abre na versão atual.
+  await updateChecker.verificar();
 
   // Path URL strategy: URLs limpas sob /v2/tenant/ (sem '#'); combina com
   // --base-href /v2/tenant/ e o SPA fallback (try_files) do Caddy. Sem isso,
@@ -88,8 +89,4 @@ Future<void> bootstrap(AppConfig config, {String updateFeedUrl = ''}) async {
   GetIt.instance.registerSingleton<List<AppModule>>(modules);
 
   runApp(SmartCoreTenantApp(modules: modules));
-
-  // Consulta o feed depois da primeira tela, sem segurar o boot. Havendo
-  // versão nova, baixa, aplica e reinicia o app sozinho.
-  unawaited(updateChecker.verificar());
 }

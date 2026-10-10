@@ -44,15 +44,16 @@ enum ResultadoAtualizacao {
 
 /// Auto-update do app desktop (D6).
 ///
-/// Duas etapas, chamadas pelo `bootstrap`:
-///   1. [preparar] ANTES do `runApp`: carrega o Velopack, que precisa ver os
-///      hooks do Setup o quanto antes (eles encerram o processo);
-///   2. [verificar] DEPOIS do `runApp`, sem `await`: a consulta ao feed não
-///      segura a primeira tela.
+/// Uma chamada, feita pelo `bootstrap` ANTES do `runApp`: [verificar] carrega
+/// o Velopack (os hooks do Setup encerram o processo antes de qualquer UI),
+/// consulta o feed e, havendo versão nova, atualiza e reinicia. Sem versão
+/// nova, ou sem rede, a tela abre normalmente.
 ///
 /// Política: sem pergunta ao usuário. Se o feed tem versão nova, baixa,
 /// aplica e reinicia. Uma falha nunca derruba o app — só fica no log, e a
 /// próxima subida tenta de novo.
+const _prazoDoFeed = Duration(seconds: 10);
+
 class UpdateChecker {
   UpdateChecker({
     required this.gateway,
@@ -99,7 +100,7 @@ class UpdateChecker {
     if (motivo != null) return motivo;
 
     try {
-      if (!await gateway.haAtualizacao()) {
+      if (!await gateway.haAtualizacao().timeout(_prazoDoFeed)) {
         _log('feed $feedUrl: app em dia');
         return ResultadoAtualizacao.emDia;
       }
