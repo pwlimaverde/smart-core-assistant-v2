@@ -168,12 +168,12 @@ async fn solicitar_pesquisa_satisfacao(
 
     let (msg_tenant, ativa_tenant, msg_global, flag_global) = cfg.unwrap_or_default();
 
-    // Default `true`: pedir avaliação é o comportamento da v1, e desligá-lo por
-    // omissão apagaria a métrica de satisfação logo na migração.
+    // Default `false`: se nenhuma config existir, não envia pesquisa.
+    // Ao migrar ou criar tenant, a pesquisa só sai se explicitamente ativada.
     let ativa = ativa_tenant.unwrap_or_else(|| {
         flag_global
             .map(|v| v.eq_ignore_ascii_case("true"))
-            .unwrap_or(true)
+            .unwrap_or(false)
     });
     if !ativa {
         return Ok(false);

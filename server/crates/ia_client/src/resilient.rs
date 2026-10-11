@@ -36,7 +36,7 @@ impl<C: IaEngineClient> ResilientIaEngine<C> {
             )),
             timeout_media: Duration::from_millis(env_ms(
                 "SMARTCORE_IA_ENGINE_TIMEOUT_MEDIA_MS",
-                30_000,
+                60_000,
             )),
         }
     }

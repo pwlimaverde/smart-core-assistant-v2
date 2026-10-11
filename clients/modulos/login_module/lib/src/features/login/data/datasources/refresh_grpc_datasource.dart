@@ -17,6 +17,9 @@ final class RefreshGrpcDatasource
   Future<Session> call(RefreshParameters parameters) async {
     final resp = await _client.refresh(
       RefreshRequest(refreshToken: parameters.refreshToken),
+    ).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw Exception('Timeout ao renovar sessão'),
     );
     return JwtPayload.decode(resp.accessToken).paraSession(
       accessToken: resp.accessToken,
