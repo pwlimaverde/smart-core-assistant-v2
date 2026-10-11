@@ -368,9 +368,9 @@ services:
     healthcheck:
       test: ["CMD", "python", "-m", "ia_engine.healthcheck"]
       interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_IA_ENGINE:-2g}
@@ -400,9 +400,9 @@ services:
     healthcheck:
       test: ["CMD", "python", "-m", "ia_engine_jev.healthcheck"]
       interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_IA_ENGINE_JEV:-1g}
@@ -453,9 +453,9 @@ services:
     healthcheck:
       test: ["CMD", "python", "-m", "mcp_server.healthcheck"]
       interval: 20s
-      timeout: 5s
-      retries: 3
-      start_period: 25s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_MCP_SERVER:-512m}
