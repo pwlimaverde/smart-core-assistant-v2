@@ -41,38 +41,39 @@ void main() {
       await tester
           .pump(); // postFrameCallback -> onInit -> bootstrap() -> Loading
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
       expect(bootState.value, isFalse);
 
       completer.complete();
       await tester.pumpAndSettle();
 
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(bootState.value, isTrue);
     },
   );
 
-  testWidgets('onLoading renderiza spinner centralizado num Scaffold', (
-    tester,
-  ) async {
-    const page = InitialLoadingPage();
-    late BuildContext ctx;
+  testWidgets(
+    'onLoading renderiza marca e barra de progresso centralizadas num Scaffold',
+    (tester) async {
+      const page = InitialLoadingPage();
+      late BuildContext ctx;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) {
-            ctx = context;
-            return const SizedBox.shrink();
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              ctx = context;
+              return const SizedBox.shrink();
+            },
+          ),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpWidget(MaterialApp(home: page.onLoading(ctx)));
+      await tester.pumpWidget(MaterialApp(home: page.onLoading(ctx)));
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-  });
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    },
+  );
 
   testWidgets('onSuccess não renderiza nenhum conteúdo visível', (
     tester,
@@ -93,7 +94,7 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(home: page.onSuccess(ctx, null)));
 
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.byType(SizedBox), findsWidgets);
   });
 
