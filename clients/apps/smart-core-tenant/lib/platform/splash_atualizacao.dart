@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:dependencies_module/dependencies_module.dart';
 
 /// Tela inicial enquanto a checagem de atualização roda, antes da aplicação.
 ///
@@ -38,19 +38,40 @@ class _SplashAtualizacaoState extends State<SplashAtualizacao> {
   Widget build(BuildContext context) {
     final app = _app;
     if (app != null) return app;
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Verificando atualizações…'),
-            ],
-          ),
-        ),
+      theme: AppTheme.light,
+      home: Builder(
+        builder: (context) {
+          final colors = context.colors;
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const AppLogo(height: 88),
+                  const SizedBox(height: AppSpacing.xl),
+                  SizedBox(
+                    width: 180,
+                    child: LinearProgressIndicator(
+                      minHeight: 3,
+                      color: colors.accent,
+                      backgroundColor: colors.border,
+                      borderRadius: AppRadius.pill,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Verificando atualizações…',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: colors.fgMuted),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

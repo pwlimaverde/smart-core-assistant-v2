@@ -43,6 +43,16 @@ final class AppColors extends ThemeExtension<AppColors> {
   final Color accentSoft;
   final Color accentRing;
 
+  // Chat (bolhas e fundos da conversa)
+  final Color chatBg;
+  final Color chatHeader;
+  final Color chatFoot;
+  final Color chatDot;
+  final Color bubIn;
+  final Color bubInFg;
+  final Color bubOut;
+  final Color bubOutFg;
+
   // Feedback
   final Color success;
   final Color successSoft;
@@ -83,6 +93,14 @@ final class AppColors extends ThemeExtension<AppColors> {
     required this.dangerSoft,
     required this.info,
     required this.infoSoft,
+    required this.chatBg,
+    required this.chatHeader,
+    required this.chatFoot,
+    required this.chatDot,
+    required this.bubIn,
+    required this.bubInFg,
+    required this.bubOut,
+    required this.bubOutFg,
   });
 
   /// Tokens do tema claro (padrão do app).
@@ -116,6 +134,14 @@ final class AppColors extends ThemeExtension<AppColors> {
     dangerSoft: AppPalette.dangerSoft,
     info: AppPalette.info,
     infoSoft: AppPalette.infoSoft,
+    chatBg: AppPalette.chatBgLight,
+    chatHeader: AppPalette.chatHeaderLight,
+    chatFoot: AppPalette.chatFootLight,
+    chatDot: AppPalette.chatDotLight,
+    bubIn: AppPalette.chatBubInLight,
+    bubInFg: AppPalette.chatBubInFgLight,
+    bubOut: AppPalette.chatBubOutLight,
+    bubOutFg: AppPalette.chatBubOutFgLight,
   );
 
   /// Tokens do tema escuro — sobrescreve apenas as cores; papéis idênticos.
@@ -149,6 +175,14 @@ final class AppColors extends ThemeExtension<AppColors> {
     dangerSoft: AppPalette.dangerSoft,
     info: AppPalette.info,
     infoSoft: AppPalette.infoSoft,
+    chatBg: AppPalette.chatBgDark,
+    chatHeader: AppPalette.chatHeaderDark,
+    chatFoot: AppPalette.chatFootDark,
+    chatDot: AppPalette.chatDotDark,
+    bubIn: AppPalette.chatBubInDark,
+    bubInFg: AppPalette.chatBubInFgDark,
+    bubOut: AppPalette.chatBubOutDark,
+    bubOutFg: AppPalette.chatBubOutFgDark,
   );
 
   @override
@@ -182,6 +216,14 @@ final class AppColors extends ThemeExtension<AppColors> {
     Color? dangerSoft,
     Color? info,
     Color? infoSoft,
+    Color? chatBg,
+    Color? chatHeader,
+    Color? chatFoot,
+    Color? chatDot,
+    Color? bubIn,
+    Color? bubInFg,
+    Color? bubOut,
+    Color? bubOutFg,
   }) {
     return AppColors(
       bg: bg ?? this.bg,
@@ -213,6 +255,14 @@ final class AppColors extends ThemeExtension<AppColors> {
       dangerSoft: dangerSoft ?? this.dangerSoft,
       info: info ?? this.info,
       infoSoft: infoSoft ?? this.infoSoft,
+      chatBg: chatBg ?? this.chatBg,
+      chatHeader: chatHeader ?? this.chatHeader,
+      chatFoot: chatFoot ?? this.chatFoot,
+      chatDot: chatDot ?? this.chatDot,
+      bubIn: bubIn ?? this.bubIn,
+      bubInFg: bubInFg ?? this.bubInFg,
+      bubOut: bubOut ?? this.bubOut,
+      bubOutFg: bubOutFg ?? this.bubOutFg,
     );
   }
 
@@ -249,6 +299,14 @@ final class AppColors extends ThemeExtension<AppColors> {
       dangerSoft: Color.lerp(dangerSoft, other.dangerSoft, t)!,
       info: Color.lerp(info, other.info, t)!,
       infoSoft: Color.lerp(infoSoft, other.infoSoft, t)!,
+      chatBg: Color.lerp(chatBg, other.chatBg, t)!,
+      chatHeader: Color.lerp(chatHeader, other.chatHeader, t)!,
+      chatFoot: Color.lerp(chatFoot, other.chatFoot, t)!,
+      chatDot: Color.lerp(chatDot, other.chatDot, t)!,
+      bubIn: Color.lerp(bubIn, other.bubIn, t)!,
+      bubInFg: Color.lerp(bubInFg, other.bubInFg, t)!,
+      bubOut: Color.lerp(bubOut, other.bubOut, t)!,
+      bubOutFg: Color.lerp(bubOutFg, other.bubOutFg, t)!,
     );
   }
 }

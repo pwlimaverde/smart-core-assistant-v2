@@ -40,7 +40,7 @@ Ver `colors.json` para paleta completa.
 
 ### Para CI/CD
 1. Setup.exe: Referenciar assets do `assets/`
-2. App Flutter: Usar tema `smart_core_theme.dart`
+2. App Flutter: Usar o design system (`clients/modulos/design_system_module`, `AppTheme` e `AppColors`)
 3. Website: Usar `colors.json` ou valores hexadecimais
 
 ## ⚠️ Requerimentos Imediatos

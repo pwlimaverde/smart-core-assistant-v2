@@ -71,13 +71,13 @@ class _DashboardPageState extends State<DashboardPage> {
                               title: 'Total de Clientes / Tenants',
                               value: summary.totalTenants.toString(),
                               icon: Icons.business,
-                              color: Colors.blue,
+                              color: context.colors.info,
                             ),
                             _buildKpiCard(
                               title: 'Tenants Ativos',
                               value: summary.activeTenants.toString(),
                               icon: Icons.check_circle_outline,
-                              color: Colors.green,
+                              color: context.colors.success,
                             ),
                           ]),
                           const SizedBox(height: 16),
@@ -92,7 +92,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               title: 'Receita Mensal Recorrente (MRR)',
                               value: 'R\$ ${summary.monthlyRecurringRevenue}',
                               icon: Icons.monetization_on_outlined,
-                              color: Colors.amber[700]!,
+                              color: context.colors.warning,
                             ),
                           ]),
                         ],
@@ -108,7 +108,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             title: 'Total de Clientes / Tenants',
                             value: summary.totalTenants.toString(),
                             icon: Icons.business,
-                            color: Colors.blue,
+                            color: context.colors.info,
                           ),
                         ),
                         SizedBox(
@@ -117,7 +117,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             title: 'Tenants Ativos',
                             value: summary.activeTenants.toString(),
                             icon: Icons.check_circle_outline,
-                            color: Colors.green,
+                            color: context.colors.success,
                           ),
                         ),
                         SizedBox(
@@ -135,7 +135,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             title: 'Receita Mensal Recorrente (MRR)',
                             value: 'R\$ ${summary.monthlyRecurringRevenue}',
                             icon: Icons.monetization_on_outlined,
-                            color: Colors.amber[700]!,
+                            color: context.colors.warning,
                           ),
                         ),
                       ],
@@ -207,7 +207,9 @@ class _DashboardPageState extends State<DashboardPage> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    color: isDark
+                        ? context.colors.fgMuted
+                        : context.colors.fgMuted,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -262,7 +264,7 @@ class _DashboardPageState extends State<DashboardPage> {
               children: [
                 Text(
                   '${service.responseTimeMs} ms',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  style: TextStyle(color: context.colors.fgMuted, fontSize: 13),
                 ),
                 const SizedBox(width: 12),
                 _buildHealthBadge(service.status),
@@ -295,16 +297,16 @@ class _DashboardPageState extends State<DashboardPage> {
 
     switch (status.toLowerCase()) {
       case 'healthy':
-        color = Colors.green;
+        color = context.colors.success;
         text = 'Saudável';
         break;
       case 'degraded':
-        color = Colors.orange;
+        color = context.colors.warning;
         text = 'Instável';
         break;
       case 'unhealthy':
       default:
-        color = Colors.red;
+        color = context.colors.danger;
         text = 'Fora do Ar';
         break;
     }

@@ -17,45 +17,25 @@
 
 ## Paleta de Cores
 
-### Cores Primárias
+Identidade oficial: gold + stone, definida pelo designer em `old/smart-core-assistant-painel/docs_dev/designer/workspace-smart/patches/app/atendimento_unificado/static/atendimento_unificado/css/workspace-tokens.css` e espelhada no design system Flutter (`clients/modulos/design_system_module/lib/src/tokens/app_palette.dart`). Use os tokens semânticos, não as cores cruas.
 
-| Cor | Hex | RGB | Uso |
-|-----|-----|-----|-----|
-| **Azul Primário** | `#0066CC` | RGB(0, 102, 204) | Logo, headers, CTAs |
-| **Azul Escuro** | `#003D7A` | RGB(0, 61, 122) | Backgrounds escuros |
-| **Branco** | `#FFFFFF` | RGB(255, 255, 255) | Texto, backgrounds claros |
-| **Cinza Claro** | `#F5F5F5` | RGB(245, 245, 245) | Backgrounds secundários |
-| **Cinza Escuro** | `#333333` | RGB(51, 51, 51) | Textos principais |
-
-### Cores Secundárias (Accent)
-
-| Cor | Hex | RGB | Uso |
-|-----|-----|-----|-----|
-| **Verde Sucesso** | `#27AE60` | RGB(39, 174, 96) | Status OK, success |
-| **Laranja Aviso** | `#E67E22` | RGB(230, 126, 34) | Warnings, alerts |
-| **Vermelho Erro** | `#E74C3C` | RGB(231, 76, 60) | Errors, critical |
+| Papel | Token | Hex (claro) | Hex (escuro) |
+|---|---|---|---|
+| Fundo do board | `bg` | `#F5F5F4` | `#14110F` |
+| Superfície (cards) | `card` | `#FFFFFF` | `#1F1B18` |
+| Texto | `fg` / `fgStrong` | `#44403C` / `#1C1917` | `#C8C0B7` / `#F5EFE7` |
+| Texto secundário | `fgMuted` | `#78716C` | `#8B8175` |
+| Acento (marca) | `accent` | `#A98F71` | `#A98F71` |
+| Topbar / sidebar | `topbar` | `#1C1917` | `#0E0C0B` |
+| Fundo do chat | `chatBg` | `#EFEAE2` | `#100D0B` |
+| Bolha recebida / enviada | `bubIn` / `bubOut` | `#FFFFFF` / `#D9FDD3` | `#1F1B18` / `#2F4434` |
+| Sucesso / aviso / erro / info | `success`, `warning`, `danger`, `info` | `#16A34A`, `#D97706`, `#DC2626`, `#2563EB` | mesmos |
 
 ---
 
 ## Tipografia
 
-### Fontes Recomendadas
-
-**Headings:**
-- Font: `Segoe UI` (Windows), `SF Pro Display` (macOS/iOS), fallback `Arial`
-- Weight: Bold (700)
-- Size: 24px (H1), 20px (H2), 16px (H3)
-
-**Body Text:**
-- Font: `Segoe UI` (Windows), `SF Pro Text` (macOS/iOS), fallback `Helvetica`
-- Weight: Regular (400)
-- Size: 14px
-
-**Monospace (Code):**
-- Font: `Consolas`, `Monaco`, fallback `monospace`
-- Size: 12px
-
----
+Família **Outfit** (empacotada no design system, sem CDN). Escala em `AppTypography`; nas telas, use `Theme.of(context).textTheme`.
 
 ## Logo & Ícone
 

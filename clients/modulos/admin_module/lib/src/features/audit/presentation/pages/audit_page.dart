@@ -129,9 +129,9 @@ class _AuditPageState extends State<AuditPage> {
         'tenants_export_${DateTime.now().millisecondsSinceEpoch}.csv',
       );
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Exportação concluída com sucesso!'),
-          backgroundColor: Colors.green,
+          backgroundColor: context.colors.success,
         ),
       );
     } else if (res case Failure(:final error)) {
@@ -140,7 +140,7 @@ class _AuditPageState extends State<AuditPage> {
           content: Text(
             'Erro ao exportar CSV: ${ErrorMessageMapper.map(error)}',
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: context.colors.danger,
         ),
       );
     }
@@ -194,9 +194,9 @@ class _AuditPageState extends State<AuditPage> {
                     const SizedBox(height: 4),
                     Text(
                       'Monitore mutações de dados críticos e tentativas de acesso aos recursos sensíveis.',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: context.colors.fgMuted,
+                      ),
                     ),
                   ],
                 ),
@@ -371,7 +371,7 @@ class _AuditPageState extends State<AuditPage> {
             ),
             child: DataTable(
               headingRowColor: WidgetStateProperty.all(
-                isDark ? Colors.grey[900] : Colors.grey[100],
+                isDark ? context.colors.fgMuted : context.colors.fgMuted,
               ),
               columns: const [
                 DataColumn(
@@ -437,7 +437,7 @@ class _AuditPageState extends State<AuditPage> {
                         child: Text(
                           '${log.ipAddress}\n${_truncateUserAgent(log.userAgent)}',
                           style: TextStyle(
-                            color: Colors.grey[600],
+                            color: context.colors.fgMuted,
                             fontSize: 12,
                           ),
                         ),
@@ -469,15 +469,15 @@ class _AuditPageState extends State<AuditPage> {
 
     switch (eventType.toLowerCase()) {
       case 'auth_login':
-        color = Colors.blue;
+        color = context.colors.info;
         label = 'LOGIN';
         break;
       case 'auth_access_denied':
-        color = Colors.red;
+        color = context.colors.danger;
         label = 'NEGADO';
         break;
       case 'config_changed':
-        color = Colors.orange;
+        color = context.colors.warning;
         label = 'CONFIG';
         break;
       case 'tenant_modified':
@@ -489,7 +489,7 @@ class _AuditPageState extends State<AuditPage> {
         label = 'FATURAMENTO';
         break;
       default:
-        color = Colors.grey;
+        color = context.colors.fgMuted;
         label = eventType.toUpperCase();
         break;
     }

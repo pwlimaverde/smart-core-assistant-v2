@@ -623,10 +623,10 @@ class _Migalha extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Text(
+    return Text(
       'WORKSPACE',
       style: TextStyle(
-        color: Color(0xFFA8A29E),
+        color: context.colors.fgSubtle,
         fontSize: 11,
         fontWeight: FontWeight.w600,
         letterSpacing: 1.3,
@@ -657,7 +657,7 @@ class _SeletorDeFluxo extends StatelessWidget {
           value: quadro.fluxoId,
           isDense: true,
           dropdownColor: colors.topbar,
-          iconEnabledColor: const Color(0xFFA8A29E),
+          iconEnabledColor: context.colors.fgSubtle,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 12,
@@ -737,7 +737,7 @@ class _SeletorDeFoco extends StatelessWidget {
                           size: 14,
                           color: m == modo
                               ? Colors.white
-                              : const Color(0xFFA8A29E),
+                              : context.colors.fgSubtle,
                         ),
                         if (comRotulos) ...[
                           const SizedBox(width: 5),
@@ -748,7 +748,7 @@ class _SeletorDeFoco extends StatelessWidget {
                               fontWeight: FontWeight.w500,
                               color: m == modo
                                   ? Colors.white
-                                  : const Color(0xFFA8A29E),
+                                  : context.colors.fgSubtle,
                             ),
                           ),
                         ],
@@ -787,7 +787,7 @@ class _CampoDeBuscaState extends State<_CampoDeBusca> {
 
   @override
   Widget build(BuildContext context) {
-    const apagado = Color(0xFFA8A29E);
+    final apagado = context.colors.fgSubtle;
     return SizedBox(
       height: 32,
       child: TextField(
@@ -798,10 +798,10 @@ class _CampoDeBuscaState extends State<_CampoDeBusca> {
           isDense: true,
           filled: true,
           fillColor: Colors.white.withValues(alpha: 0.06),
-          prefixIcon: const Icon(Icons.search, size: 16, color: apagado),
+          prefixIcon: Icon(Icons.search, size: 16, color: apagado),
           prefixIconConstraints: const BoxConstraints(minWidth: 34),
           hintText: 'Buscar por nome, telefone ou assunto',
-          hintStyle: const TextStyle(color: Color(0xFF78716C), fontSize: 12),
+          hintStyle: TextStyle(color: context.colors.fgMuted, fontSize: 12),
           contentPadding: const EdgeInsets.symmetric(vertical: 8),
           enabledBorder: OutlineInputBorder(
             borderRadius: AppRadius.md,
@@ -814,7 +814,7 @@ class _CampoDeBuscaState extends State<_CampoDeBusca> {
           suffixIcon: _texto.text.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(Icons.close, size: 14, color: apagado),
+                  icon: Icon(Icons.close, size: 14, color: apagado),
                   tooltip: 'Limpar busca',
                   onPressed: () {
                     _texto.clear();

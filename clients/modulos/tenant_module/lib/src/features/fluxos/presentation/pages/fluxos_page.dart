@@ -133,7 +133,10 @@ class _LinhaFluxo extends StatelessWidget {
                     else if (item.semEtapas)
                       // Quadro sem coluna não recebe conversa: o roteamento
                       // procura a etapa de entrada e não acha.
-                      const _Etiqueta(texto: 'Sem colunas', cor: Colors.orange),
+                      _Etiqueta(
+                        texto: 'Sem colunas',
+                        cor: context.colors.warning,
+                      ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xs),

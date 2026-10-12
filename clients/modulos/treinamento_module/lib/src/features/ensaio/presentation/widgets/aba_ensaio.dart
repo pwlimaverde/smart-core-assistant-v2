@@ -187,9 +187,9 @@ class _Resultado extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           // A resposta pode até parecer boa — o modelo inventa. É justamente
           // aqui que quem treina precisa ser avisado.
-          const _Aviso(
+          _Aviso(
             icone: Icons.warning_amber_outlined,
-            cor: Colors.orange,
+            cor: context.colors.warning,
             texto:
                 'Nenhum material e nenhuma intenção casaram com esta '
                 'pergunta. O que veio acima não saiu do seu treinamento.',

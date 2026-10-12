@@ -65,7 +65,7 @@ class _PainelPageState extends State<PainelPage> {
               else if (p.faltaEstrutura)
                 _Aviso(
                   icone: Icons.construction,
-                  cor: Colors.orange,
+                  cor: context.colors.warning,
                   titulo: 'Falta terminar a configuração',
                   detalhe: p.conexoesTotal == 0
                       ? 'Nenhum WhatsApp conectado ainda.'

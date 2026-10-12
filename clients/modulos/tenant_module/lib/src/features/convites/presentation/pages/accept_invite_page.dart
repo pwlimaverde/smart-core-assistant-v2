@@ -62,10 +62,10 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
                   ),
                   const SizedBox(height: 8),
                   if (token.isEmpty)
-                    const Text(
+                    Text(
                       'Link de convite inválido: token ausente.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.red),
+                      style: TextStyle(color: context.colors.danger),
                     )
                   else ...[
                     const SizedBox(height: 16),
@@ -101,7 +101,7 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
                         children: [
                           Text(
                             error.message,
-                            style: const TextStyle(color: Colors.red),
+                            style: TextStyle(color: context.colors.danger),
                           ),
                           const SizedBox(height: 12),
                           _buildSubmitButton(token),
@@ -109,10 +109,10 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
                       ),
                       onSuccess: (context, _) => Column(
                         children: [
-                          const Text(
+                          Text(
                             'Conta criada! Agora faça login com sua senha.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.green),
+                            style: TextStyle(color: context.colors.success),
                           ),
                           const SizedBox(height: 16),
                           PrimaryButton(

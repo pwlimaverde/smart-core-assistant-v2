@@ -1,15 +1,24 @@
 {
   "brand": {
-    "primary": "#0066CC",
-    "primary_dark": "#003D7A",
-    "white": "#FFFFFF",
-    "text_dark": "#333333",
-    "text_gray": "#666666",
-    "bg_light": "#F5F5F5"
+    "primary": "#A98F71",
+    "primary_hover": "#8B7355",
+    "surface": "#FFFFFF",
+    "background": "#F5F5F4",
+    "text": "#1C1917",
+    "text_muted": "#78716C",
+    "topbar": "#1C1917"
   },
-  "secondary": {
-    "success": "#27AE60",
-    "warning": "#E67E22",
-    "error": "#E74C3C"
-  }
+  "feedback": {
+    "success": "#16A34A",
+    "warning": "#D97706",
+    "error": "#DC2626",
+    "info": "#2563EB"
+  },
+  "chat": {
+    "background": "#EFEAE2",
+    "bubble_in": "#FFFFFF",
+    "bubble_out": "#D9FDD3"
+  },
+  "fonte": "Outfit",
+  "origem": "workspace-tokens.css do designer"
 }

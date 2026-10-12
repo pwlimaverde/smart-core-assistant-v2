@@ -192,7 +192,10 @@ class _InvitesPageState extends State<InvitesPage> {
                           ),
                         if (invite.pendente)
                           IconButton(
-                            icon: const Icon(Icons.block, color: Colors.red),
+                            icon: Icon(
+                              Icons.block,
+                              color: context.colors.danger,
+                            ),
                             tooltip: 'Revogar',
                             onPressed: () => _revoke(invite),
                           ),

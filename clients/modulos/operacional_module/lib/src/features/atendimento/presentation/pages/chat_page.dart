@@ -1131,7 +1131,7 @@ class _ChatBody extends StatelessWidget {
           child: ColoredBox(
             // O fundo bege do WhatsApp (`--ws-chat-bg`): é onde quem atende
             // já está acostumado a ler conversa.
-            color: escuro ? AppPalette.chatBgDark : AppPalette.chatBgLight,
+            color: (escuro ? AppColors.dark : AppColors.light).chatBg,
             child: viewModel.mensagens.isEmpty
                 ? const AppEmptyView(
                     icon: Icons.chat_bubble_outline,
@@ -1322,7 +1322,7 @@ class _Compositor extends StatelessWidget {
     final escuro = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: escuro ? colors.panel : const Color(0xFFF0F2F5),
+        color: escuro ? colors.panel : context.colors.chatFoot,
         border: Border(top: BorderSide(color: colors.border)),
       ),
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),

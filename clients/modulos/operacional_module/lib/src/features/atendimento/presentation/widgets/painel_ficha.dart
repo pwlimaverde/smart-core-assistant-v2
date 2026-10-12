@@ -27,7 +27,7 @@ import 'galeria_do_atendimento.dart';
 Color corDaEtiqueta(String hex) {
   final limpo = hex.replaceFirst('#', '');
   final valor = int.tryParse(limpo, radix: 16);
-  if (valor == null || limpo.length != 6) return const Color(0xFFA98F71);
+  if (valor == null || limpo.length != 6) return AppPalette.gold500;
   return Color(0xFF000000 | valor);
 }
 

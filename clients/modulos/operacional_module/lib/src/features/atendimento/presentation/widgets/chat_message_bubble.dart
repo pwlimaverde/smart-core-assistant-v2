@@ -145,14 +145,9 @@ class ChatMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final bg = _isOutbound
-        ? (isDark ? AppPalette.chatBubOutDark : AppPalette.chatBubOutLight)
-        : (isDark ? AppPalette.chatBubInDark : AppPalette.chatBubInLight);
-    final fg = _isOutbound && isDark
-        ? AppPalette.chatBubOutFgDark
-        : (_isOutbound ? AppPalette.chatBubOutFgLight : colors.fgStrong);
+    final bg = _isOutbound ? colors.bubOut : colors.bubIn;
+    final fg = _isOutbound ? colors.bubOutFg : colors.bubInFg;
 
     final bolha = Align(
       alignment: _isOutbound ? Alignment.centerRight : Alignment.centerLeft,
@@ -406,6 +401,7 @@ class _Ticks extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final (icone, cor, rotulo) = switch (status) {
       StatusEntrega.pendente => (
         Icons.schedule,
@@ -424,10 +420,10 @@ class _Ticks extends StatelessWidget {
       ),
       // Azul é a única cor com significado aqui: é o que distingue "chegou" de
       // "leram" num relance.
-      StatusEntrega.lida => (Icons.done_all, AppPalette.info, 'Lida'),
+      StatusEntrega.lida => (Icons.done_all, colors.info, 'Lida'),
       StatusEntrega.falhou => (
         Icons.error_outline,
-        AppPalette.danger,
+        colors.danger,
         'Falhou no envio',
       ),
     };

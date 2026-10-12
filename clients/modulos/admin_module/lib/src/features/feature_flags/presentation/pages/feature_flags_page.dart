@@ -48,7 +48,7 @@ class _FeatureFlagsPageState extends State<FeatureFlagsPage> {
           content: Text(
             'Erro ao atualizar flag: ${ErrorMessageMapper.map(error)}',
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: context.colors.danger,
         ),
       );
     }
@@ -68,7 +68,7 @@ class _FeatureFlagsPageState extends State<FeatureFlagsPage> {
           content: Text(
             'Erro ao remover override: ${ErrorMessageMapper.map(error)}',
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: context.colors.danger,
         ),
       );
     }
@@ -162,7 +162,7 @@ class _FeatureFlagsPageState extends State<FeatureFlagsPage> {
                           content: Text(
                             'Erro ao salvar override: ${ErrorMessageMapper.map(error)}',
                           ),
-                          backgroundColor: Colors.red,
+                          backgroundColor: context.colors.danger,
                         ),
                       );
                     }
@@ -205,7 +205,7 @@ class _FeatureFlagsPageState extends State<FeatureFlagsPage> {
               'Controle o lançamento de novas features de forma global ou libere antecipadamente para clientes específicos usando overrides.',
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+              ).textTheme.bodyMedium?.copyWith(color: context.colors.fgMuted),
             ),
             const SizedBox(height: 24),
             Expanded(
@@ -246,7 +246,9 @@ class _FeatureFlagsPageState extends State<FeatureFlagsPage> {
                 flag.enabledGlobally
                     ? Icons.toggle_on
                     : Icons.toggle_off_outlined,
-                color: flag.enabledGlobally ? Colors.green : Colors.grey,
+                color: flag.enabledGlobally
+                    ? context.colors.success
+                    : context.colors.fgMuted,
                 size: 32,
               ),
               title: Text(
@@ -302,13 +304,13 @@ class _FeatureFlagsPageState extends State<FeatureFlagsPage> {
                       ),
                       const SizedBox(height: 12),
                       if (flag.overrides.isEmpty)
-                        const Center(
+                        Center(
                           child: Padding(
                             padding: EdgeInsets.symmetric(vertical: 16.0),
                             child: Text(
                               'Nenhum override configurado. O comportamento global se aplica a todos.',
                               style: TextStyle(
-                                color: Colors.grey,
+                                color: context.colors.fgMuted,
                                 fontStyle: FontStyle.italic,
                               ),
                             ),
@@ -347,7 +349,9 @@ class _FeatureFlagsPageState extends State<FeatureFlagsPage> {
                                 o.enabled
                                     ? Icons.check_circle
                                     : Icons.remove_circle,
-                                color: o.enabled ? Colors.green : Colors.red,
+                                color: o.enabled
+                                    ? context.colors.success
+                                    : context.colors.danger,
                               ),
                               title: Text(tenantName),
                               subtitle: Text(
@@ -356,9 +360,9 @@ class _FeatureFlagsPageState extends State<FeatureFlagsPage> {
                                     : 'Desabilitado (Override)',
                               ),
                               trailing: IconButton(
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.delete_outline,
-                                  color: Colors.red,
+                                  color: context.colors.danger,
                                 ),
                                 tooltip: 'Remover Override',
                                 onPressed: () =>

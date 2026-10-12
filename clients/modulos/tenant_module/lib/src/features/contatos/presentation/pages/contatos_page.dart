@@ -174,9 +174,9 @@ class _LinhaContato extends StatelessWidget {
                       const SizedBox(width: AppSpacing.sm),
                       // Contato sem nome nenhum é o que o operador precisa
                       // completar — marcar evita que ele se perca na lista.
-                      const _Etiqueta(
+                      _Etiqueta(
                         texto: 'Sem cadastro',
-                        cor: Colors.orange,
+                        cor: context.colors.warning,
                       ),
                     ],
                   ],

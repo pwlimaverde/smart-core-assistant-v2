@@ -206,17 +206,21 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
                                 color: Colors.amber.withValues(alpha: 0.5),
                               ),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.lock, size: 12, color: Colors.amber),
+                                Icon(
+                                  Icons.lock,
+                                  size: 12,
+                                  color: context.colors.warning,
+                                ),
                                 SizedBox(width: 4),
                                 Text(
                                   'Cifrado',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.amber,
+                                    color: context.colors.warning,
                                   ),
                                 ),
                               ],
@@ -241,7 +245,9 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.grey[900] : Colors.grey[100],
+                        color: isDark
+                            ? context.colors.fgMuted
+                            : context.colors.fgMuted,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -260,12 +266,12 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.blue),
+                    icon: Icon(Icons.edit, color: context.colors.info),
                     tooltip: 'Editar',
                     onPressed: () => _showEditDialog(context, setting),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
+                    icon: Icon(Icons.delete, color: context.colors.danger),
                     tooltip: 'Excluir',
                     onPressed: () => _confirmDelete(context, setting.key),
                   ),
@@ -430,7 +436,9 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
                   ),
                 );
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.colors.danger,
+              ),
               child: const Text(
                 'Excluir',
                 style: TextStyle(color: Colors.white),
