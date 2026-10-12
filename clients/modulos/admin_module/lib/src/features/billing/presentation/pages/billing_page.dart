@@ -217,8 +217,8 @@ class _BillingPageState extends State<BillingPage>
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: plan.active
-                                              ? Colors.green
-                                              : Colors.red,
+                                              ? context.colors.success
+                                              : context.colors.danger,
                                         ),
                                       ),
                                     ),
@@ -259,7 +259,7 @@ class _BillingPageState extends State<BillingPage>
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            icon: Icon(Icons.edit, color: context.colors.info),
                             onPressed: () => _showPlanDialog(context, plan),
                           ),
                         ],
@@ -277,7 +277,7 @@ class _BillingPageState extends State<BillingPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey[900] : Colors.grey[100],
+        color: isDark ? context.colors.fgMuted : context.colors.fgMuted,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: Theme.of(context).dividerColor),
       ),
@@ -321,7 +321,9 @@ class _BillingPageState extends State<BillingPage>
                         ),
                         child: DataTable(
                           headingRowColor: WidgetStateProperty.all(
-                            isDark ? Colors.grey[900] : Colors.grey[100],
+                            isDark
+                                ? context.colors.fgMuted
+                                : context.colors.fgMuted,
                           ),
                           columns: const [
                             DataColumn(
@@ -373,8 +375,8 @@ class _BillingPageState extends State<BillingPage>
                                       borderRadius: BorderRadius.circular(4),
                                       border: Border.all(
                                         color: sub.status == 'active'
-                                            ? Colors.green
-                                            : Colors.amber,
+                                            ? context.colors.success
+                                            : context.colors.warning,
                                       ),
                                     ),
                                     child: Text(
@@ -383,8 +385,8 @@ class _BillingPageState extends State<BillingPage>
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                         color: sub.status == 'active'
-                                            ? Colors.green
-                                            : Colors.amber,
+                                            ? context.colors.success
+                                            : context.colors.warning,
                                       ),
                                     ),
                                   ),
@@ -462,7 +464,9 @@ class _BillingPageState extends State<BillingPage>
                         ),
                         child: DataTable(
                           headingRowColor: WidgetStateProperty.all(
-                            isDark ? Colors.grey[900] : Colors.grey[100],
+                            isDark
+                                ? context.colors.fgMuted
+                                : context.colors.fgMuted,
                           ),
                           columns: const [
                             DataColumn(
@@ -815,8 +819,8 @@ class _BillingPageState extends State<BillingPage>
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.grey[900]
-                              : Colors.grey[100],
+                              ? context.colors.fgMuted
+                              : context.colors.fgMuted,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
                             color: Theme.of(context).dividerColor,

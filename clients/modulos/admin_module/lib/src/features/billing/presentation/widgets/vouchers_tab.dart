@@ -135,10 +135,16 @@ class _Selo extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final (cor, icone) = switch (situacao) {
-      SituacaoVoucher.ativo => (Colors.green, Icons.check_circle_outline),
+      SituacaoVoucher.ativo => (
+        context.colors.success,
+        Icons.check_circle_outline,
+      ),
       SituacaoVoucher.agendado => (Colors.blueGrey, Icons.schedule),
-      SituacaoVoucher.esgotado => (Colors.orange, Icons.hourglass_disabled),
-      SituacaoVoucher.expirado => (Colors.orange, Icons.event_busy),
+      SituacaoVoucher.esgotado => (
+        context.colors.warning,
+        Icons.hourglass_disabled,
+      ),
+      SituacaoVoucher.expirado => (context.colors.warning, Icons.event_busy),
       SituacaoVoucher.revogado => (scheme.error, Icons.block),
     };
 

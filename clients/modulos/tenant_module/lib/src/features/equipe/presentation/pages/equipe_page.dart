@@ -325,9 +325,9 @@ class _LinhaAtendente extends StatelessWidget {
                     if (!a.ativo)
                       _Etiqueta(texto: 'Inativo', cor: context.colors.fgMuted)
                     else if (!a.disponivel)
-                      const _Etiqueta(
+                      _Etiqueta(
                         texto: 'Indisponível',
-                        cor: Colors.orange,
+                        cor: context.colors.warning,
                       ),
                   ],
                 ),

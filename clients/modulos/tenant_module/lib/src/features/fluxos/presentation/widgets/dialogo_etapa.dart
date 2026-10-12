@@ -45,7 +45,7 @@ Color corDoHex(String hex) {
   final valor = int.tryParse(limpo, radix: 16);
   // Hex inválido cai no cinza padrão: uma cor errada não justifica derrubar a
   // tela inteira.
-  if (valor == null || limpo.length != 6) return const Color(0xFF6B7280);
+  if (valor == null || limpo.length != 6) return AppPalette.stone500;
   return Color(0xFF000000 | valor);
 }
 

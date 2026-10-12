@@ -15,6 +15,7 @@ This directory contains plans for coordinating work across documentation and pla
 10. [Regras Do Bot E Permissoes](./regras-do-bot-e-permissoes.md)
 11. [Servidor Releases Windows](./servidor-releases-windows.md)
 12. [Windows Releases v0.1 Beta](./windows-releases-v01-beta.md)
+13. [Visual Cliente Windows](./visual-cliente-windows.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

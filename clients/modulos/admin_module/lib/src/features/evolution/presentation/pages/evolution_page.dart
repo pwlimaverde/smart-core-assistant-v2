@@ -96,7 +96,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
               'Verifique a integridade e o estado de conexão das instâncias do WhatsApp integradas via Evolution API.',
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+              ).textTheme.bodyMedium?.copyWith(color: context.colors.fgMuted),
             ),
             const SizedBox(height: 24),
             Expanded(
@@ -137,7 +137,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
             ),
             child: DataTable(
               headingRowColor: WidgetStateProperty.all(
-                isDark ? Colors.grey[900] : Colors.grey[100],
+                isDark ? context.colors.fgMuted : context.colors.fgMuted,
               ),
               columns: const [
                 DataColumn(
@@ -194,7 +194,9 @@ class _EvolutionPageState extends State<EvolutionPage> {
                         child: Text(
                           tenant.active ? 'Ativo' : 'Inativo',
                           style: TextStyle(
-                            color: tenant.active ? Colors.green : Colors.red,
+                            color: tenant.active
+                                ? context.colors.success
+                                : context.colors.danger,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -263,7 +265,7 @@ class _EvolutionPageState extends State<EvolutionPage> {
     EvolutionConnectionResult? result,
   ) {
     if (isLoading) {
-      return const Row(
+      return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
@@ -274,14 +276,17 @@ class _EvolutionPageState extends State<EvolutionPage> {
           SizedBox(width: 8),
           Text(
             'Consultando API...',
-            style: TextStyle(fontSize: 13, color: Colors.grey),
+            style: TextStyle(fontSize: 13, color: context.colors.fgMuted),
           ),
         ],
       );
     }
 
     if (result == null) {
-      return const Text('Não testado', style: TextStyle(color: Colors.grey));
+      return Text(
+        'Não testado',
+        style: TextStyle(color: context.colors.fgMuted),
+      );
     }
 
     Color color;
@@ -290,23 +295,23 @@ class _EvolutionPageState extends State<EvolutionPage> {
 
     switch (result.status.toLowerCase()) {
       case 'open':
-        color = Colors.green;
+        color = context.colors.success;
         text = 'CONECTADO (OPEN)';
         icon = Icons.check_circle;
         break;
       case 'connecting':
-        color = Colors.amber[800]!;
+        color = context.colors.warning;
         text = 'CONECTANDO...';
         icon = Icons.hourglass_empty;
         break;
       case 'close':
-        color = Colors.grey[600]!;
+        color = context.colors.fgMuted;
         text = 'DESCONECTADO (CLOSE)';
         icon = Icons.cancel;
         break;
       case 'error':
       default:
-        color = Colors.red;
+        color = context.colors.danger;
         text = 'ERRO API';
         icon = Icons.error_outline;
         break;

@@ -358,7 +358,7 @@ class _Selo extends StatelessWidget {
   Widget build(BuildContext context) {
     final cor = switch (situacao) {
       SituacaoTreinamento.ativo => context.colors.success,
-      SituacaoTreinamento.naFila => Colors.orange,
+      SituacaoTreinamento.naFila => context.colors.warning,
       // Aviso, não neutro: cinza lê como "tudo certo", e este é o estado em
       // que o material existe mas não chega à IA.
       SituacaoTreinamento.rascunho => context.colors.warning,

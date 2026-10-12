@@ -132,12 +132,17 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
                           DataCell(
                             Icon(
                               u.isActive ? Icons.check_circle : Icons.cancel,
-                              color: u.isActive ? Colors.green : Colors.grey,
+                              color: u.isActive
+                                  ? context.colors.success
+                                  : context.colors.fgMuted,
                             ),
                           ),
                           DataCell(
                             IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              icon: Icon(
+                                Icons.edit,
+                                color: context.colors.info,
+                              ),
                               tooltip: 'Editar',
                               onPressed: () => _showEditDialog(context, u),
                             ),

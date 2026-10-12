@@ -109,8 +109,8 @@ void main() {
     });
 
     test('hex inválido cai no cinza em vez de estourar', () {
-      expect(corDoHex(''), const Color(0xFF6B7280));
-      expect(corDoHex('#xyz'), const Color(0xFF6B7280));
+      expect(corDoHex(''), const Color(0xFF78716C));
+      expect(corDoHex('#xyz'), const Color(0xFF78716C));
       expect(corDoHex('#12345'), const Color(0xFF6B7280));
     });
   });

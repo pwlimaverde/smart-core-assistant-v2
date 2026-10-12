@@ -117,9 +117,12 @@ class _Linha extends StatelessWidget {
                     // cadastro e não existe para a IA. Sem dizer isso, alguém
                     // cadastra, testa e conclui que o sistema não funciona.
                     if (item.vetorizada)
-                      const _Etiqueta(texto: 'Ativa', cor: Colors.green)
+                      _Etiqueta(texto: 'Ativa', cor: context.colors.success)
                     else
-                      const _Etiqueta(texto: 'Processando', cor: Colors.orange),
+                      _Etiqueta(
+                        texto: 'Processando',
+                        cor: context.colors.warning,
+                      ),
                     if (item.grupo.isNotEmpty) ...[
                       const SizedBox(width: AppSpacing.sm),
                       _Etiqueta(texto: item.grupo, cor: muted),

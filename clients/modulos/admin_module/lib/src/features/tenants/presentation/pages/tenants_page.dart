@@ -101,7 +101,7 @@ class _TenantsPageState extends State<TenantsPage> {
             ),
             child: DataTable(
               headingRowColor: WidgetStateProperty.all(
-                isDark ? Colors.grey[900] : Colors.grey[100],
+                isDark ? context.colors.fgMuted : context.colors.fgMuted,
               ),
               columns: const [
                 DataColumn(
@@ -211,23 +211,23 @@ class _TenantsPageState extends State<TenantsPage> {
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            icon: Icon(Icons.edit, color: context.colors.info),
                             tooltip: 'Editar',
                             onPressed: () => _showEditDialog(context, tenant),
                           ),
                           IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.settings,
-                              color: Colors.amber,
+                              color: context.colors.warning,
                             ),
                             tooltip: 'Ver Configurações',
                             onPressed: () =>
                                 context.go('/tenant-config?id=${tenant.id}'),
                           ),
                           IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.payment,
-                              color: Colors.green,
+                              color: context.colors.success,
                             ),
                             tooltip: 'Ver Pagamentos',
                             onPressed: () =>
@@ -289,8 +289,8 @@ class _TenantsPageState extends State<TenantsPage> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.grey[900]
-                        : Colors.grey[100],
+                        ? context.colors.fgMuted
+                        : context.colors.fgMuted,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: Theme.of(context).dividerColor),
                   ),

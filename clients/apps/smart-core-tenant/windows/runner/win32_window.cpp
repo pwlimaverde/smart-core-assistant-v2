@@ -187,6 +187,15 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
 
+    case WM_GETMINMAXINFO: {
+      // Abaixo disso o layout de três painéis não cabe; medida em pixels físicos.
+      const double scale = GetDpiForWindow(hwnd) / 96.0;
+      auto info = reinterpret_cast<MINMAXINFO*>(lparam);
+      info->ptMinTrackSize.x = static_cast<LONG>(960 * scale);
+      info->ptMinTrackSize.y = static_cast<LONG>(600 * scale);
+      return 0;
+    }
+
     case WM_DPICHANGED: {
       auto newRectSize = reinterpret_cast<RECT*>(lparam);
       LONG newWidth = newRectSize->right - newRectSize->left;

@@ -162,7 +162,8 @@ class _ConexoesPageState extends State<ConexoesPage> {
     if (!mounted) return;
 
     final departamentos = switch (res) {
-      Success(:final value) => value.departamentos.where((d) => d.ativo).toList(),
+      Success(:final value) =>
+        value.departamentos.where((d) => d.ativo).toList(),
       Failure() => const <Departamento>[],
     };
     if (departamentos.isEmpty) {
@@ -593,7 +594,7 @@ class _Selo extends StatelessWidget {
   Widget build(BuildContext context) {
     final cor = switch (situacao) {
       SituacaoConexao.conectada => context.colors.success,
-      SituacaoConexao.conectando => Colors.orange,
+      SituacaoConexao.conectando => context.colors.warning,
       SituacaoConexao.desconectada => Theme.of(context).colorScheme.error,
       SituacaoConexao.desconhecida => context.colors.fgMuted,
     };

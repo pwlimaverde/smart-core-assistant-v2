@@ -74,4 +74,12 @@ abstract final class AppPalette {
   static const Color chatBubInDark = Color(0xFF1F1B18);
   static const Color chatBubOutDark = Color(0xFF2F4434);
   static const Color chatBubOutFgDark = Color(0xFFD6F0C8);
+  static const Color chatHeaderLight = Color(0xFFEDE9E0);
+  static const Color chatFootLight = Color(0xFFF0F2F5);
+  static const Color chatDotLight = Color(0xFFC8B89C);
+  static const Color chatBubInFgLight = Color(0xFF1C1917);
+  static const Color chatHeaderDark = Color(0xFF1A1714);
+  static const Color chatFootDark = Color(0xFF1A1714);
+  static const Color chatDotDark = Color(0xFF2B2622);
+  static const Color chatBubInFgDark = Color(0xFFEDE4D7);
 }

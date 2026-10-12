@@ -16,8 +16,26 @@ class InitialLoadingPage extends ModulePage<InitialLoadingController, void> {
   Widget onSuccess(BuildContext context, void _) => const SizedBox.shrink();
 
   @override
-  Widget onLoading(BuildContext context) =>
-      const Scaffold(body: Center(child: CircularProgressIndicator()));
+  Widget onLoading(BuildContext context) => Scaffold(
+    body: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AppLogo(height: 88),
+          const SizedBox(height: AppSpacing.xl),
+          SizedBox(
+            width: 180,
+            child: LinearProgressIndicator(
+              minHeight: 3,
+              color: context.colors.accent,
+              backgroundColor: context.colors.border,
+              borderRadius: AppRadius.pill,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   @override
   Widget onError(BuildContext context, AppError error) => Scaffold(
