@@ -367,8 +367,8 @@ services:
     # aparece como `running` e passa no smoke test.
     healthcheck:
       test: ["CMD", "python", "-m", "ia_engine.healthcheck"]
-      interval: 15s
-      timeout: 20s
+      interval: 60s
+      timeout: 30s
       retries: 5
       start_period: 120s
     restart: unless-stopped
@@ -399,8 +399,8 @@ services:
     networks: [internal, observability]
     healthcheck:
       test: ["CMD", "python", "-m", "ia_engine_jev.healthcheck"]
-      interval: 15s
-      timeout: 20s
+      interval: 60s
+      timeout: 30s
       retries: 5
       start_period: 120s
     restart: unless-stopped
@@ -452,8 +452,8 @@ services:
     # falha, não saúde.
     healthcheck:
       test: ["CMD", "python", "-m", "mcp_server.healthcheck"]
-      interval: 20s
-      timeout: 20s
+      interval: 60s
+      timeout: 30s
       retries: 5
       start_period: 120s
     restart: unless-stopped
