@@ -60,3 +60,11 @@ com `skipContentGeneration: true`.
 | Security & Compliance Notes | `security.md` | Auth model, secrets management, compliance requirements |
 | Tooling & Productivity Guide | `tooling.md` | CLI scripts, IDE configs, automation workflows |
 
+## Ambiente da dev (VPS) — regra compartilhada
+
+- Fonte do ambiente: `/opt/smartcore/dev/env/dev.env` (dono `gh-runner`, modo 600). **Nunca** editar `docker/*/.env` à mão.
+- O deploy da dev copia esse arquivo para `docker/dev/.env` no workspace do runner e **falha** se faltar uma chave obrigatória (`POSTGRES_*`, `REDIS_PASSWORD`, `MINIO_ROOT_PASSWORD`, `EVOLUTION_GLOBAL_API_KEY`).
+- O checkout `/opt/smartcore/ops/smart-core-assistant-v2` é espelho do `dev`: manter com `git pull --ff-only origin dev`. Não subir o compose de lá com um `.env` que não veio do `dev.env`.
+- Recriar serviços da dev à mão só depois de conferir `REDIS_PASSWORD` no `.env` usado (sem exibir o valor). Se a dúvida for de configuração, o caminho é o deploy.
+- Mesmo arquivo de regras para a sessão local e a sessão do VPS: mudanças de ambiente entram aqui.
+

@@ -396,7 +396,13 @@ jobs:
 
       - name: Provisiona env real do servidor (DEV)
         run: |
-          cp /opt/smartcore/dev/env/dev.env docker/dev/.env
+          cp -f /opt/smartcore/dev/env/dev.env docker/dev/.env
+          # Um .env incompleto sobe o compose sem senhas: os serviços caem em laço.
+          for k in POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB REDIS_PASSWORD MINIO_ROOT_PASSWORD EVOLUTION_GLOBAL_API_KEY; do
+            if ! grep -q "^$k=." docker/dev/.env; then
+              echo "::error::docker/dev/.env sem $k (ver /opt/smartcore/dev/env/dev.env)"; exit 1
+            fi
+          done
           # O evolution sobe a partir do MESMO dev.env (compose lê via --env-file;
           # vars extras são ignoradas). Exige EVOLUTION_POSTGRES_USER/PASSWORD,
           # EVOLUTION_GLOBAL_API_KEY e EVOLUTION_PORT no dev.env (ver .env.example).
