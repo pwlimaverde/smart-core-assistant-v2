@@ -1821,15 +1821,31 @@ const ObterContatoDoAtendimentoResponse$json = {
     {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
     {'1': 'telefone', '3': 3, '4': 1, '5': 9, '10': 'telefone'},
     {'1': 'foto_url', '3': 4, '4': 1, '5': 9, '10': 'fotoUrl'},
+    {'1': 'email', '3': 5, '4': 1, '5': 9, '10': 'email'},
+    {
+      '1': 'nome_perfil_whatsapp',
+      '3': 6,
+      '4': 1,
+      '5': 9,
+      '10': 'nomePerfilWhatsapp'
+    },
+    {'1': 'cargo', '3': 7, '4': 1, '5': 9, '10': 'cargo'},
+    {'1': 'segmento', '3': 8, '4': 1, '5': 9, '10': 'segmento'},
+    {'1': 'observacoes', '3': 9, '4': 1, '5': 9, '10': 'observacoes'},
+    {'1': 'cliente_id', '3': 10, '4': 1, '5': 5, '10': 'clienteId'},
+    {'1': 'cliente_nome', '3': 11, '4': 1, '5': 9, '10': 'clienteNome'},
   ],
 };
 
 /// Descriptor for `ObterContatoDoAtendimentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List obterContatoDoAtendimentoResponseDescriptor =
-    $convert.base64Decode(
-        'CiFPYnRlckNvbnRhdG9Eb0F0ZW5kaW1lbnRvUmVzcG9uc2USHQoKY29udGF0b19pZBgBIAEoBV'
-        'IJY29udGF0b0lkEhIKBG5vbWUYAiABKAlSBG5vbWUSGgoIdGVsZWZvbmUYAyABKAlSCHRlbGVm'
-        'b25lEhkKCGZvdG9fdXJsGAQgASgJUgdmb3RvVXJs');
+final $typed_data.Uint8List obterContatoDoAtendimentoResponseDescriptor = $convert.base64Decode(
+    'CiFPYnRlckNvbnRhdG9Eb0F0ZW5kaW1lbnRvUmVzcG9uc2USHQoKY29udGF0b19pZBgBIAEoBV'
+    'IJY29udGF0b0lkEhIKBG5vbWUYAiABKAlSBG5vbWUSGgoIdGVsZWZvbmUYAyABKAlSCHRlbGVm'
+    'b25lEhkKCGZvdG9fdXJsGAQgASgJUgdmb3RvVXJsEhQKBWVtYWlsGAUgASgJUgVlbWFpbBIwCh'
+    'Rub21lX3BlcmZpbF93aGF0c2FwcBgGIAEoCVISbm9tZVBlcmZpbFdoYXRzYXBwEhQKBWNhcmdv'
+    'GAcgASgJUgVjYXJnbxIaCghzZWdtZW50bxgIIAEoCVIIc2VnbWVudG8SIAoLb2JzZXJ2YWNvZX'
+    'MYCSABKAlSC29ic2VydmFjb2VzEh0KCmNsaWVudGVfaWQYCiABKAVSCWNsaWVudGVJZBIhCgxj'
+    'bGllbnRlX25vbWUYCyABKAlSC2NsaWVudGVOb21l');
 
 @$core.Deprecated('Use listAtendimentosRequestDescriptor instead')
 const ListAtendimentosRequest$json = {

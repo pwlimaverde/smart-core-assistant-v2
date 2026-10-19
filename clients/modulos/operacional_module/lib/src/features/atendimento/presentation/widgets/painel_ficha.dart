@@ -8,6 +8,7 @@ import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/atendimento_errors.dart';
+import '../../domain/model/contato_da_conversa.dart';
 import '../../domain/model/evento_timeline.dart';
 import '../../domain/model/ficha.dart';
 import '../../domain/model/midia_mensagem.dart';
@@ -59,6 +60,12 @@ class PainelFicha extends StatelessWidget {
   final String telefoneDoContato;
   final String fotoDoContato;
 
+  /// O contato completo, para a seção de contato e cliente. Null enquanto carrega.
+  final ContatoDaConversa? contato;
+
+  /// Chamado depois de editar contato ou cliente, para recarregar o cabeçalho.
+  final VoidCallback? aoMudarContato;
+
   const PainelFicha({
     required this.controller,
     this.largura = 320,
@@ -67,6 +74,8 @@ class PainelFicha extends StatelessWidget {
     this.nomeDoContato = '',
     this.telefoneDoContato = '',
     this.fotoDoContato = '',
+    this.contato,
+    this.aoMudarContato,
     super.key,
   });
 
@@ -124,6 +133,11 @@ class _Conteudo extends StatelessWidget {
       padding: EdgeInsets.zero,
       children: [
         _Cabecalho(painel: painel, controller: controller),
+        _SecaoContatoECliente(
+          controller: controller,
+          contato: painel.contato,
+          aoMudar: painel.aoMudarContato,
+        ),
         if (noQuadro != null) _SecaoDoAtendimento(noQuadro: noQuadro),
         // D3 — o interruptor da IA vem antes do resto da ficha: é o estado
         // mais consequente da conversa, e é o que alguém vem procurar aqui
@@ -1645,4 +1659,454 @@ class _TimelineState extends State<_Timeline> {
     'encerrado' => Icons.flag_outlined,
     _ => Icons.circle_outlined,
   };
+}
+
+/// Contato e cliente da conversa, editáveis sem sair do atendimento.
+final class _SecaoContatoECliente extends StatelessWidget {
+  final FichaController controller;
+  final ContatoDaConversa? contato;
+  final VoidCallback? aoMudar;
+
+  const _SecaoContatoECliente({
+    required this.controller,
+    required this.contato,
+    required this.aoMudar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = contato;
+    if (c == null) return const SizedBox.shrink();
+    final muted = context.colors.fgMuted;
+    final estilo = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: muted, fontSize: 12);
+    final tituloCliente = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600);
+    return _Secao(
+      titulo: 'Contato e cliente',
+      acao: IconButton(
+        icon: const Icon(Icons.edit_outlined, size: 16),
+        tooltip: 'Editar contato',
+        visualDensity: VisualDensity.compact,
+        onPressed: () => _editarContato(context, c),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            c.nomeParaExibir,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          if (c.telefone.isNotEmpty) Text(c.telefone, style: estilo),
+          if (c.email.isNotEmpty) Text(c.email, style: estilo),
+          if (c.cargo.isNotEmpty) Text('Cargo: ${c.cargo}', style: estilo),
+          if (c.segmento.isNotEmpty)
+            Text('Segmento: ${c.segmento}', style: estilo),
+          if (c.observacoes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(c.observacoes, style: estilo),
+            ),
+          const SizedBox(height: 10),
+          if (c.clienteId > 0)
+            Row(
+              children: [
+                Icon(Icons.business_outlined, size: 16, color: muted),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    c.clienteNome.isEmpty
+                        ? 'Cliente #${c.clienteId}'
+                        : c.clienteNome,
+                    style: tituloCliente,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  tooltip: 'Editar cliente',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _editarCliente(context, c),
+                ),
+                TextButton(
+                  onPressed: () => _desvincular(context, c),
+                  child: const Text('Desvincular'),
+                ),
+              ],
+            )
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.link, size: 16),
+                label: const Text('Vincular a cliente'),
+                onPressed: () => _vincular(context, c),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _avisar(BuildContext context, String mensagem) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(mensagem)));
+
+  Widget _campo(TextEditingController c, String rotulo, {int linhas = 1}) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: TextField(
+          controller: c,
+          minLines: 1,
+          maxLines: linhas,
+          decoration: InputDecoration(labelText: rotulo, isDense: true),
+        ),
+      );
+
+  Future<void> _editarContato(BuildContext context, ContatoDaConversa c) async {
+    final nome = TextEditingController(text: c.nome);
+    final email = TextEditingController(text: c.email);
+    final cargo = TextEditingController(text: c.cargo);
+    final segmento = TextEditingController(text: c.segmento);
+    final observacoes = TextEditingController(text: c.observacoes);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => DialogoComCampos(
+        campos: [nome, email, cargo, segmento, observacoes],
+        builder: (_) => AlertDialog(
+          title: const Text('Editar contato'),
+          content: SizedBox(
+            width: 360,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _campo(nome, 'Nome'),
+                  _campo(email, 'E-mail'),
+                  _campo(cargo, 'Cargo'),
+                  _campo(segmento, 'Segmento'),
+                  _campo(observacoes, 'Observações', linhas: 3),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final erro = await controller.editarContato(
+                  contatoId: c.contatoId,
+                  nome: nome.text.trim(),
+                  email: email.text.trim(),
+                  cargo: cargo.text.trim(),
+                  segmento: segmento.text.trim(),
+                  observacoes: observacoes.text.trim(),
+                );
+                if (!dialogContext.mounted) return;
+                if (erro != null) {
+                  _avisar(context, erro.message);
+                  return;
+                }
+                Navigator.of(dialogContext).pop();
+                aoMudar?.call();
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editarCliente(BuildContext context, ContatoDaConversa c) async {
+    final (atual, erro) = await controller.obterCliente(c.clienteId);
+    if (!context.mounted) return;
+    if (erro != null || atual == null) {
+      _avisar(context, erro?.message ?? 'Cliente não encontrado.');
+      return;
+    }
+    await _formularioCliente(context, dados: atual, contatoId: c.contatoId);
+  }
+
+  Future<void> _formularioCliente(
+    BuildContext context, {
+    required ClienteDaConversa dados,
+    required int contatoId,
+  }) async {
+    final campos = <String, TextEditingController>{
+      'nome': TextEditingController(text: dados.nomeFantasia),
+      'razao': TextEditingController(text: dados.razaoSocial),
+      'cnpj': TextEditingController(text: dados.cnpj),
+      'cpf': TextEditingController(text: dados.cpf),
+      'telefone': TextEditingController(text: dados.telefone),
+      'site': TextEditingController(text: dados.site),
+      'segmento': TextEditingController(text: dados.segmento),
+      'cargo': TextEditingController(text: dados.cargoResponsavel),
+      'observacoes': TextEditingController(text: dados.observacoes),
+      'cep': TextEditingController(text: dados.cep),
+      'logradouro': TextEditingController(text: dados.logradouro),
+      'numero': TextEditingController(text: dados.numero),
+      'complemento': TextEditingController(text: dados.complemento),
+      'bairro': TextEditingController(text: dados.bairro),
+      'cidade': TextEditingController(text: dados.cidade),
+      'uf': TextEditingController(text: dados.uf),
+    };
+    var tipo = dados.tipo;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => DialogoComCampos(
+        campos: campos.values.toList(),
+        builder: (_) => StatefulBuilder(
+          builder: (ctx, setDialog) => AlertDialog(
+            title: Text(dados.id > 0 ? 'Editar cliente' : 'Novo cliente'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: tipo,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo',
+                        isDense: true,
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: '',
+                          child: Text('Não informado'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'pj',
+                          child: Text('Pessoa jurídica'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'pf',
+                          child: Text('Pessoa física'),
+                        ),
+                      ],
+                      onChanged: (v) => setDialog(() => tipo = v ?? ''),
+                    ),
+                    const SizedBox(height: 8),
+                    _campo(campos['nome']!, 'Nome fantasia *'),
+                    _campo(campos['razao']!, 'Razão social'),
+                    _campo(campos['cnpj']!, 'CNPJ'),
+                    _campo(campos['cpf']!, 'CPF'),
+                    _campo(campos['telefone']!, 'Telefone'),
+                    _campo(campos['site']!, 'Site'),
+                    _campo(campos['segmento']!, 'Segmento'),
+                    _campo(campos['cargo']!, 'Cargo do responsável'),
+                    _campo(campos['observacoes']!, 'Observações', linhas: 3),
+                    _campo(campos['cep']!, 'CEP'),
+                    _campo(campos['logradouro']!, 'Logradouro'),
+                    _campo(campos['numero']!, 'Número'),
+                    _campo(campos['complemento']!, 'Complemento'),
+                    _campo(campos['bairro']!, 'Bairro'),
+                    _campo(campos['cidade']!, 'Cidade'),
+                    _campo(campos['uf']!, 'UF'),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final nome = campos['nome']!.text.trim();
+                  if (nome.isEmpty) {
+                    _avisar(context, 'Informe o nome fantasia.');
+                    return;
+                  }
+                  String t(String chave) => campos[chave]!.text.trim();
+                  final (id, erroSalvar) = await controller.salvarCliente(
+                    ClienteDaConversa(
+                      id: dados.id,
+                      nomeFantasia: nome,
+                      razaoSocial: t('razao'),
+                      tipo: tipo,
+                      cnpj: t('cnpj'),
+                      cpf: t('cpf'),
+                      telefone: t('telefone'),
+                      site: t('site'),
+                      segmento: t('segmento'),
+                      cargoResponsavel: t('cargo'),
+                      observacoes: t('observacoes'),
+                      cep: t('cep'),
+                      logradouro: t('logradouro'),
+                      numero: t('numero'),
+                      complemento: t('complemento'),
+                      bairro: t('bairro'),
+                      cidade: t('cidade'),
+                      uf: t('uf').toUpperCase(),
+                    ),
+                  );
+                  if (!dialogContext.mounted) return;
+                  if (erroSalvar != null || id == null) {
+                    _avisar(
+                      context,
+                      erroSalvar?.message ?? 'Não foi possível salvar.',
+                    );
+                    return;
+                  }
+                  if (dados.id == 0 && contatoId > 0) {
+                    final erroVinculo = await controller.vincularCliente(
+                      clienteId: id,
+                      contatoId: contatoId,
+                      vincular: true,
+                    );
+                    if (!dialogContext.mounted) return;
+                    if (erroVinculo != null) {
+                      _avisar(context, erroVinculo.message);
+                      return;
+                    }
+                  }
+                  Navigator.of(dialogContext).pop();
+                  aoMudar?.call();
+                },
+                child: const Text('Salvar'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _vincular(BuildContext context, ContatoDaConversa c) async {
+    final busca = TextEditingController();
+    var resultados = <ClienteDaConversa>[];
+    var buscando = false;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => DialogoComCampos(
+        campos: [busca],
+        builder: (_) => StatefulBuilder(
+          builder: (ctx, setDialog) => AlertDialog(
+            title: const Text('Vincular a cliente'),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: busca,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome, CNPJ ou CPF',
+                      prefixIcon: Icon(Icons.search),
+                      isDense: true,
+                    ),
+                    onChanged: (termo) async {
+                      setDialog(() => buscando = true);
+                      final (lista, erro) = await controller.buscarClientes(
+                        termo.trim(),
+                      );
+                      if (!ctx.mounted) return;
+                      setDialog(() {
+                        buscando = false;
+                        resultados = lista ?? <ClienteDaConversa>[];
+                      });
+                      if (erro != null) _avisar(context, erro.message);
+                    },
+                  ),
+                  if (buscando) const LinearProgressIndicator(),
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 260),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final r in resultados)
+                          ListTile(
+                            dense: true,
+                            title: Text(r.nomeFantasia),
+                            subtitle: Text(r.cnpj.isNotEmpty ? r.cnpj : r.cpf),
+                            onTap: () async {
+                              final erro = await controller.vincularCliente(
+                                clienteId: r.id,
+                                contatoId: c.contatoId,
+                                vincular: true,
+                              );
+                              if (!dialogContext.mounted) return;
+                              if (erro != null) {
+                                _avisar(context, erro.message);
+                                return;
+                              }
+                              Navigator.of(dialogContext).pop();
+                              aoMudar?.call();
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  _formularioCliente(
+                    context,
+                    dados: const ClienteDaConversa(id: 0),
+                    contatoId: c.contatoId,
+                  );
+                },
+                child: const Text('Criar cliente'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Fechar'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _desvincular(BuildContext context, ContatoDaConversa c) async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Desvincular cliente?'),
+        content: const Text(
+          'O contato deixa de estar ligado a este cliente. Os dados dos dois continuam.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Desvincular'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !context.mounted) return;
+    final erro = await controller.vincularCliente(
+      clienteId: c.clienteId,
+      contatoId: c.contatoId,
+      vincular: false,
+    );
+    if (!context.mounted) return;
+    if (erro != null) {
+      _avisar(context, erro.message);
+      return;
+    }
+    aoMudar?.call();
+  }
 }

@@ -1,5 +1,7 @@
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../model/contato_da_conversa.dart';
+
 final class AtendimentoIdParameters extends Parameters {
   final int atendimentoId;
 
@@ -115,4 +117,53 @@ final class ObterContatoParameters extends Parameters {
     required this.atendimentoId,
     this.forcar = false,
   });
+}
+
+final class EditarContatoParameters extends Parameters {
+  final int contatoId;
+  final String nome;
+  final String email;
+  final String cargo;
+  final String segmento;
+  final String observacoes;
+
+  const EditarContatoParameters({
+    required this.contatoId,
+    required this.nome,
+    required this.email,
+    required this.cargo,
+    required this.segmento,
+    required this.observacoes,
+  });
+}
+
+final class ObterClienteParameters extends Parameters {
+  final int clienteId;
+
+  const ObterClienteParameters({required this.clienteId});
+}
+
+final class SalvarClienteParameters extends Parameters {
+  /// `id` 0 = cliente novo.
+  final ClienteDaConversa dados;
+
+  const SalvarClienteParameters({required this.dados});
+}
+
+final class VincularClienteParameters extends Parameters {
+  final int clienteId;
+  final int contatoId;
+  final bool vincular;
+
+  const VincularClienteParameters({
+    required this.clienteId,
+    required this.contatoId,
+    required this.vincular,
+  });
+}
+
+final class BuscarClientesParameters extends Parameters {
+  final String busca;
+
+  const BuscarClientesParameters({required this.busca});
 }

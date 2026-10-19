@@ -488,3 +488,73 @@ final class MarcarRevisadoDatasource
     return unit;
   }
 }
+
+final class EditarContatoDatasource
+    implements Datasource<Unit, EditarContatoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const EditarContatoDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(EditarContatoParameters parameters) async {
+    await _gateway.editarContato(
+      contatoId: parameters.contatoId,
+      nome: parameters.nome,
+      email: parameters.email,
+      cargo: parameters.cargo,
+      segmento: parameters.segmento,
+      observacoes: parameters.observacoes,
+    );
+    return unit;
+  }
+}
+
+final class ObterClienteDatasource
+    implements Datasource<ClienteDaConversa, ObterClienteParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ObterClienteDatasource({required this._gateway});
+
+  @override
+  Future<ClienteDaConversa> call(ObterClienteParameters parameters) =>
+      _gateway.obterCliente(clienteId: parameters.clienteId);
+}
+
+final class SalvarClienteDatasource
+    implements Datasource<int, SalvarClienteParameters> {
+  final AtendimentoGateway _gateway;
+
+  const SalvarClienteDatasource({required this._gateway});
+
+  @override
+  Future<int> call(SalvarClienteParameters parameters) =>
+      _gateway.salvarCliente(dados: parameters.dados);
+}
+
+final class VincularClienteDatasource
+    implements Datasource<Unit, VincularClienteParameters> {
+  final AtendimentoGateway _gateway;
+
+  const VincularClienteDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(VincularClienteParameters parameters) async {
+    await _gateway.vincularContatoCliente(
+      clienteId: parameters.clienteId,
+      contatoId: parameters.contatoId,
+      vincular: parameters.vincular,
+    );
+    return unit;
+  }
+}
+
+final class BuscarClientesDatasource
+    implements Datasource<List<ClienteDaConversa>, BuscarClientesParameters> {
+  final AtendimentoGateway _gateway;
+
+  const BuscarClientesDatasource({required this._gateway});
+
+  @override
+  Future<List<ClienteDaConversa>> call(BuscarClientesParameters parameters) =>
+      _gateway.buscarClientes(busca: parameters.busca);
+}

@@ -216,6 +216,36 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
       revisados.add(atendimentoId);
 
   @override
+  Future<void> editarContato({
+    required int contatoId,
+    required String nome,
+    required String email,
+    required String cargo,
+    required String segmento,
+    required String observacoes,
+  }) async {}
+
+  @override
+  Future<ClienteDaConversa> obterCliente({required int clienteId}) async =>
+      ClienteDaConversa(id: clienteId);
+
+  @override
+  Future<int> salvarCliente({required ClienteDaConversa dados}) async =>
+      dados.id > 0 ? dados.id : 1;
+
+  @override
+  Future<void> vincularContatoCliente({
+    required int clienteId,
+    required int contatoId,
+    required bool vincular,
+  }) async {}
+
+  @override
+  Future<List<ClienteDaConversa>> buscarClientes({
+    required String busca,
+  }) async => <ClienteDaConversa>[];
+
+  @override
   Future<ContatoDaConversa> obterContatoDoAtendimento({
     required int atendimentoId,
     bool forcar = false,

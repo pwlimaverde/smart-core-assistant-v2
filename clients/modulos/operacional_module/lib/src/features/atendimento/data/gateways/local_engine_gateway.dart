@@ -830,6 +830,46 @@ final class LocalEngineGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<void> editarContato({
+    required int contatoId,
+    required String nome,
+    required String email,
+    required String cargo,
+    required String segmento,
+    required String observacoes,
+  }) => _remoto.editarContato(
+    contatoId: contatoId,
+    nome: nome,
+    email: email,
+    cargo: cargo,
+    segmento: segmento,
+    observacoes: observacoes,
+  );
+
+  @override
+  Future<ClienteDaConversa> obterCliente({required int clienteId}) =>
+      _remoto.obterCliente(clienteId: clienteId);
+
+  @override
+  Future<int> salvarCliente({required ClienteDaConversa dados}) =>
+      _remoto.salvarCliente(dados: dados);
+
+  @override
+  Future<void> vincularContatoCliente({
+    required int clienteId,
+    required int contatoId,
+    required bool vincular,
+  }) => _remoto.vincularContatoCliente(
+    clienteId: clienteId,
+    contatoId: contatoId,
+    vincular: vincular,
+  );
+
+  @override
+  Future<List<ClienteDaConversa>> buscarClientes({required String busca}) =>
+      _remoto.buscarClientes(busca: busca);
+
+  @override
   Future<void> criarNota({
     required int atendimentoId,
     required String texto,

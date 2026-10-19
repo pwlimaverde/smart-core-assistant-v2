@@ -480,10 +480,8 @@ final class EnviarMidiaRepository
     return switch (_kindDeTransporte(e)) {
       GrpcFailureKind.unauthenticated => const EnviarMidiaSessaoExpirada(),
       GrpcFailureKind.permissionDenied => const EnviarMidiaAcessoNegado(),
-      GrpcFailureKind.invalidArgument ||
-      GrpcFailureKind.failedPrecondition => EnviarMidiaRecusado(
-        e is GrpcError ? e.message : null,
-      ),
+      GrpcFailureKind.invalidArgument || GrpcFailureKind.failedPrecondition =>
+        EnviarMidiaRecusado(e is GrpcError ? e.message : null),
       // `rateLimited` é o `resourceExhausted` do gRPC, que aqui significa cota
       // de armazenamento estourada: é recusa, não instabilidade.
       GrpcFailureKind.rateLimited => EnviarMidiaRecusado(
@@ -535,11 +533,7 @@ final class AtribuirAtendimentoRepository
 
 final class DefinirPrioridadeRepository
     extends
-        RepositoryBase<
-          Unit,
-          DefinirPrioridadeParameters,
-          QuadroOperacaoError
-        > {
+        RepositoryBase<Unit, DefinirPrioridadeParameters, QuadroOperacaoError> {
   const DefinirPrioridadeRepository({required super.datasource});
 
   @override
@@ -668,4 +662,55 @@ final class MarcarRevisadoRepository
     StackTrace s,
     MarcarRevisadoParameters p,
   ) => _erroDeOperacaoDoQuadro(e, s, p.atendimentoId);
+}
+
+final class EditarContatoRepository
+    extends RepositoryBase<Unit, EditarContatoParameters, FichaError> {
+  const EditarContatoRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, EditarContatoParameters p) =>
+      _erroDeFicha(e, s, p.contatoId);
+}
+
+final class ObterClienteRepository
+    extends
+        RepositoryBase<ClienteDaConversa, ObterClienteParameters, FichaError> {
+  const ObterClienteRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, ObterClienteParameters p) =>
+      _erroDeFicha(e, s, p.clienteId);
+}
+
+final class SalvarClienteRepository
+    extends RepositoryBase<int, SalvarClienteParameters, FichaError> {
+  const SalvarClienteRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, SalvarClienteParameters p) =>
+      _erroDeFicha(e, s, p.dados.id);
+}
+
+final class VincularClienteRepository
+    extends RepositoryBase<Unit, VincularClienteParameters, FichaError> {
+  const VincularClienteRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, VincularClienteParameters p) =>
+      _erroDeFicha(e, s, p.contatoId);
+}
+
+final class BuscarClientesRepository
+    extends
+        RepositoryBase<
+          List<ClienteDaConversa>,
+          BuscarClientesParameters,
+          FichaError
+        > {
+  const BuscarClientesRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, BuscarClientesParameters p) =>
+      _erroDeFicha(e, s, null);
 }

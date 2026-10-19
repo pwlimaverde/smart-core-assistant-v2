@@ -196,6 +196,11 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       desativarEtiqueta: GetIt.instance.isRegistered<DesativarEtiquetaUsecase>()
           ? inject<DesativarEtiquetaUsecase>()
           : null,
+      editarContato: inject(),
+      obterCliente: inject(),
+      salvarCliente: inject(),
+      vincularCliente: inject(),
+      buscarClientes: inject(),
     );
     _controller.abrir(widget.atendimentoId);
     _ficha.abrir(widget.atendimentoId);
@@ -299,6 +304,8 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
         final contato = _contato;
         final resumo = widget.noQuadro?.resumo;
         final ficha = PainelFicha(
+          contato: _contato,
+          aoMudarContato: () => unawaited(_carregarContato()),
           controller: _ficha,
           largura: null,
           noQuadro: widget.noQuadro,
@@ -374,6 +381,8 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                     child: Material(
                       elevation: 12,
                       child: PainelFicha(
+                        contato: _contato,
+                        aoMudarContato: () => unawaited(_carregarContato()),
                         controller: _ficha,
                         noQuadro: widget.noQuadro,
                         nomeDoContato: contato?.nomeParaExibir ?? '',

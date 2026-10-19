@@ -3,6 +3,7 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/parameters/definir_valor_campo_parameters.dart';
 import '../../domain/errors/atendimento_errors.dart';
+import '../../domain/model/contato_da_conversa.dart';
 import '../../domain/model/ficha.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
@@ -27,6 +28,11 @@ final class FichaController extends BaseController<FichaAtendimento> {
   final RemoverNotaUsecase? _removerNota;
   final AtualizarEtiquetaUsecase? _atualizarEtiqueta;
   final DesativarEtiquetaUsecase? _desativarEtiqueta;
+  final EditarContatoUsecase? _editarContato;
+  final ObterClienteUsecase? _obterCliente;
+  final SalvarClienteUsecase? _salvarCliente;
+  final VincularClienteUsecase? _vincularCliente;
+  final BuscarClientesUsecase? _buscarClientes;
 
   int _atendimentoId = 0;
 
@@ -40,6 +46,11 @@ final class FichaController extends BaseController<FichaAtendimento> {
     RemoverNotaUsecase? removerNota,
     AtualizarEtiquetaUsecase? atualizarEtiqueta,
     DesativarEtiquetaUsecase? desativarEtiqueta,
+    EditarContatoUsecase? editarContato,
+    ObterClienteUsecase? obterCliente,
+    SalvarClienteUsecase? salvarCliente,
+    VincularClienteUsecase? vincularCliente,
+    BuscarClientesUsecase? buscarClientes,
   }) : _removerNota = removerNota,
        _atualizarEtiqueta = atualizarEtiqueta,
        _desativarEtiqueta = desativarEtiqueta,
@@ -48,7 +59,12 @@ final class FichaController extends BaseController<FichaAtendimento> {
        _alternar = alternar,
        _criarNota = criarNota,
        _definirBot = definirBot,
-       _definirValorCampo = definirValorCampo;
+       _definirValorCampo = definirValorCampo,
+       _editarContato = editarContato,
+       _obterCliente = obterCliente,
+       _salvarCliente = salvarCliente,
+       _vincularCliente = vincularCliente,
+       _buscarClientes = buscarClientes;
 
   int get atendimentoId => _atendimentoId;
 
@@ -173,6 +189,79 @@ final class FichaController extends BaseController<FichaAtendimento> {
     if (res case Failure(:final error)) return error;
     await abrir(_atendimentoId);
     return null;
+  }
+
+  /// Edita o contato sem sair da conversa. O telefone não muda aqui.
+  Future<FichaError?> editarContato({
+    required int contatoId,
+    required String nome,
+    required String email,
+    required String cargo,
+    required String segmento,
+    required String observacoes,
+  }) async {
+    final uc = _editarContato;
+    if (uc == null) return const FichaInesperado();
+    final res = await uc(
+      EditarContatoParameters(
+        contatoId: contatoId,
+        nome: nome,
+        email: email,
+        cargo: cargo,
+        segmento: segmento,
+        observacoes: observacoes,
+      ),
+    );
+    if (res case Failure(:final error)) return error;
+    return null;
+  }
+
+  Future<(ClienteDaConversa?, FichaError?)> obterCliente(int clienteId) async {
+    final uc = _obterCliente;
+    if (uc == null) return (null, const FichaInesperado());
+    final res = await uc(ObterClienteParameters(clienteId: clienteId));
+    if (res case Success(:final value)) return (value, null);
+    if (res case Failure(:final error)) return (null, error);
+    return (null, const FichaInesperado());
+  }
+
+  /// Devolve o id do cliente gravado.
+  Future<(int?, FichaError?)> salvarCliente(ClienteDaConversa dados) async {
+    final uc = _salvarCliente;
+    if (uc == null) return (null, const FichaInesperado());
+    final res = await uc(SalvarClienteParameters(dados: dados));
+    if (res case Success(:final value)) return (value, null);
+    if (res case Failure(:final error)) return (null, error);
+    return (null, const FichaInesperado());
+  }
+
+  Future<FichaError?> vincularCliente({
+    required int clienteId,
+    required int contatoId,
+    required bool vincular,
+  }) async {
+    final uc = _vincularCliente;
+    if (uc == null) return const FichaInesperado();
+    final res = await uc(
+      VincularClienteParameters(
+        clienteId: clienteId,
+        contatoId: contatoId,
+        vincular: vincular,
+      ),
+    );
+    if (res case Failure(:final error)) return error;
+    return null;
+  }
+
+  Future<(List<ClienteDaConversa>?, FichaError?)> buscarClientes(
+    String busca,
+  ) async {
+    final uc = _buscarClientes;
+    if (uc == null) return (null, const FichaInesperado());
+    final res = await uc(BuscarClientesParameters(busca: busca));
+    if (res case Success(:final value)) return (value, null);
+    if (res case Failure(:final error)) return (null, error);
+    return (null, const FichaInesperado());
   }
 
   Future<FichaError?> anotar(String texto) async {

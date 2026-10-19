@@ -128,6 +128,29 @@ abstract interface class AtendimentoGateway {
   /// Anota algo na conversa. A nota é interna: o contato nunca a vê.
   Future<void> criarNota({required int atendimentoId, required String texto});
 
+  /// Edita o contato. O telefone não entra aqui: trocá-lo passaria o histórico de uma pessoa para outra.
+  Future<void> editarContato({
+    required int contatoId,
+    required String nome,
+    required String email,
+    required String cargo,
+    required String segmento,
+    required String observacoes,
+  });
+
+  Future<ClienteDaConversa> obterCliente({required int clienteId});
+
+  /// Devolve o id do cliente gravado (o novo, quando `dados.id` é 0).
+  Future<int> salvarCliente({required ClienteDaConversa dados});
+
+  Future<void> vincularContatoCliente({
+    required int clienteId,
+    required int contatoId,
+    required bool vincular,
+  });
+
+  Future<List<ClienteDaConversa>> buscarClientes({required String busca});
+
   /// Persiste uma mensagem outbound do atendente; devolve o id da mensagem.
   Future<int> sendOutboundMessage({
     required int atendimentoId,
@@ -183,10 +206,7 @@ abstract interface class AtendimentoGateway {
   });
 
   /// P5 — apaga uma nota interna.
-  Future<void> removerNota({
-    required int notaId,
-    required int atendimentoId,
-  });
+  Future<void> removerNota({required int notaId, required int atendimentoId});
 
   /// P5 — renomeia/recolore uma etiqueta do catálogo.
   Future<Etiqueta> atualizarEtiqueta({
@@ -234,10 +254,7 @@ abstract interface class AtendimentoGateway {
   ///
   /// Devolve `false` quando não há conexão ativa para o contato. Não lança:
   /// presença é enfeite, e quem digita não deve ser interrompido por ela.
-  Future<bool> enviarPresenca({
-    required int atendimentoId,
-    String situacao,
-  });
+  Future<bool> enviarPresenca({required int atendimentoId, String situacao});
 
   Future<List<MidiaMensagem>> listarMidias({
     required int atendimentoId,

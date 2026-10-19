@@ -1070,6 +1070,13 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$updateMyCliente, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.MyClienteResponse> getMyCliente(
+    $0.MyClienteIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getMyCliente, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.SimpleOkResponse> definirMyClienteAtivo(
     $0.DefinirMyClienteAtivoRequest request, {
     $grpc.CallOptions? options,
@@ -1943,6 +1950,11 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/UpdateMyCliente',
           ($0.UpdateMyClienteRequest value) => value.writeToBuffer(),
           $0.SimpleOkResponse.fromBuffer);
+  static final _$getMyCliente =
+      $grpc.ClientMethod<$0.MyClienteIdRequest, $0.MyClienteResponse>(
+          '/smartcore.contracts.queries.AdminService/GetMyCliente',
+          ($0.MyClienteIdRequest value) => value.writeToBuffer(),
+          $0.MyClienteResponse.fromBuffer);
   static final _$definirMyClienteAtivo =
       $grpc.ClientMethod<$0.DefinirMyClienteAtivoRequest, $0.SimpleOkResponse>(
           '/smartcore.contracts.queries.AdminService/DefinirMyClienteAtivo',
@@ -3244,6 +3256,14 @@ abstract class AdminServiceBase extends $grpc.Service {
             ($core.List<$core.int> value) =>
                 $0.UpdateMyClienteRequest.fromBuffer(value),
             ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyClienteIdRequest, $0.MyClienteResponse>(
+        'GetMyCliente',
+        getMyCliente_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MyClienteIdRequest.fromBuffer(value),
+        ($0.MyClienteResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.DefinirMyClienteAtivoRequest,
             $0.SimpleOkResponse>(
         'DefinirMyClienteAtivo',
@@ -4637,6 +4657,14 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> updateMyCliente(
       $grpc.ServiceCall call, $0.UpdateMyClienteRequest request);
+
+  $async.Future<$0.MyClienteResponse> getMyCliente_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.MyClienteIdRequest> $request) async {
+    return getMyCliente($call, await $request);
+  }
+
+  $async.Future<$0.MyClienteResponse> getMyCliente(
+      $grpc.ServiceCall call, $0.MyClienteIdRequest request);
 
   $async.Future<$0.SimpleOkResponse> definirMyClienteAtivo_Pre(
       $grpc.ServiceCall $call,
