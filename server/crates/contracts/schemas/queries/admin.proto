@@ -1708,6 +1708,9 @@ message MyContato {
   bool ativo = 6;
   int64 ultima_interacao = 7;
   int64 cadastrado_em = 8;
+  string cargo = 9;
+  string segmento = 10;
+  string observacoes = 11;
 }
 
 // --- N9 E13: campos do cartao de atendimento -----------------------------
@@ -1822,6 +1825,9 @@ message UpdateMyContatoRequest {
   int32 id = 1;
   string nome_contato = 2;
   string email = 3;
+  string cargo = 5;
+  string segmento = 6;
+  string observacoes = 7;
   // Vazio = nao mexe. So e aceito enquanto o contato nao tem conversa: o
   // historico esta amarrado ao numero, e troca-lo passaria as mensagens de
   // uma pessoa para outra.
@@ -1896,6 +1902,7 @@ message DadosMyCliente {
   string bairro = 14;
   string cidade = 15;
   string uf = 16;
+  string cargo_responsavel = 17;
 }
 
 message MyCliente {

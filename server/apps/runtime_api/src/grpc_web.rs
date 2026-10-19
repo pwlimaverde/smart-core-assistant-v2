@@ -5705,6 +5705,9 @@ impl AdminService for AdminFacade {
             "id": inner.id,
             "nome_contato": inner.nome_contato,
             "email": inner.email,
+            "cargo": inner.cargo,
+            "segmento": inner.segmento,
+            "observacoes": inner.observacoes,
         });
         if !inner.telefone.trim().is_empty() {
             payload["telefone"] = serde_json::Value::String(inner.telefone.clone());
@@ -11168,6 +11171,7 @@ fn dados_cliente_para_json(d: &DadosMyCliente) -> serde_json::Value {
         "bairro": d.bairro,
         "cidade": d.cidade,
         "uf": d.uf,
+        "cargo_responsavel": d.cargo_responsavel,
     })
 }
 
@@ -11197,6 +11201,7 @@ fn cliente_do_json(v: &serde_json::Value) -> MyCliente {
             bairro: texto("bairro"),
             cidade: texto("cidade"),
             uf: texto("uf"),
+            cargo_responsavel: texto("cargo_responsavel"),
         }),
         ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
         contatos: v.get("contatos").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
@@ -11226,6 +11231,9 @@ fn contato_do_json(v: &serde_json::Value) -> MyContato {
         ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
         ultima_interacao: data("ultima_interacao"),
         cadastrado_em: data("data_cadastro"),
+        cargo: texto("cargo"),
+        segmento: texto("segmento"),
+        observacoes: texto("observacoes"),
     }
 }
 

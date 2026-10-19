@@ -6968,6 +6968,7 @@ fn dados_do_cliente(
         site: opcional("site", 200, "site")?,
         ramo_atividade: opcional("ramo_atividade", 200, "ramo de atividade")?,
         observacoes: opcional("observacoes", 5000, "observações")?,
+        cargo_responsavel: opcional("cargo_responsavel", 100, "cargo do responsável")?,
         cep: digitos("cep", 8, "CEP")?,
         logradouro: opcional("logradouro", 200, "logradouro")?,
         numero: opcional("numero", 10, "número")?,
@@ -7253,6 +7254,10 @@ async fn handler_update_contato(
             Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
         }
     }
+    // Mesma regra do e-mail: campo presente (mesmo vazio) é gravado; ausente não mexe.
+    edicao.cargo = texto("cargo");
+    edicao.segmento = texto("segmento");
+    edicao.observacoes = texto("observacoes");
     if let Some(bruto) = texto("telefone").filter(|t| !t.is_empty()) {
         let Some(t) = normalizar_telefone(&bruto) else {
             return erro(
@@ -12797,6 +12802,9 @@ mod tests_atendimento_cliente_unit {
             metadados: serde_json::json!({}),
             foto_perfil: None,
             foto_perfil_url_origem: None,
+            cargo: None,
+            segmento: None,
+            observacoes: None,
         }
     }
 

@@ -19,6 +19,7 @@ pub struct Cliente {
     pub site: Option<String>,
     pub ramo_atividade: Option<String>,
     pub observacoes: Option<String>,
+    pub cargo_responsavel: Option<String>,
     pub cep: Option<String>,
     pub logradouro: Option<String>,
     pub numero: Option<String>,
@@ -97,7 +98,7 @@ impl ClienteRepository for PostgresClienteRepository {
             r#"INSERT INTO oraculo_cliente (tenant_id, nome_fantasia, tipo, cnpj, cpf)
                VALUES ($1, $2, $3, $4, $5)
                RETURNING id, tenant_id, nome_fantasia, slug, razao_social, tipo,
-                         cnpj, cpf, telefone, site, ramo_atividade, observacoes,
+                         cnpj, cpf, telefone, site, ramo_atividade, observacoes, cargo_responsavel,
                          cep, logradouro, numero, complemento, bairro, cidade, uf, pais,
                          data_cadastro, ultima_atualizacao, ativo, metadados"#,
             ctx.tenant_id,
@@ -122,7 +123,7 @@ impl ClienteRepository for PostgresClienteRepository {
         let row = sqlx::query_as!(
             Cliente,
             r#"SELECT id, tenant_id, nome_fantasia, slug, razao_social, tipo,
-                      cnpj, cpf, telefone, site, ramo_atividade, observacoes,
+                      cnpj, cpf, telefone, site, ramo_atividade, observacoes, cargo_responsavel,
                       cep, logradouro, numero, complemento, bairro, cidade, uf, pais,
                       data_cadastro, ultima_atualizacao, ativo, metadados
                FROM oraculo_cliente
@@ -189,7 +190,7 @@ impl ClienteRepository for PostgresClienteRepository {
         let rows = sqlx::query_as!(
             Cliente,
             r#"SELECT id, tenant_id, nome_fantasia, slug, razao_social, tipo,
-                      cnpj, cpf, telefone, site, ramo_atividade, observacoes,
+                      cnpj, cpf, telefone, site, ramo_atividade, observacoes, cargo_responsavel,
                       cep, logradouro, numero, complemento, bairro, cidade, uf, pais,
                       data_cadastro, ultima_atualizacao, ativo, metadados
                FROM oraculo_cliente
@@ -227,6 +228,7 @@ pub struct DadosCliente {
     pub site: Option<String>,
     pub ramo_atividade: Option<String>,
     pub observacoes: Option<String>,
+    pub cargo_responsavel: Option<String>,
     pub cep: Option<String>,
     pub logradouro: Option<String>,
     pub numero: Option<String>,
@@ -250,6 +252,7 @@ pub struct ClienteResumo {
     pub site: String,
     pub ramo_atividade: String,
     pub observacoes: String,
+    pub cargo_responsavel: String,
     pub cep: String,
     pub logradouro: String,
     pub numero: String,
@@ -277,7 +280,7 @@ const SQL_LISTAR_CLIENTES: &str = r#"SELECT c.id, c.nome_fantasia,
     COALESCE(c.cnpj, '') AS cnpj, COALESCE(c.cpf, '') AS cpf,
     COALESCE(c.telefone, '') AS telefone, COALESCE(c.site, '') AS site,
     COALESCE(c.ramo_atividade, '') AS ramo_atividade,
-    COALESCE(c.observacoes, '') AS observacoes, COALESCE(c.cep, '') AS cep,
+    COALESCE(c.observacoes, '') AS observacoes, COALESCE(c.cargo_responsavel, '') AS cargo_responsavel, COALESCE(c.cep, '') AS cep,
     COALESCE(c.logradouro, '') AS logradouro, COALESCE(c.numero, '') AS numero,
     COALESCE(c.complemento, '') AS complemento, COALESCE(c.bairro, '') AS bairro,
     COALESCE(c.cidade, '') AS cidade, COALESCE(c.uf, '') AS uf, c.ativo,
@@ -299,7 +302,7 @@ const SQL_BUSCAR_CLIENTE: &str = r#"SELECT c.id, c.nome_fantasia,
     COALESCE(c.cnpj, '') AS cnpj, COALESCE(c.cpf, '') AS cpf,
     COALESCE(c.telefone, '') AS telefone, COALESCE(c.site, '') AS site,
     COALESCE(c.ramo_atividade, '') AS ramo_atividade,
-    COALESCE(c.observacoes, '') AS observacoes, COALESCE(c.cep, '') AS cep,
+    COALESCE(c.observacoes, '') AS observacoes, COALESCE(c.cargo_responsavel, '') AS cargo_responsavel, COALESCE(c.cep, '') AS cep,
     COALESCE(c.logradouro, '') AS logradouro, COALESCE(c.numero, '') AS numero,
     COALESCE(c.complemento, '') AS complemento, COALESCE(c.bairro, '') AS bairro,
     COALESCE(c.cidade, '') AS cidade, COALESCE(c.uf, '') AS uf, c.ativo,
@@ -323,6 +326,7 @@ fn cliente_da_linha(row: &sqlx::postgres::PgRow) -> Result<ClienteResumo, DbErro
         site: row.try_get("site")?,
         ramo_atividade: row.try_get("ramo_atividade")?,
         observacoes: row.try_get("observacoes")?,
+        cargo_responsavel: row.try_get("cargo_responsavel")?,
         cep: row.try_get("cep")?,
         logradouro: row.try_get("logradouro")?,
         numero: row.try_get("numero")?,
@@ -379,9 +383,9 @@ pub async fn criar_cliente(
         r#"INSERT INTO oraculo_cliente
              (tenant_id, nome_fantasia, razao_social, tipo, cnpj, cpf, telefone,
               site, ramo_atividade, observacoes, cep, logradouro, numero,
-              complemento, bairro, cidade, uf)
+              complemento, bairro, cidade, uf, cargo_responsavel)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                   $15, $16, $17)
+                   $15, $16, $17, $18)
            RETURNING id"#,
     )
     .bind(ctx.tenant_id)
@@ -401,6 +405,7 @@ pub async fn criar_cliente(
     .bind(&d.bairro)
     .bind(&d.cidade)
     .bind(&d.uf)
+    .bind(&d.cargo_responsavel)
     .fetch_one(&mut **tx)
     .await?;
     Ok(id)
@@ -409,7 +414,7 @@ pub async fn criar_cliente(
 /// Quais campos a edição muda — é o que vai para a auditoria, nunca o valor.
 pub fn campos_alterados(antes: &ClienteResumo, depois: &DadosCliente) -> Vec<&'static str> {
     let texto = |v: &Option<String>| v.clone().unwrap_or_default();
-    let pares: [(&'static str, &str, String); 16] = [
+    let pares: [(&'static str, &str, String); 17] = [
         (
             "nome_fantasia",
             &antes.nome_fantasia,
@@ -446,6 +451,11 @@ pub fn campos_alterados(antes: &ClienteResumo, depois: &DadosCliente) -> Vec<&'s
         ("bairro", &antes.bairro, texto(&depois.bairro)),
         ("cidade", &antes.cidade, texto(&depois.cidade)),
         ("uf", &antes.uf, texto(&depois.uf)),
+        (
+            "cargo_responsavel",
+            &antes.cargo_responsavel,
+            texto(&depois.cargo_responsavel),
+        ),
     ];
     pares
         .into_iter()
@@ -467,7 +477,7 @@ pub async fn atualizar_cliente(
                cpf = $7, telefone = $8, site = $9, ramo_atividade = $10,
                observacoes = $11, cep = $12, logradouro = $13, numero = $14,
                complemento = $15, bairro = $16, cidade = $17, uf = $18,
-               ultima_atualizacao = NOW()
+               cargo_responsavel = $19, ultima_atualizacao = NOW()
            WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
     )
     .bind(ctx.tenant_id)
@@ -488,6 +498,7 @@ pub async fn atualizar_cliente(
     .bind(&d.bairro)
     .bind(&d.cidade)
     .bind(&d.uf)
+    .bind(&d.cargo_responsavel)
     .execute(&mut **tx)
     .await?;
     Ok(res.rows_affected() > 0)
