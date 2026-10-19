@@ -196,11 +196,21 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       desativarEtiqueta: GetIt.instance.isRegistered<DesativarEtiquetaUsecase>()
           ? inject<DesativarEtiquetaUsecase>()
           : null,
-      editarContato: inject(),
-      obterCliente: inject(),
-      salvarCliente: inject(),
-      vincularCliente: inject(),
-      buscarClientes: inject(),
+      editarContato: GetIt.instance.isRegistered<EditarContatoUsecase>()
+          ? inject<EditarContatoUsecase>()
+          : null,
+      obterCliente: GetIt.instance.isRegistered<ObterClienteUsecase>()
+          ? inject<ObterClienteUsecase>()
+          : null,
+      salvarCliente: GetIt.instance.isRegistered<SalvarClienteUsecase>()
+          ? inject<SalvarClienteUsecase>()
+          : null,
+      vincularCliente: GetIt.instance.isRegistered<VincularClienteUsecase>()
+          ? inject<VincularClienteUsecase>()
+          : null,
+      buscarClientes: GetIt.instance.isRegistered<BuscarClientesUsecase>()
+          ? inject<BuscarClientesUsecase>()
+          : null,
     );
     _controller.abrir(widget.atendimentoId);
     _ficha.abrir(widget.atendimentoId);
