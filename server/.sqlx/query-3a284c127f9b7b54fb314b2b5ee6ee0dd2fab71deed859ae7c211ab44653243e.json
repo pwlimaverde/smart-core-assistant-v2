@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_contato\n                  SET nome_contato = COALESCE($3::text, nome_contato),\n                      email        = COALESCE($4::text, email),\n                      telefone     = COALESCE($5::text, telefone),\n                      cargo        = COALESCE($6::text, cargo),\n                      segmento     = COALESCE($7::text, segmento),\n                      observacoes  = COALESCE($8::text, observacoes)\n                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3a284c127f9b7b54fb314b2b5ee6ee0dd2fab71deed859ae7c211ab44653243e"
+}

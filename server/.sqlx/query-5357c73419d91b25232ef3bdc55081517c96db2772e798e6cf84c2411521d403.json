@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, telefone, nome_contato, slug, email,\n                      nome_perfil_whatsapp, data_cadastro, ultima_interacao,\n                      ativo, metadados, foto_perfil, foto_perfil_url_origem\n               FROM oraculo_contato\n               WHERE tenant_id = $1 AND id = $2",
+  "query": "INSERT INTO oraculo_contato (tenant_id, telefone, nome_contato)\n               VALUES ($1, $2, $3)\n               ON CONFLICT (tenant_id, telefone) WHERE excluido_em IS NULL DO UPDATE\n                   SET nome_contato = COALESCE(EXCLUDED.nome_contato, oraculo_contato.nome_contato),\n                       ultima_interacao = NOW()\n               RETURNING id, tenant_id, telefone, nome_contato, slug, email,\n                         nome_perfil_whatsapp, data_cadastro, ultima_interacao,\n                         ativo, metadados, foto_perfil, foto_perfil_url_origem, cargo, segmento, observacoes",
   "describe": {
     "columns": [
       {
@@ -145,12 +145,46 @@
             "name": "foto_perfil_url_origem"
           }
         }
+      },
+      {
+        "ordinal": 13,
+        "name": "cargo",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "cargo"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "segmento",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "segmento"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "observacoes",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "observacoes"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Int4"
+        "Varchar",
+        "Varchar"
       ]
     },
     "nullable": [
@@ -166,8 +200,11 @@
       false,
       false,
       true,
+      true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "c7e0aeb54a292143c5449633878cc5c8245ced20a82cf3f9c14574288efda450"
+  "hash": "5357c73419d91b25232ef3bdc55081517c96db2772e798e6cf84c2411521d403"
 }

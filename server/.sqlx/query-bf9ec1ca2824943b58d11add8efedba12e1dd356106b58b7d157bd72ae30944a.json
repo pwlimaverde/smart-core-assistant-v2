@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO oraculo_cliente (tenant_id, nome_fantasia, tipo, cnpj, cpf)\n               VALUES ($1, $2, $3, $4, $5)\n               RETURNING id, tenant_id, nome_fantasia, slug, razao_social, tipo,\n                         cnpj, cpf, telefone, site, ramo_atividade, observacoes,\n                         cep, logradouro, numero, complemento, bairro, cidade, uf, pais,\n                         data_cadastro, ultima_atualizacao, ativo, metadados",
+  "query": "SELECT id, tenant_id, nome_fantasia, slug, razao_social, tipo,\n                      cnpj, cpf, telefone, site, ramo_atividade, observacoes, cargo_responsavel,\n                      cep, logradouro, numero, complemento, bairro, cidade, uf, pais,\n                      data_cadastro, ultima_atualizacao, ativo, metadados\n               FROM oraculo_cliente\n               WHERE tenant_id = $1 AND ativo = true AND excluido_em IS NULL\n               ORDER BY nome_fantasia\n               LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -137,6 +137,17 @@
       },
       {
         "ordinal": 12,
+        "name": "cargo_responsavel",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_cliente",
+            "name": "cargo_responsavel"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
         "name": "cep",
         "type_info": "Varchar",
         "origin": {
@@ -147,7 +158,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "logradouro",
         "type_info": "Varchar",
         "origin": {
@@ -158,7 +169,7 @@
         }
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "numero",
         "type_info": "Varchar",
         "origin": {
@@ -169,7 +180,7 @@
         }
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "complemento",
         "type_info": "Varchar",
         "origin": {
@@ -180,7 +191,7 @@
         }
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "bairro",
         "type_info": "Varchar",
         "origin": {
@@ -191,7 +202,7 @@
         }
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "cidade",
         "type_info": "Varchar",
         "origin": {
@@ -202,7 +213,7 @@
         }
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "uf",
         "type_info": "Varchar",
         "origin": {
@@ -213,7 +224,7 @@
         }
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "pais",
         "type_info": "Varchar",
         "origin": {
@@ -224,7 +235,7 @@
         }
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "data_cadastro",
         "type_info": "Timestamptz",
         "origin": {
@@ -235,7 +246,7 @@
         }
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "ultima_atualizacao",
         "type_info": "Timestamptz",
         "origin": {
@@ -246,7 +257,7 @@
         }
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "ativo",
         "type_info": "Bool",
         "origin": {
@@ -257,7 +268,7 @@
         }
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "metadados",
         "type_info": "Jsonb",
         "origin": {
@@ -271,10 +282,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Varchar",
-        "Varchar",
-        "Varchar",
-        "Varchar"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -298,11 +307,12 @@
       true,
       true,
       true,
+      true,
       false,
       false,
       false,
       false
     ]
   },
-  "hash": "3851f1b4d26211c48521080f3ecd6f9039b1d692f0ff14d8d0aa0d7663a47346"
+  "hash": "bf9ec1ca2824943b58d11add8efedba12e1dd356106b58b7d157bd72ae30944a"
 }
