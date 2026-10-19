@@ -562,6 +562,14 @@ message ObterContatoDoAtendimentoResponse {
   string nome = 2;
   string telefone = 3;
   string foto_url = 4;
+  string email = 5;
+  string nome_perfil_whatsapp = 6;
+  string cargo = 7;
+  string segmento = 8;
+  string observacoes = 9;
+  // 0 = sem cliente vinculado.
+  int32 cliente_id = 10;
+  string cliente_nome = 11;
 }
 
 message ListAtendimentosRequest {
@@ -1560,6 +1568,7 @@ service AdminService {
   rpc ListMyClientes(ListMyClientesRequest) returns (ListMyClientesResponse);
   rpc CreateMyCliente(CreateMyClienteRequest) returns (MyClienteResponse);
   rpc UpdateMyCliente(UpdateMyClienteRequest) returns (SimpleOkResponse);
+  rpc GetMyCliente(MyClienteIdRequest) returns (MyClienteResponse);
   rpc DefinirMyClienteAtivo(DefinirMyClienteAtivoRequest) returns (SimpleOkResponse);
   rpc ListMyContatosDoCliente(MyClienteIdRequest) returns (ListMyContatosDoClienteResponse);
   rpc VincularMyContatoCliente(VincularMyContatoClienteRequest) returns (SimpleOkResponse);

@@ -68,6 +68,20 @@ impl ClienteStore for PgClienteStore {
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn buscar_cliente(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<Option<infrastructure_postgres::clientes::clientes::ClienteResumo>, DbError> {
+        use infrastructure_postgres::clientes::clientes as repo;
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let cliente = repo::buscar_cliente(&mut tx, &ctx, id).await?;
+            Ok((cliente, tx))
+        })
+        .await
+    }
+
     async fn atualizar_cliente(
         &self,
         ctx: &RequestContext,

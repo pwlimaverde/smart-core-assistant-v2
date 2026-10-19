@@ -547,6 +547,7 @@ async fn main() -> anyhow::Result<()> {
     let s_clientes_listar = state_clone.clone();
     let s_cliente_criar = state_clone.clone();
     let s_cliente_atualizar = state_clone.clone();
+    let s_cliente_obter = state_clone.clone();
     let s_cliente_ativo = state_clone.clone();
     let s_cliente_contatos = state_clone.clone();
     let s_cliente_vincular = state_clone.clone();
@@ -1491,6 +1492,10 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_update_cliente(state.cliente.as_ref(), state.audit.as_ref(), env).await
             })
+        })
+        .route("GetCliente", move |env| {
+            let state = s_cliente_obter.clone();
+            Box::pin(async move { handler_get_cliente(state.cliente.as_ref(), env).await })
         })
         .route("DefinirClienteAtivo", move |env| {
             let state = s_cliente_ativo.clone();
@@ -7074,6 +7079,31 @@ async fn handler_update_cliente(
                 serde_json::json!({ "sucesso": true }),
             )
         }
+        Ok(None) => erro(
+            error_core::AppError::Validation("cliente não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "GetCliente", tenant_id = %env.tenant_id))]
+async fn handler_get_cliente(store: &dyn ports::ClienteStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    if id <= 0 {
+        return erro(
+            error_core::AppError::Validation("cliente não informado".into()),
+            &env,
+        );
+    }
+    let ctx = contexto_do_envelope(&env);
+    match store.buscar_cliente(&ctx, id).await {
+        Ok(Some(cliente)) => ok_reply(
+            &env,
+            "GetClienteReply",
+            serde_json::json!({ "cliente": cliente }),
+        ),
         Ok(None) => erro(
             error_core::AppError::Validation("cliente não encontrado".into()),
             &env,

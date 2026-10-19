@@ -15595,6 +15595,9 @@ class MyContato extends $pb.GeneratedMessage {
     $core.bool? ativo,
     $fixnum.Int64? ultimaInteracao,
     $fixnum.Int64? cadastradoEm,
+    $core.String? cargo,
+    $core.String? segmento,
+    $core.String? observacoes,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -15606,6 +15609,9 @@ class MyContato extends $pb.GeneratedMessage {
     if (ativo != null) result.ativo = ativo;
     if (ultimaInteracao != null) result.ultimaInteracao = ultimaInteracao;
     if (cadastradoEm != null) result.cadastradoEm = cadastradoEm;
+    if (cargo != null) result.cargo = cargo;
+    if (segmento != null) result.segmento = segmento;
+    if (observacoes != null) result.observacoes = observacoes;
     return result;
   }
 
@@ -15631,6 +15637,9 @@ class MyContato extends $pb.GeneratedMessage {
     ..aOB(6, _omitFieldNames ? '' : 'ativo')
     ..aInt64(7, _omitFieldNames ? '' : 'ultimaInteracao')
     ..aInt64(8, _omitFieldNames ? '' : 'cadastradoEm')
+    ..aOS(9, _omitFieldNames ? '' : 'cargo')
+    ..aOS(10, _omitFieldNames ? '' : 'segmento')
+    ..aOS(11, _omitFieldNames ? '' : 'observacoes')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -15725,6 +15734,33 @@ class MyContato extends $pb.GeneratedMessage {
   $core.bool hasCadastradoEm() => $_has(7);
   @$pb.TagNumber(8)
   void clearCadastradoEm() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.String get cargo => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set cargo($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasCargo() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearCargo() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.String get segmento => $_getSZ(9);
+  @$pb.TagNumber(10)
+  set segmento($core.String value) => $_setString(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasSegmento() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearSegmento() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $core.String get observacoes => $_getSZ(10);
+  @$pb.TagNumber(11)
+  set observacoes($core.String value) => $_setString(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasObservacoes() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearObservacoes() => $_clearField(11);
 }
 
 class OpcaoCampo extends $pb.GeneratedMessage {
@@ -16923,12 +16959,18 @@ class UpdateMyContatoRequest extends $pb.GeneratedMessage {
     $core.String? nomeContato,
     $core.String? email,
     $core.String? telefone,
+    $core.String? cargo,
+    $core.String? segmento,
+    $core.String? observacoes,
   }) {
     final result = create();
     if (id != null) result.id = id;
     if (nomeContato != null) result.nomeContato = nomeContato;
     if (email != null) result.email = email;
     if (telefone != null) result.telefone = telefone;
+    if (cargo != null) result.cargo = cargo;
+    if (segmento != null) result.segmento = segmento;
+    if (observacoes != null) result.observacoes = observacoes;
     return result;
   }
 
@@ -16950,6 +16992,9 @@ class UpdateMyContatoRequest extends $pb.GeneratedMessage {
     ..aOS(2, _omitFieldNames ? '' : 'nomeContato')
     ..aOS(3, _omitFieldNames ? '' : 'email')
     ..aOS(4, _omitFieldNames ? '' : 'telefone')
+    ..aOS(5, _omitFieldNames ? '' : 'cargo')
+    ..aOS(6, _omitFieldNames ? '' : 'segmento')
+    ..aOS(7, _omitFieldNames ? '' : 'observacoes')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -17010,6 +17055,33 @@ class UpdateMyContatoRequest extends $pb.GeneratedMessage {
   $core.bool hasTelefone() => $_has(3);
   @$pb.TagNumber(4)
   void clearTelefone() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get cargo => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set cargo($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasCargo() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearCargo() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get segmento => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set segmento($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasSegmento() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearSegmento() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get observacoes => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set observacoes($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasObservacoes() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearObservacoes() => $_clearField(7);
 }
 
 class DefinirMyContatoAtivoRequest extends $pb.GeneratedMessage {
@@ -17612,6 +17684,7 @@ class DadosMyCliente extends $pb.GeneratedMessage {
     $core.String? bairro,
     $core.String? cidade,
     $core.String? uf,
+    $core.String? cargoResponsavel,
   }) {
     final result = create();
     if (nomeFantasia != null) result.nomeFantasia = nomeFantasia;
@@ -17630,6 +17703,7 @@ class DadosMyCliente extends $pb.GeneratedMessage {
     if (bairro != null) result.bairro = bairro;
     if (cidade != null) result.cidade = cidade;
     if (uf != null) result.uf = uf;
+    if (cargoResponsavel != null) result.cargoResponsavel = cargoResponsavel;
     return result;
   }
 
@@ -17663,6 +17737,7 @@ class DadosMyCliente extends $pb.GeneratedMessage {
     ..aOS(14, _omitFieldNames ? '' : 'bairro')
     ..aOS(15, _omitFieldNames ? '' : 'cidade')
     ..aOS(16, _omitFieldNames ? '' : 'uf')
+    ..aOS(17, _omitFieldNames ? '' : 'cargoResponsavel')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -17827,6 +17902,15 @@ class DadosMyCliente extends $pb.GeneratedMessage {
   $core.bool hasUf() => $_has(15);
   @$pb.TagNumber(16)
   void clearUf() => $_clearField(16);
+
+  @$pb.TagNumber(17)
+  $core.String get cargoResponsavel => $_getSZ(16);
+  @$pb.TagNumber(17)
+  set cargoResponsavel($core.String value) => $_setString(16, value);
+  @$pb.TagNumber(17)
+  $core.bool hasCargoResponsavel() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearCargoResponsavel() => $_clearField(17);
 }
 
 class MyCliente extends $pb.GeneratedMessage {
@@ -28488,6 +28572,10 @@ class AdminServiceApi {
           $pb.ClientContext? ctx, DefinirMyClienteAtivoRequest request) =>
       _client.invoke<SimpleOkResponse>(ctx, 'AdminService',
           'DefinirMyClienteAtivo', request, SimpleOkResponse());
+  $async.Future<MyClienteResponse> getMyCliente(
+          $pb.ClientContext? ctx, MyClienteIdRequest request) =>
+      _client.invoke<MyClienteResponse>(
+          ctx, 'AdminService', 'GetMyCliente', request, MyClienteResponse());
   $async.Future<ListMyContatosDoClienteResponse> listMyContatosDoCliente(
           $pb.ClientContext? ctx, MyClienteIdRequest request) =>
       _client.invoke<ListMyContatosDoClienteResponse>(
