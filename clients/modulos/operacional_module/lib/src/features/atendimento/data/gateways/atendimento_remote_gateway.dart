@@ -231,6 +231,13 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
       nome: resp.nome,
       telefone: resp.telefone,
       fotoUrl: resp.fotoUrl,
+      email: resp.email,
+      nomePerfilWhatsapp: resp.nomePerfilWhatsapp,
+      cargo: resp.cargo,
+      segmento: resp.segmento,
+      observacoes: resp.observacoes,
+      clienteId: resp.clienteId,
+      clienteNome: resp.clienteNome,
     );
   }
 
@@ -636,6 +643,86 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<void> editarContato({
+    required int contatoId,
+    required String nome,
+    required String email,
+    required String cargo,
+    required String segmento,
+    required String observacoes,
+  }) async {
+    // NUNCA logar os campos (PII) — só trafegam no corpo da chamada.
+    await _client.updateMyContato(
+      proto.UpdateMyContatoRequest(
+        id: contatoId,
+        nomeContato: nome,
+        email: email,
+        cargo: cargo,
+        segmento: segmento,
+        observacoes: observacoes,
+      ),
+    );
+  }
+
+  @override
+  Future<void> ignorarNumero({
+    required String nome,
+    required String telefone,
+  }) async {
+    await _client.criarNumeroIgnorado(
+      proto.CriarNumeroIgnoradoRequest(nome: nome, telefone: telefone),
+    );
+  }
+
+  @override
+  Future<ClienteDaConversa> obterCliente({required int clienteId}) async {
+    final resp = await _client.getMyCliente(
+      proto.MyClienteIdRequest(id: clienteId),
+    );
+    return _clienteDoProto(resp.cliente);
+  }
+
+  @override
+  Future<int> salvarCliente({required ClienteDaConversa dados}) async {
+    final pd = _dadosDoClienteProto(dados);
+    if (dados.id > 0) {
+      await _client.updateMyCliente(
+        proto.UpdateMyClienteRequest(id: dados.id, dados: pd),
+      );
+      return dados.id;
+    }
+    final resp = await _client.createMyCliente(
+      proto.CreateMyClienteRequest(dados: pd),
+    );
+    return resp.cliente.id;
+  }
+
+  @override
+  Future<void> vincularContatoCliente({
+    required int clienteId,
+    required int contatoId,
+    required bool vincular,
+  }) async {
+    await _client.vincularMyContatoCliente(
+      proto.VincularMyContatoClienteRequest(
+        clienteId: clienteId,
+        contatoId: contatoId,
+        vincular: vincular,
+      ),
+    );
+  }
+
+  @override
+  Future<List<ClienteDaConversa>> buscarClientes({
+    required String busca,
+  }) async {
+    final resp = await _client.listMyClientes(
+      proto.ListMyClientesRequest(busca: busca, limite: 20),
+    );
+    return resp.clientes.map(_clienteDoProto).toList();
+  }
+
+  @override
   Future<void> criarNota({
     required int atendimentoId,
     required String texto,
@@ -673,3 +760,48 @@ ValorCampo _valorCampoDoProto(proto.ValorCampoDoAtendimento c) => ValorCampo(
   confianca: c.confianca,
   editadoPorHumano: c.editadoPorHumano,
 );
+
+ClienteDaConversa _clienteDoProto(proto.MyCliente c) {
+  final d = c.dados;
+  return ClienteDaConversa(
+    id: c.id,
+    nomeFantasia: d.nomeFantasia,
+    razaoSocial: d.razaoSocial,
+    tipo: d.tipo,
+    cnpj: d.cnpj,
+    cpf: d.cpf,
+    telefone: d.telefone,
+    site: d.site,
+    segmento: d.ramoAtividade,
+    cargoResponsavel: d.cargoResponsavel,
+    observacoes: d.observacoes,
+    cep: d.cep,
+    logradouro: d.logradouro,
+    numero: d.numero,
+    complemento: d.complemento,
+    bairro: d.bairro,
+    cidade: d.cidade,
+    uf: d.uf,
+  );
+}
+
+proto.DadosMyCliente _dadosDoClienteProto(ClienteDaConversa d) =>
+    proto.DadosMyCliente(
+      nomeFantasia: d.nomeFantasia,
+      razaoSocial: d.razaoSocial,
+      tipo: d.tipo,
+      cnpj: d.cnpj,
+      cpf: d.cpf,
+      telefone: d.telefone,
+      site: d.site,
+      ramoAtividade: d.segmento,
+      cargoResponsavel: d.cargoResponsavel,
+      observacoes: d.observacoes,
+      cep: d.cep,
+      logradouro: d.logradouro,
+      numero: d.numero,
+      complemento: d.complemento,
+      bairro: d.bairro,
+      cidade: d.cidade,
+      uf: d.uf,
+    );

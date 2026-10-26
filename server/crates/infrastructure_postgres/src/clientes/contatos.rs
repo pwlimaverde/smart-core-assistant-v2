@@ -20,6 +20,9 @@ pub struct Contato {
     pub metadados: serde_json::Value,
     pub foto_perfil: Option<String>,
     pub foto_perfil_url_origem: Option<String>,
+    pub cargo: Option<String>,
+    pub segmento: Option<String>,
+    pub observacoes: Option<String>,
 }
 
 /// O que se pode mudar num contato já cadastrado (C4).
@@ -32,6 +35,9 @@ pub struct EdicaoContato {
     pub nome_contato: Option<String>,
     pub email: Option<String>,
     pub telefone: Option<String>,
+    pub cargo: Option<String>,
+    pub segmento: Option<String>,
+    pub observacoes: Option<String>,
 }
 
 #[async_trait]
@@ -160,7 +166,7 @@ impl ContatoRepository for PostgresContatoRepository {
                        ultima_interacao = NOW()
                RETURNING id, tenant_id, telefone, nome_contato, slug, email,
                          nome_perfil_whatsapp, data_cadastro, ultima_interacao,
-                         ativo, metadados, foto_perfil, foto_perfil_url_origem"#,
+                         ativo, metadados, foto_perfil, foto_perfil_url_origem, cargo, segmento, observacoes"#,
             ctx.tenant_id,
             telefone,
             nome_contato
@@ -192,7 +198,7 @@ impl ContatoRepository for PostgresContatoRepository {
                VALUES ($1, $2, $3, $4)
                RETURNING id, tenant_id, telefone, nome_contato, slug, email,
                          nome_perfil_whatsapp, data_cadastro, ultima_interacao,
-                         ativo, metadados, foto_perfil, foto_perfil_url_origem"#,
+                         ativo, metadados, foto_perfil, foto_perfil_url_origem, cargo, segmento, observacoes"#,
             ctx.tenant_id,
             telefone,
             nome_contato,
@@ -220,13 +226,19 @@ impl ContatoRepository for PostgresContatoRepository {
             r#"UPDATE oraculo_contato
                   SET nome_contato = COALESCE($3::text, nome_contato),
                       email        = COALESCE($4::text, email),
-                      telefone     = COALESCE($5::text, telefone)
+                      telefone     = COALESCE($5::text, telefone),
+                      cargo        = COALESCE($6::text, cargo),
+                      segmento     = COALESCE($7::text, segmento),
+                      observacoes  = COALESCE($8::text, observacoes)
                 WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             id,
             edicao.nome_contato,
             edicao.email,
-            edicao.telefone
+            edicao.telefone,
+            edicao.cargo,
+            edicao.segmento,
+            edicao.observacoes
         )
         .execute(&mut **tx)
         .await
@@ -286,7 +298,7 @@ impl ContatoRepository for PostgresContatoRepository {
             Contato,
             r#"SELECT id, tenant_id, telefone, nome_contato, slug, email,
                       nome_perfil_whatsapp, data_cadastro, ultima_interacao,
-                      ativo, metadados, foto_perfil, foto_perfil_url_origem
+                      ativo, metadados, foto_perfil, foto_perfil_url_origem, cargo, segmento, observacoes
                FROM oraculo_contato
                WHERE tenant_id = $1 AND telefone = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
@@ -308,7 +320,7 @@ impl ContatoRepository for PostgresContatoRepository {
             Contato,
             r#"SELECT id, tenant_id, telefone, nome_contato, slug, email,
                       nome_perfil_whatsapp, data_cadastro, ultima_interacao,
-                      ativo, metadados, foto_perfil, foto_perfil_url_origem
+                      ativo, metadados, foto_perfil, foto_perfil_url_origem, cargo, segmento, observacoes
                FROM oraculo_contato
                WHERE tenant_id = $1 AND id = $2"#,
             ctx.tenant_id,
@@ -331,7 +343,7 @@ impl ContatoRepository for PostgresContatoRepository {
             Contato,
             r#"SELECT id, tenant_id, telefone, nome_contato, slug, email,
                       nome_perfil_whatsapp, data_cadastro, ultima_interacao,
-                      ativo, metadados, foto_perfil, foto_perfil_url_origem
+                      ativo, metadados, foto_perfil, foto_perfil_url_origem, cargo, segmento, observacoes
                FROM oraculo_contato
                WHERE tenant_id = $1 AND ativo = true AND excluido_em IS NULL
                ORDER BY ultima_interacao DESC
@@ -379,7 +391,7 @@ impl ContatoRepository for PostgresContatoRepository {
         let rows = sqlx::query_as::<_, Contato>(
             r#"SELECT id, tenant_id, telefone, nome_contato, slug, email,
                       nome_perfil_whatsapp, data_cadastro, ultima_interacao,
-                      ativo, metadados, foto_perfil, foto_perfil_url_origem
+                      ativo, metadados, foto_perfil, foto_perfil_url_origem, cargo, segmento, observacoes
                FROM oraculo_contato
                WHERE tenant_id = $1 AND excluido_em IS NULL
                  AND ($2::text IS NULL

@@ -1821,15 +1821,31 @@ const ObterContatoDoAtendimentoResponse$json = {
     {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
     {'1': 'telefone', '3': 3, '4': 1, '5': 9, '10': 'telefone'},
     {'1': 'foto_url', '3': 4, '4': 1, '5': 9, '10': 'fotoUrl'},
+    {'1': 'email', '3': 5, '4': 1, '5': 9, '10': 'email'},
+    {
+      '1': 'nome_perfil_whatsapp',
+      '3': 6,
+      '4': 1,
+      '5': 9,
+      '10': 'nomePerfilWhatsapp'
+    },
+    {'1': 'cargo', '3': 7, '4': 1, '5': 9, '10': 'cargo'},
+    {'1': 'segmento', '3': 8, '4': 1, '5': 9, '10': 'segmento'},
+    {'1': 'observacoes', '3': 9, '4': 1, '5': 9, '10': 'observacoes'},
+    {'1': 'cliente_id', '3': 10, '4': 1, '5': 5, '10': 'clienteId'},
+    {'1': 'cliente_nome', '3': 11, '4': 1, '5': 9, '10': 'clienteNome'},
   ],
 };
 
 /// Descriptor for `ObterContatoDoAtendimentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List obterContatoDoAtendimentoResponseDescriptor =
-    $convert.base64Decode(
-        'CiFPYnRlckNvbnRhdG9Eb0F0ZW5kaW1lbnRvUmVzcG9uc2USHQoKY29udGF0b19pZBgBIAEoBV'
-        'IJY29udGF0b0lkEhIKBG5vbWUYAiABKAlSBG5vbWUSGgoIdGVsZWZvbmUYAyABKAlSCHRlbGVm'
-        'b25lEhkKCGZvdG9fdXJsGAQgASgJUgdmb3RvVXJs');
+final $typed_data.Uint8List obterContatoDoAtendimentoResponseDescriptor = $convert.base64Decode(
+    'CiFPYnRlckNvbnRhdG9Eb0F0ZW5kaW1lbnRvUmVzcG9uc2USHQoKY29udGF0b19pZBgBIAEoBV'
+    'IJY29udGF0b0lkEhIKBG5vbWUYAiABKAlSBG5vbWUSGgoIdGVsZWZvbmUYAyABKAlSCHRlbGVm'
+    'b25lEhkKCGZvdG9fdXJsGAQgASgJUgdmb3RvVXJsEhQKBWVtYWlsGAUgASgJUgVlbWFpbBIwCh'
+    'Rub21lX3BlcmZpbF93aGF0c2FwcBgGIAEoCVISbm9tZVBlcmZpbFdoYXRzYXBwEhQKBWNhcmdv'
+    'GAcgASgJUgVjYXJnbxIaCghzZWdtZW50bxgIIAEoCVIIc2VnbWVudG8SIAoLb2JzZXJ2YWNvZX'
+    'MYCSABKAlSC29ic2VydmFjb2VzEh0KCmNsaWVudGVfaWQYCiABKAVSCWNsaWVudGVJZBIhCgxj'
+    'bGllbnRlX25vbWUYCyABKAlSC2NsaWVudGVOb21l');
 
 @$core.Deprecated('Use listAtendimentosRequestDescriptor instead')
 const ListAtendimentosRequest$json = {
@@ -4012,6 +4028,9 @@ const MyContato$json = {
     {'1': 'ativo', '3': 6, '4': 1, '5': 8, '10': 'ativo'},
     {'1': 'ultima_interacao', '3': 7, '4': 1, '5': 3, '10': 'ultimaInteracao'},
     {'1': 'cadastrado_em', '3': 8, '4': 1, '5': 3, '10': 'cadastradoEm'},
+    {'1': 'cargo', '3': 9, '4': 1, '5': 9, '10': 'cargo'},
+    {'1': 'segmento', '3': 10, '4': 1, '5': 9, '10': 'segmento'},
+    {'1': 'observacoes', '3': 11, '4': 1, '5': 9, '10': 'observacoes'},
   ],
 };
 
@@ -4021,7 +4040,9 @@ final $typed_data.Uint8List myContatoDescriptor = $convert.base64Decode(
     'IhCgxub21lX2NvbnRhdG8YAyABKAlSC25vbWVDb250YXRvEjAKFG5vbWVfcGVyZmlsX3doYXRz'
     'YXBwGAQgASgJUhJub21lUGVyZmlsV2hhdHNhcHASFAoFZW1haWwYBSABKAlSBWVtYWlsEhQKBW'
     'F0aXZvGAYgASgIUgVhdGl2bxIpChB1bHRpbWFfaW50ZXJhY2FvGAcgASgDUg91bHRpbWFJbnRl'
-    'cmFjYW8SIwoNY2FkYXN0cmFkb19lbRgIIAEoA1IMY2FkYXN0cmFkb0Vt');
+    'cmFjYW8SIwoNY2FkYXN0cmFkb19lbRgIIAEoA1IMY2FkYXN0cmFkb0VtEhQKBWNhcmdvGAkgAS'
+    'gJUgVjYXJnbxIaCghzZWdtZW50bxgKIAEoCVIIc2VnbWVudG8SIAoLb2JzZXJ2YWNvZXMYCyAB'
+    'KAlSC29ic2VydmFjb2Vz');
 
 @$core.Deprecated('Use opcaoCampoDescriptor instead')
 const OpcaoCampo$json = {
@@ -4356,6 +4377,9 @@ const UpdateMyContatoRequest$json = {
     {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
     {'1': 'nome_contato', '3': 2, '4': 1, '5': 9, '10': 'nomeContato'},
     {'1': 'email', '3': 3, '4': 1, '5': 9, '10': 'email'},
+    {'1': 'cargo', '3': 5, '4': 1, '5': 9, '10': 'cargo'},
+    {'1': 'segmento', '3': 6, '4': 1, '5': 9, '10': 'segmento'},
+    {'1': 'observacoes', '3': 7, '4': 1, '5': 9, '10': 'observacoes'},
     {'1': 'telefone', '3': 4, '4': 1, '5': 9, '10': 'telefone'},
   ],
 };
@@ -4363,8 +4387,9 @@ const UpdateMyContatoRequest$json = {
 /// Descriptor for `UpdateMyContatoRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List updateMyContatoRequestDescriptor = $convert.base64Decode(
     'ChZVcGRhdGVNeUNvbnRhdG9SZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBIhCgxub21lX2NvbnRhdG'
-    '8YAiABKAlSC25vbWVDb250YXRvEhQKBWVtYWlsGAMgASgJUgVlbWFpbBIaCgh0ZWxlZm9uZRgE'
-    'IAEoCVIIdGVsZWZvbmU=');
+    '8YAiABKAlSC25vbWVDb250YXRvEhQKBWVtYWlsGAMgASgJUgVlbWFpbBIUCgVjYXJnbxgFIAEo'
+    'CVIFY2FyZ28SGgoIc2VnbWVudG8YBiABKAlSCHNlZ21lbnRvEiAKC29ic2VydmFjb2VzGAcgAS'
+    'gJUgtvYnNlcnZhY29lcxIaCgh0ZWxlZm9uZRgEIAEoCVIIdGVsZWZvbmU=');
 
 @$core.Deprecated('Use definirMyContatoAtivoRequestDescriptor instead')
 const DefinirMyContatoAtivoRequest$json = {
@@ -4514,6 +4539,13 @@ const DadosMyCliente$json = {
     {'1': 'bairro', '3': 14, '4': 1, '5': 9, '10': 'bairro'},
     {'1': 'cidade', '3': 15, '4': 1, '5': 9, '10': 'cidade'},
     {'1': 'uf', '3': 16, '4': 1, '5': 9, '10': 'uf'},
+    {
+      '1': 'cargo_responsavel',
+      '3': 17,
+      '4': 1,
+      '5': 9,
+      '10': 'cargoResponsavel'
+    },
   ],
 };
 
@@ -4526,7 +4558,8 @@ final $typed_data.Uint8List dadosMyClienteDescriptor = $convert.base64Decode(
     'bW9BdGl2aWRhZGUSIAoLb2JzZXJ2YWNvZXMYCSABKAlSC29ic2VydmFjb2VzEhAKA2NlcBgKIA'
     'EoCVIDY2VwEh4KCmxvZ3JhZG91cm8YCyABKAlSCmxvZ3JhZG91cm8SFgoGbnVtZXJvGAwgASgJ'
     'UgZudW1lcm8SIAoLY29tcGxlbWVudG8YDSABKAlSC2NvbXBsZW1lbnRvEhYKBmJhaXJybxgOIA'
-    'EoCVIGYmFpcnJvEhYKBmNpZGFkZRgPIAEoCVIGY2lkYWRlEg4KAnVmGBAgASgJUgJ1Zg==');
+    'EoCVIGYmFpcnJvEhYKBmNpZGFkZRgPIAEoCVIGY2lkYWRlEg4KAnVmGBAgASgJUgJ1ZhIrChFj'
+    'YXJnb19yZXNwb25zYXZlbBgRIAEoCVIQY2FyZ29SZXNwb25zYXZlbA==');
 
 @$core.Deprecated('Use myClienteDescriptor instead')
 const MyCliente$json = {

@@ -547,6 +547,7 @@ async fn main() -> anyhow::Result<()> {
     let s_clientes_listar = state_clone.clone();
     let s_cliente_criar = state_clone.clone();
     let s_cliente_atualizar = state_clone.clone();
+    let s_cliente_obter = state_clone.clone();
     let s_cliente_ativo = state_clone.clone();
     let s_cliente_contatos = state_clone.clone();
     let s_cliente_vincular = state_clone.clone();
@@ -1491,6 +1492,10 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_update_cliente(state.cliente.as_ref(), state.audit.as_ref(), env).await
             })
+        })
+        .route("GetCliente", move |env| {
+            let state = s_cliente_obter.clone();
+            Box::pin(async move { handler_get_cliente(state.cliente.as_ref(), env).await })
         })
         .route("DefinirClienteAtivo", move |env| {
             let state = s_cliente_ativo.clone();
@@ -6968,6 +6973,7 @@ fn dados_do_cliente(
         site: opcional("site", 200, "site")?,
         ramo_atividade: opcional("ramo_atividade", 200, "ramo de atividade")?,
         observacoes: opcional("observacoes", 5000, "observações")?,
+        cargo_responsavel: opcional("cargo_responsavel", 100, "cargo do responsável")?,
         cep: digitos("cep", 8, "CEP")?,
         logradouro: opcional("logradouro", 200, "logradouro")?,
         numero: opcional("numero", 10, "número")?,
@@ -7073,6 +7079,31 @@ async fn handler_update_cliente(
                 serde_json::json!({ "sucesso": true }),
             )
         }
+        Ok(None) => erro(
+            error_core::AppError::Validation("cliente não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "GetCliente", tenant_id = %env.tenant_id))]
+async fn handler_get_cliente(store: &dyn ports::ClienteStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    if id <= 0 {
+        return erro(
+            error_core::AppError::Validation("cliente não informado".into()),
+            &env,
+        );
+    }
+    let ctx = contexto_do_envelope(&env);
+    match store.buscar_cliente(&ctx, id).await {
+        Ok(Some(cliente)) => ok_reply(
+            &env,
+            "GetClienteReply",
+            serde_json::json!({ "cliente": cliente }),
+        ),
         Ok(None) => erro(
             error_core::AppError::Validation("cliente não encontrado".into()),
             &env,
@@ -7253,6 +7284,10 @@ async fn handler_update_contato(
             Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
         }
     }
+    // Mesma regra do e-mail: campo presente (mesmo vazio) é gravado; ausente não mexe.
+    edicao.cargo = texto("cargo");
+    edicao.segmento = texto("segmento");
+    edicao.observacoes = texto("observacoes");
     if let Some(bruto) = texto("telefone").filter(|t| !t.is_empty()) {
         let Some(t) = normalizar_telefone(&bruto) else {
             return erro(
@@ -12797,6 +12832,9 @@ mod tests_atendimento_cliente_unit {
             metadados: serde_json::json!({}),
             foto_perfil: None,
             foto_perfil_url_origem: None,
+            cargo: None,
+            segmento: None,
+            observacoes: None,
         }
     }
 

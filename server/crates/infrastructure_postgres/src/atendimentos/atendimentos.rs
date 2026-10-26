@@ -1639,6 +1639,14 @@ pub struct ContatoComFoto {
     pub telefone: String,
     pub foto_chave: String,
     pub foto_verificada_em: Option<DateTime<Utc>>,
+    pub email: String,
+    pub nome_perfil_whatsapp: String,
+    pub cargo: String,
+    pub segmento: String,
+    pub observacoes: String,
+    /// 0 = o contato não está vinculado a nenhum cliente.
+    pub cliente_id: i32,
+    pub cliente_nome: String,
 }
 
 #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
@@ -1654,10 +1662,27 @@ pub async fn contato_do_atendimento(
                            NULLIF(TRIM(c.nome_perfil_whatsapp), ''), '') AS nome,
                   COALESCE(c.telefone, '') AS telefone,
                   COALESCE(c.foto_perfil, '') AS foto_chave,
-                  c.foto_verificada_em
+                  c.foto_verificada_em,
+                  COALESCE(c.email, '') AS email,
+                  COALESCE(c.nome_perfil_whatsapp, '') AS nome_perfil_whatsapp,
+                  COALESCE(c.cargo, '') AS cargo,
+                  COALESCE(c.segmento, '') AS segmento,
+                  COALESCE(c.observacoes, '') AS observacoes,
+                  COALESCE(cl.id, 0) AS cliente_id,
+                  COALESCE(cl.nome_fantasia, '') AS cliente_nome
              FROM oraculo_atendimento a
              JOIN oraculo_contato c
                ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+             LEFT JOIN LATERAL (
+                 SELECT cli.id, cli.nome_fantasia
+                   FROM oraculo_cliente_contatos cc
+                   JOIN oraculo_cliente cli
+                     ON cli.id = cc.cliente_id AND cli.tenant_id = cc.tenant_id
+                  WHERE cc.contato_id = c.id AND cc.tenant_id = c.tenant_id
+                    AND cli.excluido_em IS NULL
+                  ORDER BY cli.id
+                  LIMIT 1
+             ) cl ON TRUE
             WHERE a.tenant_id = $1 AND a.id = $2"#,
     )
     .bind(ctx.tenant_id)

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO oraculo_contato (tenant_id, telefone, nome_contato, email)\n               VALUES ($1, $2, $3, $4)\n               RETURNING id, tenant_id, telefone, nome_contato, slug, email,\n                         nome_perfil_whatsapp, data_cadastro, ultima_interacao,\n                         ativo, metadados, foto_perfil, foto_perfil_url_origem",
+  "query": "SELECT id, tenant_id, telefone, nome_contato, slug, email,\n                      nome_perfil_whatsapp, data_cadastro, ultima_interacao,\n                      ativo, metadados, foto_perfil, foto_perfil_url_origem, cargo, segmento, observacoes\n               FROM oraculo_contato\n               WHERE tenant_id = $1 AND telefone = $2 AND excluido_em IS NULL",
   "describe": {
     "columns": [
       {
@@ -145,14 +145,45 @@
             "name": "foto_perfil_url_origem"
           }
         }
+      },
+      {
+        "ordinal": 13,
+        "name": "cargo",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "cargo"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "segmento",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "segmento"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "observacoes",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "observacoes"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Varchar",
-        "Varchar",
-        "Varchar"
+        "Text"
       ]
     },
     "nullable": [
@@ -168,8 +199,11 @@
       false,
       false,
       true,
+      true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "68847a576fe67df9752aed096bf3e903c0ab3d93b9ea5c6bcabf65f50394d0c8"
+  "hash": "748914fa6249883943d38b8e3bd1236d10699c382701357f094321c91a3ca38c"
 }

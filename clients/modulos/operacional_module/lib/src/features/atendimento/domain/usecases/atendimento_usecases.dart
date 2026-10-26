@@ -472,7 +472,12 @@ final class CriarNotaUsecase
 /// P3 — "digitando..." do atendente.
 final class EnviarPresencaUsecase
     extends
-        UsecaseBaseCallData<bool, bool, EnviarPresencaParameters, PresencaError> {
+        UsecaseBaseCallData<
+          bool,
+          bool,
+          EnviarPresencaParameters,
+          PresencaError
+        > {
   const EnviarPresencaUsecase({required super.repository});
 
   @override
@@ -590,7 +595,12 @@ final class TransferirParaFluxoUsecase
   const TransferirParaFluxoUsecase({required super.repository});
 
   @override
-  ProcessData<String, String, TransferirParaFluxoParameters, QuadroOperacaoError>
+  ProcessData<
+    String,
+    String,
+    TransferirParaFluxoParameters,
+    QuadroOperacaoError
+  >
   get process =>
       (data, _) => Success(data);
 
@@ -613,7 +623,12 @@ final class ExportarQuadroUsecase
   const ExportarQuadroUsecase({required super.repository});
 
   @override
-  ProcessData<List<int>, List<int>, ExportarQuadroParameters, QuadroOperacaoError>
+  ProcessData<
+    List<int>,
+    List<int>,
+    ExportarQuadroParameters,
+    QuadroOperacaoError
+  >
   get process =>
       (data, _) => Success(data);
 
@@ -682,8 +697,7 @@ final class AtendimentosDoContatoUsecase
 
 /// P5 — apaga uma nota interna.
 final class RemoverNotaUsecase
-    extends
-        UsecaseBaseCallData<Unit, Unit, RemoverNotaParameters, FichaError> {
+    extends UsecaseBaseCallData<Unit, Unit, RemoverNotaParameters, FichaError> {
   const RemoverNotaUsecase({required super.repository});
 
   @override
@@ -791,5 +805,122 @@ final class MarcarRevisadoUsecase
   QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
     _logBug('marcarRevisado', exception, stackTrace);
     return const QuadroOperacaoInesperado();
+  }
+}
+
+final class EditarContatoUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, EditarContatoParameters, FichaError> {
+  const EditarContatoUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, EditarContatoParameters, FichaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('editarContato', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+final class IgnorarNumeroUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, IgnorarNumeroParameters, FichaError> {
+  const IgnorarNumeroUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, IgnorarNumeroParameters, FichaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('ignorarNumero', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+final class ObterClienteUsecase
+    extends
+        UsecaseBaseCallData<
+          ClienteDaConversa,
+          ClienteDaConversa,
+          ObterClienteParameters,
+          FichaError
+        > {
+  const ObterClienteUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    ClienteDaConversa,
+    ClienteDaConversa,
+    ObterClienteParameters,
+    FichaError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('obterCliente', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+final class SalvarClienteUsecase
+    extends UsecaseBaseCallData<int, int, SalvarClienteParameters, FichaError> {
+  const SalvarClienteUsecase({required super.repository});
+
+  @override
+  ProcessData<int, int, SalvarClienteParameters, FichaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('salvarCliente', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+final class VincularClienteUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, VincularClienteParameters, FichaError> {
+  const VincularClienteUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, VincularClienteParameters, FichaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('vincularCliente', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+final class BuscarClientesUsecase
+    extends
+        UsecaseBaseCallData<
+          List<ClienteDaConversa>,
+          List<ClienteDaConversa>,
+          BuscarClientesParameters,
+          FichaError
+        > {
+  const BuscarClientesUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<ClienteDaConversa>,
+    List<ClienteDaConversa>,
+    BuscarClientesParameters,
+    FichaError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('buscarClientes', exception, stackTrace);
+    return const FichaInesperado();
   }
 }

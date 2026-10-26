@@ -314,6 +314,60 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<EditarContatoUsecase>(
+      () => EditarContatoUsecase(
+        repository: EditarContatoRepository(
+          datasource: EditarContatoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<ObterClienteUsecase>(
+      () => ObterClienteUsecase(
+        repository: ObterClienteRepository(
+          datasource: ObterClienteDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<SalvarClienteUsecase>(
+      () => SalvarClienteUsecase(
+        repository: SalvarClienteRepository(
+          datasource: SalvarClienteDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<VincularClienteUsecase>(
+      () => VincularClienteUsecase(
+        repository: VincularClienteRepository(
+          datasource: VincularClienteDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<BuscarClientesUsecase>(
+      () => BuscarClientesUsecase(
+        repository: BuscarClientesRepository(
+          datasource: BuscarClientesDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<IgnorarNumeroUsecase>(
+      () => IgnorarNumeroUsecase(
+        repository: IgnorarNumeroRepository(
+          datasource: IgnorarNumeroDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<SendOutboundMessageUsecase>(
       () => SendOutboundMessageUsecase(
         repository: SendOutboundMessageRepository(

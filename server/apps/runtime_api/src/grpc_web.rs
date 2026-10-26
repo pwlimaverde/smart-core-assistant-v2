@@ -5262,6 +5262,28 @@ impl AdminService for AdminFacade {
 
     #[tracing::instrument(
         skip_all,
+        fields(service = "runtime_api", rpc = "GetMyCliente", traceparent)
+    )]
+    async fn get_my_cliente(
+        &self,
+        req: Request<MyClienteIdRequest>,
+    ) -> Result<Response<MyClienteResponse>, Status> {
+        let id = req.get_ref().id;
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "GetCliente",
+                serde_json::json!({ "id": id }),
+            )
+            .await?;
+        Ok(Response::new(MyClienteResponse {
+            cliente: Some(cliente_do_json(&corpo["cliente"])),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
         fields(service = "runtime_api", rpc = "UpdateMyCliente", traceparent)
     )]
     async fn update_my_cliente(
@@ -5705,6 +5727,9 @@ impl AdminService for AdminFacade {
             "id": inner.id,
             "nome_contato": inner.nome_contato,
             "email": inner.email,
+            "cargo": inner.cargo,
+            "segmento": inner.segmento,
+            "observacoes": inner.observacoes,
         });
         if !inner.telefone.trim().is_empty() {
             payload["telefone"] = serde_json::Value::String(inner.telefone.clone());
@@ -6644,6 +6669,16 @@ impl AdminService for AdminFacade {
             nome: texto_do(&contato, "nome"),
             telefone: texto_do(&contato, "telefone"),
             foto_url,
+            email: texto_do(&contato, "email"),
+            nome_perfil_whatsapp: texto_do(&contato, "nome_perfil_whatsapp"),
+            cargo: texto_do(&contato, "cargo"),
+            segmento: texto_do(&contato, "segmento"),
+            observacoes: texto_do(&contato, "observacoes"),
+            cliente_id: contato
+                .get("cliente_id")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32,
+            cliente_nome: texto_do(&contato, "cliente_nome"),
         }))
     }
 
@@ -11168,6 +11203,7 @@ fn dados_cliente_para_json(d: &DadosMyCliente) -> serde_json::Value {
         "bairro": d.bairro,
         "cidade": d.cidade,
         "uf": d.uf,
+        "cargo_responsavel": d.cargo_responsavel,
     })
 }
 
@@ -11197,6 +11233,7 @@ fn cliente_do_json(v: &serde_json::Value) -> MyCliente {
             bairro: texto("bairro"),
             cidade: texto("cidade"),
             uf: texto("uf"),
+            cargo_responsavel: texto("cargo_responsavel"),
         }),
         ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
         contatos: v.get("contatos").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
@@ -11226,6 +11263,9 @@ fn contato_do_json(v: &serde_json::Value) -> MyContato {
         ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
         ultima_interacao: data("ultima_interacao"),
         cadastrado_em: data("data_cadastro"),
+        cargo: texto("cargo"),
+        segmento: texto("segmento"),
+        observacoes: texto("observacoes"),
     }
 }
 

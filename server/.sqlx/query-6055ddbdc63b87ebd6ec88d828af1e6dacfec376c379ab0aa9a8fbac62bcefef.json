@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, telefone, nome_contato, slug, email,\n                      nome_perfil_whatsapp, data_cadastro, ultima_interacao,\n                      ativo, metadados, foto_perfil, foto_perfil_url_origem\n               FROM oraculo_contato\n               WHERE tenant_id = $1 AND telefone = $2 AND excluido_em IS NULL",
+  "query": "SELECT id, tenant_id, telefone, nome_contato, slug, email,\n                      nome_perfil_whatsapp, data_cadastro, ultima_interacao,\n                      ativo, metadados, foto_perfil, foto_perfil_url_origem, cargo, segmento, observacoes\n               FROM oraculo_contato\n               WHERE tenant_id = $1 AND ativo = true AND excluido_em IS NULL\n               ORDER BY ultima_interacao DESC\n               LIMIT $2",
   "describe": {
     "columns": [
       {
@@ -145,12 +145,45 @@
             "name": "foto_perfil_url_origem"
           }
         }
+      },
+      {
+        "ordinal": 13,
+        "name": "cargo",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "cargo"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "segmento",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "segmento"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "observacoes",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "observacoes"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Text"
+        "Int8"
       ]
     },
     "nullable": [
@@ -166,8 +199,11 @@
       false,
       false,
       true,
+      true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "c5a0cac1ff0b698a84d07979643eb8bd406a3130ef377c41c68db389034258bb"
+  "hash": "6055ddbdc63b87ebd6ec88d828af1e6dacfec376c379ab0aa9a8fbac62bcefef"
 }

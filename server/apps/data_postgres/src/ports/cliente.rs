@@ -92,6 +92,13 @@ pub trait ClienteStore: Send + Sync {
         dados: infrastructure_postgres::clientes::clientes::DadosCliente,
     ) -> Result<Option<Vec<String>>, DbError>;
 
+    /// Lê um cliente por id, com todos os dados, para a ficha editar.
+    async fn buscar_cliente(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<Option<infrastructure_postgres::clientes::clientes::ClienteResumo>, DbError>;
+
     /// B10 — tira (ou devolve) o cliente da lista.
     async fn definir_cliente_ativo(
         &self,
