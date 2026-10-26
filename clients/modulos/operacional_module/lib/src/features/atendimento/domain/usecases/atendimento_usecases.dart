@@ -824,6 +824,22 @@ final class EditarContatoUsecase
   }
 }
 
+final class IgnorarNumeroUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, IgnorarNumeroParameters, FichaError> {
+  const IgnorarNumeroUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, IgnorarNumeroParameters, FichaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('ignorarNumero', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
 final class ObterClienteUsecase
     extends
         UsecaseBaseCallData<

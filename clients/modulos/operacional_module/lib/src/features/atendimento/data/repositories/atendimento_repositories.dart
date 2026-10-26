@@ -673,6 +673,15 @@ final class EditarContatoRepository
       _erroDeFicha(e, s, p.contatoId);
 }
 
+final class IgnorarNumeroRepository
+    extends RepositoryBase<Unit, IgnorarNumeroParameters, FichaError> {
+  const IgnorarNumeroRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, IgnorarNumeroParameters p) =>
+      _erroDeFicha(e, s, null);
+}
+
 final class ObterClienteRepository
     extends
         RepositoryBase<ClienteDaConversa, ObterClienteParameters, FichaError> {

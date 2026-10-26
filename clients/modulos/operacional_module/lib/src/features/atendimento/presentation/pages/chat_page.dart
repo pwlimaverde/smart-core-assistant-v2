@@ -211,6 +211,9 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       buscarClientes: GetIt.instance.isRegistered<BuscarClientesUsecase>()
           ? inject<BuscarClientesUsecase>()
           : null,
+      ignorarNumero: GetIt.instance.isRegistered<IgnorarNumeroUsecase>()
+          ? inject<IgnorarNumeroUsecase>()
+          : null,
     );
     _controller.abrir(widget.atendimentoId);
     _ficha.abrir(widget.atendimentoId);

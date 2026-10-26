@@ -847,6 +847,12 @@ final class LocalEngineGateway implements AtendimentoGateway {
   );
 
   @override
+  Future<void> ignorarNumero({
+    required String nome,
+    required String telefone,
+  }) => _remoto.ignorarNumero(nome: nome, telefone: telefone);
+
+  @override
   Future<ClienteDaConversa> obterCliente({required int clienteId}) =>
       _remoto.obterCliente(clienteId: clienteId);
 

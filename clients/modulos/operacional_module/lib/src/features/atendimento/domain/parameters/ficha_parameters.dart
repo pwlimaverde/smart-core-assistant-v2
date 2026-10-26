@@ -137,6 +137,15 @@ final class EditarContatoParameters extends Parameters {
   });
 }
 
+/// Põe o número na lista de não atendidos. O bot deixa de responder e o
+/// atendimento não é aberto.
+final class IgnorarNumeroParameters extends Parameters {
+  final String nome;
+  final String telefone;
+
+  const IgnorarNumeroParameters({required this.nome, required this.telefone});
+}
+
 final class ObterClienteParameters extends Parameters {
   final int clienteId;
 

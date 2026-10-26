@@ -509,6 +509,22 @@ final class EditarContatoDatasource
   }
 }
 
+final class IgnorarNumeroDatasource
+    implements Datasource<Unit, IgnorarNumeroParameters> {
+  final AtendimentoGateway _gateway;
+
+  const IgnorarNumeroDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(IgnorarNumeroParameters parameters) async {
+    await _gateway.ignorarNumero(
+      nome: parameters.nome,
+      telefone: parameters.telefone,
+    );
+    return unit;
+  }
+}
+
 final class ObterClienteDatasource
     implements Datasource<ClienteDaConversa, ObterClienteParameters> {
   final AtendimentoGateway _gateway;

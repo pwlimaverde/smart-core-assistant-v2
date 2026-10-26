@@ -359,6 +359,15 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<IgnorarNumeroUsecase>(
+      () => IgnorarNumeroUsecase(
+        repository: IgnorarNumeroRepository(
+          datasource: IgnorarNumeroDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<SendOutboundMessageUsecase>(
       () => SendOutboundMessageUsecase(
         repository: SendOutboundMessageRepository(

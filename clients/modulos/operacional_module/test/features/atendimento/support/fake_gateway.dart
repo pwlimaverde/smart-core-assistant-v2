@@ -219,6 +219,14 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
       revisados.add(atendimentoId);
 
   @override
+  Future<void> ignorarNumero({
+    required String nome,
+    required String telefone,
+  }) async {
+    acoesDoCadastro.add('ignorarNumero:$nome:$telefone');
+  }
+
+  @override
   Future<void> editarContato({
     required int contatoId,
     required String nome,

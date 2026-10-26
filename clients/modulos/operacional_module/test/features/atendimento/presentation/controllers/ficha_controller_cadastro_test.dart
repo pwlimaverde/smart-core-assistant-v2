@@ -70,6 +70,13 @@ FichaController _controller(
           ),
         )
       : null,
+  ignorarNumero: completo
+      ? IgnorarNumeroUsecase(
+          repository: IgnorarNumeroRepository(
+            datasource: IgnorarNumeroDatasource(gateway: gateway),
+          ),
+        )
+      : null,
   buscarClientes: completo
       ? BuscarClientesUsecase(
           repository: BuscarClientesRepository(
@@ -187,6 +194,23 @@ void main() {
       await controller.close();
     });
 
+    test('não atender envia nome e telefone ao servidor', () async {
+      final gateway = FakeAtendimentoGateway();
+      final controller = _controller(gateway);
+
+      final erro = await controller.ignorarNumero(
+        nome: 'Ana',
+        telefone: '5588999912191',
+      );
+
+      expect(erro, isNull);
+      expect(
+        gateway.acoesDoCadastro,
+        contains('ignorarNumero:Ana:5588999912191'),
+      );
+      await controller.close();
+    });
+
     test(
       'sem os casos de uso do cadastro, cada ação devolve erro inesperado',
       () async {
@@ -219,6 +243,10 @@ void main() {
         );
         expect(
           (await controller.buscarClientes('x')).$2,
+          isA<FichaInesperado>(),
+        );
+        expect(
+          await controller.ignorarNumero(nome: 'Ana', telefone: '1'),
           isA<FichaInesperado>(),
         );
         expect(gateway.acoesDoCadastro, isEmpty);

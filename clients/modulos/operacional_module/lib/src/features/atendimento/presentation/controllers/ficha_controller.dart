@@ -33,6 +33,7 @@ final class FichaController extends BaseController<FichaAtendimento> {
   final SalvarClienteUsecase? _salvarCliente;
   final VincularClienteUsecase? _vincularCliente;
   final BuscarClientesUsecase? _buscarClientes;
+  final IgnorarNumeroUsecase? _ignorarNumero;
 
   int _atendimentoId = 0;
 
@@ -51,6 +52,7 @@ final class FichaController extends BaseController<FichaAtendimento> {
     SalvarClienteUsecase? salvarCliente,
     VincularClienteUsecase? vincularCliente,
     BuscarClientesUsecase? buscarClientes,
+    IgnorarNumeroUsecase? ignorarNumero,
   }) : _removerNota = removerNota,
        _atualizarEtiqueta = atualizarEtiqueta,
        _desativarEtiqueta = desativarEtiqueta,
@@ -64,7 +66,8 @@ final class FichaController extends BaseController<FichaAtendimento> {
        _obterCliente = obterCliente,
        _salvarCliente = salvarCliente,
        _vincularCliente = vincularCliente,
-       _buscarClientes = buscarClientes;
+       _buscarClientes = buscarClientes,
+       _ignorarNumero = ignorarNumero;
 
   int get atendimentoId => _atendimentoId;
 
@@ -248,6 +251,20 @@ final class FichaController extends BaseController<FichaAtendimento> {
         contatoId: contatoId,
         vincular: vincular,
       ),
+    );
+    if (res case Failure(:final error)) return error;
+    return null;
+  }
+
+  /// Devolve `null` quando o número foi posto na lista.
+  Future<FichaError?> ignorarNumero({
+    required String nome,
+    required String telefone,
+  }) async {
+    final uc = _ignorarNumero;
+    if (uc == null) return const FichaInesperado();
+    final res = await uc(
+      IgnorarNumeroParameters(nome: nome, telefone: telefone),
     );
     if (res case Failure(:final error)) return error;
     return null;

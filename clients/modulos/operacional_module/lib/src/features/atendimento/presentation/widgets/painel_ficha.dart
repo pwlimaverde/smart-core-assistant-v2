@@ -1747,9 +1747,48 @@ final class _SecaoContatoECliente extends StatelessWidget {
                 onPressed: () => _vincular(context, c),
               ),
             ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.block, size: 16),
+              label: const Text('Não atender este número'),
+              onPressed: c.telefone.isEmpty
+                  ? null
+                  : () => _naoAtender(context, c),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _naoAtender(BuildContext context, ContatoDaConversa c) async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Não atender ${c.telefone}?'),
+        content: const Text(
+          'O bot deixa de responder este número e mensagens novas não abrem atendimento.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Não atender'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !context.mounted) return;
+    final erro = await controller.ignorarNumero(
+      nome: c.nomeParaExibir,
+      telefone: c.telefone,
+    );
+    if (!context.mounted) return;
+    _avisar(context, erro?.message ?? 'Número marcado como não atendido.');
   }
 
   void _avisar(BuildContext context, String mensagem) => ScaffoldMessenger.of(

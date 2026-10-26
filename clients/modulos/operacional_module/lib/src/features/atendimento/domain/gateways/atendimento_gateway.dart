@@ -138,6 +138,9 @@ abstract interface class AtendimentoGateway {
     required String observacoes,
   });
 
+  /// Põe o número na lista de não atendidos.
+  Future<void> ignorarNumero({required String nome, required String telefone});
+
   Future<ClienteDaConversa> obterCliente({required int clienteId});
 
   /// Devolve o id do cliente gravado (o novo, quando `dados.id` é 0).

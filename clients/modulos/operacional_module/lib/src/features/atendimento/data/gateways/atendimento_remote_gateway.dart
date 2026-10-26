@@ -665,6 +665,16 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<void> ignorarNumero({
+    required String nome,
+    required String telefone,
+  }) async {
+    await _client.criarNumeroIgnorado(
+      proto.CriarNumeroIgnoradoRequest(nome: nome, telefone: telefone),
+    );
+  }
+
+  @override
   Future<ClienteDaConversa> obterCliente({required int clienteId}) async {
     final resp = await _client.getMyCliente(
       proto.MyClienteIdRequest(id: clienteId),
