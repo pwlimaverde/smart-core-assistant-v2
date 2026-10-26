@@ -199,6 +199,9 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   List<EventoDaTimeline> timeline = const [];
   final List<String> acoesDaFicha = [];
 
+  /// Cadastro de contato e cliente, na ordem das chamadas.
+  final List<String> acoesDoCadastro = [];
+
   /// P13 — o contato que o cabeçalho mostra, e quantas vezes pediram foto nova.
   ContatoDaConversa contato = const ContatoDaConversa(
     contatoId: 2,
@@ -223,27 +226,40 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     required String cargo,
     required String segmento,
     required String observacoes,
-  }) async {}
+  }) async {
+    acoesDoCadastro.add(
+      'editarContato:$contatoId:$nome:$email:$cargo:$segmento:$observacoes',
+    );
+  }
 
   @override
-  Future<ClienteDaConversa> obterCliente({required int clienteId}) async =>
-      ClienteDaConversa(id: clienteId);
+  Future<ClienteDaConversa> obterCliente({required int clienteId}) async {
+    acoesDoCadastro.add('obterCliente:$clienteId');
+    return ClienteDaConversa(id: clienteId, nomeFantasia: 'Cliente $clienteId');
+  }
 
   @override
-  Future<int> salvarCliente({required ClienteDaConversa dados}) async =>
-      dados.id > 0 ? dados.id : 1;
+  Future<int> salvarCliente({required ClienteDaConversa dados}) async {
+    acoesDoCadastro.add('salvarCliente:${dados.id}:${dados.nomeFantasia}');
+    return dados.id > 0 ? dados.id : 1;
+  }
 
   @override
   Future<void> vincularContatoCliente({
     required int clienteId,
     required int contatoId,
     required bool vincular,
-  }) async {}
+  }) async {
+    acoesDoCadastro.add('vincular:$clienteId:$contatoId:$vincular');
+  }
 
   @override
   Future<List<ClienteDaConversa>> buscarClientes({
     required String busca,
-  }) async => <ClienteDaConversa>[];
+  }) async {
+    acoesDoCadastro.add('buscarClientes:$busca');
+    return <ClienteDaConversa>[];
+  }
 
   @override
   Future<ContatoDaConversa> obterContatoDoAtendimento({
