@@ -14147,7 +14147,7 @@ mod tests_atendimento_cliente_unit {
 
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
-        assert_eq!(body["cnpj"], "12345678000190");
+        assert_eq!(body["cnpj"], "11222333000181");
     }
 
     /// B10: vínculo com contato de outro tenant é "não encontrado" e não audita.
