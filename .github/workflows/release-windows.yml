@@ -364,7 +364,7 @@ jobs:
             Instalador Windows do Smart Core Tenant — canal `${{ steps.v.outputs.canal }}`.
 
             - Baixe `${{ env.PACK_ID }}-${{ steps.v.outputs.canal }}-Setup.exe` e confira o SHA-256: `${{ steps.sha.outputs.sha256 }}` (também no `.sha256` ao lado).
-            - Instala por usuário, sem pedir administrador. O app se atualiza sozinho pelo feed do canal `${{ steps.v.outputs.canal }}`.
+            - Instala por usuário, sem pedir administrador, em `%LOCALAPPDATA%\SmartCoreTenant`. O app se atualiza sozinho pelo feed do canal `${{ steps.v.outputs.canal }}`.
             - Assinado (Authenticode SHA-256 com carimbo de tempo), certificado `${{ steps.cert.outputs.thumbprint }}`. No beta o certificado é **auto-assinado de desenvolvimento**: o SmartScreen continua avisando ("Editor desconhecido") até a troca por um certificado de CA pública. Em máquinas de teste, importar `infra/windows/smartcore-dev.crt` em "Autoridades de Certificação Raiz Confiáveis" faz o Windows reconhecer a assinatura.
 
       # Publicação no releases_server. Fica de fora (com aviso) enquanto o
