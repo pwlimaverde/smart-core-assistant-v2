@@ -182,3 +182,9 @@
 - **V3, validação de documento:** o servidor valida só o tamanho de CPF (11) e CNPJ (14) em `data_postgres/src/main.rs` (~6936). **Falta o dígito verificador.** Decisão pendente: rejeitar documento inválido ao salvar (bloqueia edição de cliente antigo com documento inválido até corrigir) ou só avisar.
 - **V3, extração pela conversa:** não iniciada. Depende da decisão acima e da conferência de `pydantic` 2.12 na documentação atual.
 - **Release beta.9:** publicada com build, auto-update e feed verificados. Validação no app pendente.
+
+## Validação no app (29/10/2026)
+
+- **Release `0.2.0-beta.9`:** validada pelo dono do produto no app instalado.
+- **Entregue e validada:** cadastro de contato e cliente na ficha, vínculo e desvínculo, auditoria, e "Não atender este número".
+- **Pendente para fechar a V3:** decisão sobre o advisory `RUSTSEC-2026-0387` (`crypto-bigint` via `aws-sigv4`), que hoje reprova o job de advisories na `dev` e na branch `feature/validacao-documentos-cliente`.
