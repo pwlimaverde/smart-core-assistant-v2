@@ -294,10 +294,10 @@ services:
     # serviço da stack a ter healthcheck, e o modelo para os demais.
     healthcheck:
       test: ["CMD", "python", "-m", "ia_engine.healthcheck"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_IA_ENGINE:-2g}
@@ -326,10 +326,10 @@ services:
     networks: [internal, observability]
     healthcheck:
       test: ["CMD", "python", "-m", "ia_engine_jev.healthcheck"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_IA_ENGINE_JEV:-1g}
@@ -379,10 +379,10 @@ services:
     # falha, não saúde.
     healthcheck:
       test: ["CMD", "python", "-m", "mcp_server.healthcheck"]
-      interval: 20s
-      timeout: 5s
-      retries: 3
-      start_period: 25s
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_MCP_SERVER:-512m}
