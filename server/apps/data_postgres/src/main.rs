@@ -6907,6 +6907,68 @@ async fn handler_create_contato(
     }
 }
 
+/// Dígito verificador do CPF (Receita Federal). Recebe só dígitos.
+fn cpf_valido(cpf: &str) -> bool {
+    let d: Vec<u32> = cpf.chars().filter_map(|c| c.to_digit(10)).collect();
+    if d.len() != 11 || d.iter().all(|&x| x == d[0]) {
+        return false;
+    }
+    let verificador = |n: usize| {
+        let soma: u32 = (0..n).map(|i| d[i] * (n as u32 + 1 - i as u32)).sum();
+        let resto = soma * 10 % 11;
+        if resto == 10 {
+            0
+        } else {
+            resto
+        }
+    };
+    verificador(9) == d[9] && verificador(10) == d[10]
+}
+
+/// Dígito verificador do CNPJ (Receita Federal). Recebe só dígitos.
+fn cnpj_valido(cnpj: &str) -> bool {
+    let d: Vec<u32> = cnpj.chars().filter_map(|c| c.to_digit(10)).collect();
+    if d.len() != 14 || d.iter().all(|&x| x == d[0]) {
+        return false;
+    }
+    const PESOS_1: [u32; 12] = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const PESOS_2: [u32; 13] = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    let digito = |pesos: &[u32], n: usize| {
+        let soma: u32 = pesos.iter().zip(&d[..n]).map(|(p, x)| p * x).sum();
+        let resto = soma % 11;
+        if resto < 2 {
+            0
+        } else {
+            11 - resto
+        }
+    };
+    digito(&PESOS_1, 12) == d[12] && digito(&PESOS_2, 13) == d[13]
+}
+
+/// Na criação, todo documento informado precisa ser válido. Na alteração, só
+/// o documento que mudou: cliente antigo com documento inválido continua
+/// salvando enquanto ninguém mexe nele.
+fn validar_documentos_alterados(
+    dados: &infrastructure_postgres::clientes::clientes::DadosCliente,
+    atual: Option<&infrastructure_postgres::clientes::clientes::ClienteResumo>,
+) -> Result<(), String> {
+    let cnpj_alterado = dados
+        .cnpj
+        .as_deref()
+        .filter(|c| atual.is_none_or(|a| a.cnpj != *c));
+    if cnpj_alterado.is_some_and(|c| !cnpj_valido(c)) {
+        return Err("CNPJ inválido: confira os dígitos".into());
+    }
+    let cpf_alterado = dados
+        .cpf
+        .as_deref()
+        .filter(|c| atual.is_none_or(|a| a.cpf != *c));
+    if cpf_alterado.is_some_and(|c| !cpf_valido(c)) {
+        return Err("CPF inválido: confira os dígitos".into());
+    }
+    Ok(())
+}
+
 /// B10 (N11 E5) — lê e confere os campos de um cliente.
 ///
 /// Documento vira só dígitos e precisa ter o tamanho certo (CNPJ 14, CPF 11);
@@ -7024,6 +7086,9 @@ async fn handler_create_cliente(
         Ok(d) => d,
         Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
     };
+    if let Err(msg) = validar_documentos_alterados(&dados, None) {
+        return erro(error_core::AppError::Validation(msg), &env);
+    }
     let ctx = contexto_do_envelope(&env);
     match store.criar_cliente(&ctx, dados).await {
         Ok(cliente) => {
@@ -7061,6 +7126,13 @@ async fn handler_update_cliente(
         Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
     };
     let ctx = contexto_do_envelope(&env);
+    let atual = match store.buscar_cliente(&ctx, id).await {
+        Ok(a) => a,
+        Err(e) => return erro(e.into(), &env),
+    };
+    if let Err(msg) = validar_documentos_alterados(&dados, atual.as_ref()) {
+        return erro(error_core::AppError::Validation(msg), &env);
+    }
     match store.atualizar_cliente(&ctx, id, dados).await {
         Ok(Some(campos)) => {
             if !campos.is_empty() {
@@ -14014,6 +14086,34 @@ mod tests_atendimento_cliente_unit {
         );
     }
 
+    #[test]
+    fn cpf_e_cnpj_conferem_digito_verificador() {
+        assert!(cpf_valido("52998224725"));
+        assert!(!cpf_valido("52998224726"));
+        assert!(!cpf_valido("11111111111"));
+        assert!(!cpf_valido("529982247"));
+
+        assert!(cnpj_valido("11222333000181"));
+        assert!(!cnpj_valido("11222333000182"));
+        assert!(!cnpj_valido("00000000000000"));
+        assert!(!cnpj_valido("1122233300018"));
+    }
+
+    /// Criação recusa documento com dígito errado antes de tocar no banco.
+    #[tokio::test]
+    async fn create_cliente_recusa_cnpj_com_digito_errado() {
+        let store = MockClienteStore::new();
+        let audit = crate::ports::MockAuditPort::new();
+        let env = envelope_com_payload(
+            "CreateCliente",
+            serde_json::json!({ "nome_fantasia": "Padaria Sol", "tipo": "pj", "cnpj": "12345678000190" }),
+        );
+
+        let resp = handler_create_cliente(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
     /// B10: a trilha do cadastro não leva documento nem nome.
     #[tokio::test]
     async fn create_cliente_audita_sem_dado_protegido() {
@@ -14040,14 +14140,14 @@ mod tests_atendimento_cliente_unit {
             .returning(|_, _, _, _| ());
         let env = envelope_com_payload(
             "CreateCliente",
-            serde_json::json!({ "nome_fantasia": "Padaria Sol", "tipo": "pj", "cnpj": "12345678000190" }),
+            serde_json::json!({ "nome_fantasia": "Padaria Sol", "tipo": "pj", "cnpj": "11222333000181" }),
         );
 
         let resp = handler_create_cliente(&store, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
-        assert_eq!(body["cnpj"], "12345678000190");
+        assert_eq!(body["cnpj"], "11222333000181");
     }
 
     /// B10: vínculo com contato de outro tenant é "não encontrado" e não audita.
