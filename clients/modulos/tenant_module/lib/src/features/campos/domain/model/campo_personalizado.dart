@@ -10,7 +10,17 @@ enum TipoCampo {
   numero('numero', 'Número', 'Só números — quantidades, valores, códigos.'),
   data('data', 'Data', 'Uma data no calendário.'),
   booleano('booleano', 'Sim / Não', 'Uma escolha de duas.'),
-  lista('lista', 'Lista de opções', 'Escolha entre opções que você define.');
+  lista('lista', 'Lista de opções', 'Escolha entre opções que você define.'),
+  cpf(
+    'cpf',
+    'CPF',
+    'Documento de pessoa física. Só entra com dígito verificador válido.',
+  ),
+  cnpj(
+    'cnpj',
+    'CNPJ',
+    'Documento de empresa. Só entra com dígito verificador válido.',
+  );
 
   final String valor;
   final String rotulo;
