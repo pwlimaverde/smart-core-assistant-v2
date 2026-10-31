@@ -187,3 +187,11 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 - [Project Overview](project-overview.md)
 - [Data Flow](data-flow.md)
 - [00-planejamento-inicial.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/planejamento/00-planejamento-inicial.md)
+
+
+## Paleta oficial do cliente Windows
+
+- Paleta: dourada e stone, a mesma de `workspace-tokens.css` do designer (`old/smart-core-assistant-painel/docs_dev/designer/workspace-smart`).
+- Fonte no código: `clients/modulos/design_system_module/lib/src/tokens/app_palette.dart` e `lib/src/theme/app_colors.dart`. O tema azul antigo foi removido.
+- Cores fixas de overlay sobre mídia e foto (branco, preto semitransparente) são intencionais.
+- Splash do instalador: fundo `stone100` (`#F5F5F4`), com a logo completa centralizada (`infra/branding/assets/installer-splash.png`).
