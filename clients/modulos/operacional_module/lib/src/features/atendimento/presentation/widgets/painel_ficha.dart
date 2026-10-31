@@ -8,6 +8,7 @@ import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/atendimento_errors.dart';
+import '../../domain/model/documentos_da_conversa.dart';
 import '../../domain/model/contato_da_conversa.dart';
 import '../../domain/model/evento_timeline.dart';
 import '../../domain/model/ficha.dart';
@@ -66,6 +67,9 @@ class PainelFicha extends StatelessWidget {
   /// Chamado depois de editar contato ou cliente, para recarregar o cabeçalho.
   final VoidCallback? aoMudarContato;
 
+  /// V3 — CPF/CNPJ que o cliente escreveu na conversa, já validados.
+  final List<String> documentos;
+
   const PainelFicha({
     required this.controller,
     this.largura = 320,
@@ -76,6 +80,7 @@ class PainelFicha extends StatelessWidget {
     this.fotoDoContato = '',
     this.contato,
     this.aoMudarContato,
+    this.documentos = const [],
     super.key,
   });
 
@@ -137,6 +142,7 @@ class _Conteudo extends StatelessWidget {
           controller: controller,
           contato: painel.contato,
           aoMudar: painel.aoMudarContato,
+          documentos: painel.documentos,
         ),
         if (noQuadro != null) _SecaoDoAtendimento(noQuadro: noQuadro),
         // D3 — o interruptor da IA vem antes do resto da ficha: é o estado
@@ -1661,16 +1667,127 @@ class _TimelineState extends State<_Timeline> {
   };
 }
 
+/// V3 — um CPF ou CNPJ que o cliente escreveu bate com um cadastro. Quem
+/// vincula é o atendente; a conversa só sugere.
+final class _SugestaoDeCliente extends StatefulWidget {
+  final FichaController controller;
+  final ContatoDaConversa contato;
+  final List<String> documentos;
+  final VoidCallback? aoMudar;
+
+  const _SugestaoDeCliente({
+    required this.controller,
+    required this.contato,
+    required this.documentos,
+    required this.aoMudar,
+  });
+
+  @override
+  State<_SugestaoDeCliente> createState() => _SugestaoDeClienteState();
+}
+
+final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
+  ClienteDaConversa? _sugerido;
+
+  @override
+  void initState() {
+    super.initState();
+    _buscar();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SugestaoDeCliente antigo) {
+    super.didUpdateWidget(antigo);
+    if (!DocumentosDaConversa.mesmosDocumentos(
+      antigo.documentos,
+      widget.documentos,
+    )) {
+      _buscar();
+    }
+  }
+
+  Future<void> _buscar() async {
+    for (final documento in widget.documentos.take(3)) {
+      final (lista, erro) = await widget.controller.buscarClientes(documento);
+      if (!mounted) return;
+      if (erro != null || lista == null) continue;
+      for (final cliente in lista) {
+        final bate =
+            cliente.id > 0 &&
+            (cliente.cnpj == documento || cliente.cpf == documento);
+        if (bate) {
+          setState(() => _sugerido = cliente);
+          return;
+        }
+      }
+    }
+    if (mounted) setState(() => _sugerido = null);
+  }
+
+  Future<void> _vincular(ClienteDaConversa cliente) async {
+    final erro = await widget.controller.vincularCliente(
+      clienteId: cliente.id,
+      contatoId: widget.contato.contatoId,
+      vincular: true,
+    );
+    if (!mounted) return;
+    if (erro != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(erro.message)));
+      return;
+    }
+    widget.aoMudar?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cliente = _sugerido;
+    if (cliente == null) return const SizedBox.shrink();
+    final nome = cliente.nomeFantasia.isNotEmpty
+        ? cliente.nomeFantasia
+        : 'cliente #${cliente.id}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: context.colors.fgMuted),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Pela conversa, parece ser $nome.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              TextButton(
+                onPressed: () => _vincular(cliente),
+                child: const Text('Vincular'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Contato e cliente da conversa, editáveis sem sair do atendimento.
 final class _SecaoContatoECliente extends StatelessWidget {
   final FichaController controller;
   final ContatoDaConversa? contato;
   final VoidCallback? aoMudar;
+  final List<String> documentos;
 
   const _SecaoContatoECliente({
     required this.controller,
     required this.contato,
     required this.aoMudar,
+    this.documentos = const [],
   });
 
   @override
@@ -1746,6 +1863,13 @@ final class _SecaoContatoECliente extends StatelessWidget {
                 label: const Text('Vincular a cliente'),
                 onPressed: () => _vincular(context, c),
               ),
+            ),
+          if (c.clienteId == 0 && documentos.isNotEmpty)
+            _SugestaoDeCliente(
+              controller: controller,
+              contato: c,
+              documentos: documentos,
+              aoMudar: aoMudar,
             ),
           Align(
             alignment: Alignment.centerLeft,
