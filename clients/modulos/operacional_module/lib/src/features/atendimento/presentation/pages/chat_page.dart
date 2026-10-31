@@ -26,6 +26,7 @@ import '../controllers/ficha_controller.dart';
 import '../gravacao/gravador_de_audio.dart';
 import '../widgets/atendimento_no_quadro.dart';
 import '../widgets/avatar_do_contato.dart';
+import '../../domain/model/documentos_da_conversa.dart';
 import '../widgets/chat_connection_badge.dart';
 import '../widgets/chat_message_bubble.dart';
 import '../widgets/painel_ficha.dart';
@@ -280,9 +281,14 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
           // Chegou histórico ou mensagem nova: depois de desenhar, confere se o
           // fim está à vista.
           listenWhen: (_, atual) => atual is SuccessState<ChatViewModel>,
-          listener: (_, _) => WidgetsBinding.instance.addPostFrameCallback(
-            (_) => _marcarSeNoFim(),
-          ),
+          listener: (_, atual) {
+            if (atual is SuccessState<ChatViewModel>) {
+              _atualizarDocumentos(atual.data.mensagens);
+            }
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _marcarSeNoFim(),
+            );
+          },
           builder: (context, state) {
             return switch (state) {
               InitialState() || LoadingState() => const Center(
@@ -318,6 +324,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
         final resumo = widget.noQuadro?.resumo;
         final ficha = PainelFicha(
           contato: _contato,
+          documentos: _documentos,
           aoMudarContato: () => unawaited(_carregarContato()),
           controller: _ficha,
           largura: null,
@@ -395,6 +402,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                       elevation: 12,
                       child: PainelFicha(
                         contato: _contato,
+                        documentos: _documentos,
                         aoMudarContato: () => unawaited(_carregarContato()),
                         controller: _ficha,
                         noQuadro: widget.noQuadro,
@@ -436,6 +444,17 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   /// nasce no primeiro clique no microfone e é liberado no [dispose].
   late final GravadorDeAudio _gravador =
       widget.criarGravador?.call() ?? GravadorDeAudio();
+  List<String> _documentos = const [];
+
+  void _atualizarDocumentos(List<MensagemThread> mensagens) {
+    final doCliente = mensagens
+        .where((m) => m.remetente != 'atendente' && m.remetente != 'bot')
+        .map((m) => m.conteudo);
+    final novos = DocumentosDaConversa.extrair(doCliente);
+    if (DocumentosDaConversa.mesmosDocumentos(novos, _documentos)) return;
+    setState(() => _documentos = novos);
+  }
+
   bool _gravando = false;
 
   /// Um clique de cada vez: entre o clique e o `start`/`stop` responder há
