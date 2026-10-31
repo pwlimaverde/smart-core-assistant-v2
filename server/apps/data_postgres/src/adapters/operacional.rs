@@ -1275,7 +1275,7 @@ impl OperacionalStore for PgOperacionalStore {
             .map(|v| v as i32);
 
         let tipo = match texto("tipo").as_str() {
-            t @ ("numero" | "data" | "booleano" | "lista") => t.to_string(),
+            t @ ("numero" | "data" | "booleano" | "lista" | "cpf" | "cnpj") => t.to_string(),
             _ => "texto".to_string(),
         };
         let opcoes = campo
@@ -1338,7 +1338,7 @@ impl OperacionalStore for PgOperacionalStore {
 
         let nome = texto("nome");
         let tipo = match texto("tipo").as_str() {
-            t @ ("numero" | "data" | "booleano" | "lista") => t.to_string(),
+            t @ ("numero" | "data" | "booleano" | "lista" | "cpf" | "cnpj") => t.to_string(),
             _ => "texto".to_string(),
         };
         let opcoes = campo

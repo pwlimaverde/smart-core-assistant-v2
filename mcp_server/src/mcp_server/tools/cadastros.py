@@ -19,7 +19,7 @@ from mcp_server.tools.guards import exigir_confirmacao, resultado_dry_run
 from mcp_server.tools.registry import Categoria, Registro
 
 DRY_RUN = Field(default=False, description="Só simular.")
-TipoCampo = Literal["texto", "numero", "booleano", "data", "lista"]
+TipoCampo = Literal["texto", "numero", "booleano", "data", "lista", "cpf", "cnpj"]
 
 
 def _dados_cliente(**campos: str) -> pb.DadosMyCliente:

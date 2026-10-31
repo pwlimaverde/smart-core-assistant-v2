@@ -77,6 +77,22 @@ pub fn valor_para_o_tipo(valor_json: &str, tipo: &str, opcoes: &Value) -> Option
             _ => None,
         },
 
+        "cpf" => match &v {
+            Value::String(s) => {
+                let digitos: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
+                (digitos.len() == 11 && crate::cpf_valido(&digitos))
+                    .then_some(Value::String(digitos))
+            }
+            _ => None,
+        },
+        "cnpj" => match &v {
+            Value::String(s) => {
+                let digitos: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
+                (digitos.len() == 14 && crate::cnpj_valido(&digitos))
+                    .then_some(Value::String(digitos))
+            }
+            _ => None,
+        },
         "booleano" => match &v {
             Value::Bool(_) => Some(v),
             Value::String(s) => match s.trim().to_lowercase().as_str() {
@@ -133,6 +149,27 @@ mod tests {
         assert_eq!(
             valor_para_o_tipo("\"  15x21 cm \"", "texto", &json!([])),
             Some(json!("15x21 cm"))
+        );
+    }
+
+    /// Documento extraído pela IA só entra com dígito verificador válido.
+    #[test]
+    fn cpf_e_cnpj_so_entram_validos() {
+        assert_eq!(
+            valor_para_o_tipo("\"529.982.247-25\"", "cpf", &json!([])),
+            Some(json!("52998224725"))
+        );
+        assert_eq!(
+            valor_para_o_tipo("\"529.982.247-26\"", "cpf", &json!([])),
+            None
+        );
+        assert_eq!(
+            valor_para_o_tipo("\"11.222.333/0001-81\"", "cnpj", &json!([])),
+            Some(json!("11222333000181"))
+        );
+        assert_eq!(
+            valor_para_o_tipo("\"11.222.333/0001-82\"", "cnpj", &json!([])),
+            None
         );
     }
 
