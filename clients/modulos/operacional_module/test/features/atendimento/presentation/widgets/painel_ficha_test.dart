@@ -71,6 +71,16 @@ void main() {
             datasource: DesativarEtiquetaDatasource(gateway: gateway),
           ),
         ),
+        vincularCliente: VincularClienteUsecase(
+          repository: VincularClienteRepository(
+            datasource: VincularClienteDatasource(gateway: gateway),
+          ),
+        ),
+        buscarClientes: BuscarClientesUsecase(
+          repository: BuscarClientesRepository(
+            datasource: BuscarClientesDatasource(gateway: gateway),
+          ),
+        ),
       );
 
   Future<FichaController> montar(
