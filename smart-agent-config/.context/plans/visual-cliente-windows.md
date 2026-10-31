@@ -45,46 +45,46 @@ Levantamento feito no código em 12/10/2026, sem executar o app (o projeto não 
 
 ### Fase R — Revisão e decisões
 
-- [ ] Receber a paleta oficial e o tipo de splash.
-- [ ] Se a paleta for a azul: definir o tema único (remover o dourado) e atualizar o guia.
-- [ ] Se a paleta for a dourada: atualizar `BRANDING_GUIDE.md` e `colors.json` para refletir o app.
+- [x] Receber a paleta oficial e o tipo de splash. Paleta oficial: dourada/stone (`workspace-tokens.css` do designer). Splash: estática, com a logo.
+- [x] (N/A) a paleta é a dourada.
+- [x] `BRANDING_GUIDE.md` e `colors.json` atualizados (commit `e4f6006e`).
 
 ### Fase E — Execução
 
 **E1. Splash com marca e tema (`clients/apps/smart-core-tenant`)**
-- [ ] `splash_atualizacao.dart`: trocar o `MaterialApp` padrão pelo tema do app (`AppTheme.light`), com fundo da marca, `AppLogo(variant: mark)` centralizado, barra de progresso fina e textos de estado ("Verificando atualizações…", "Atualizando para a versão X…").
-- [ ] `initial_loading_page.dart`: mesma identidade (logo e progresso), para não haver salto visual entre a splash e o login.
-- [ ] Testes de widget atualizados em `test/splash_atualizacao_test.dart`: a splash mostra a marca e some só depois da verificação.
+- [x] `splash_atualizacao.dart`: trocar o `MaterialApp` padrão pelo tema do app (`AppTheme.light`), com fundo da marca, `AppLogo(variant: mark)` centralizado, barra de progresso fina e textos de estado ("Verificando atualizações…", "Atualizando para a versão X…").
+- [x] `initial_loading_page.dart`: mesma identidade (logo e progresso), para não haver salto visual entre a splash e o login.
+- [x] Testes de widget atualizados em `test/splash_atualizacao_test.dart`: a splash mostra a marca e some só depois da verificação.
 
 **E2. Cores e fontes nas telas de maior uso (`clients/modulos/operacional_module`)**
-- [ ] Kanban (`kanban_page.dart`): trocar `Colors.*` e `Color(0x…)` por `context.colors` e `fontSize` fixos por `textTheme`.
-- [ ] Cartão do atendimento (`atendimento_card_content.dart`) e ficha (`painel_ficha.dart`).
-- [ ] Barra da conversa (`mini_barra_da_conversa.dart`) e mídia da bolha (`midia_da_bolha.dart`).
+- [~] Kanban (`kanban_page.dart`): cores trocadas por `context.colors` (`e4f6006e`). Tamanhos de fonte: **não trocados por `textTheme`**; ver "Revisão de 29/10".
+- [~] Cartão do atendimento (`atendimento_card_content.dart`) e ficha (`painel_ficha.dart`): cores trocadas no cartão; `painel_ficha.dart` ainda tem 3 cores fixas e as fontes da revisão.
+- [~] Barra da conversa (`mini_barra_da_conversa.dart`, 6 cores fixas) e mídia da bolha (`midia_da_bolha.dart`, 3 cores fixas) pendentes.
 
 **E3. Telas do admin (`clients/modulos/admin_module`)**
 - [ ] Faturamento, painel, evolução e auditoria: mesma troca de cores e fontes. Fazer por último, porque é a área menos usada pelo atendimento.
 
 **E4. Janela do Windows (`clients/apps/smart-core-tenant/windows/runner`)**
-- [ ] `main.cpp`: centralizar a janela na tela principal, mantendo 1280×720 como padrão.
-- [ ] `win32_window.cpp`: tamanho mínimo (por exemplo 960×600) tratado em `WM_GETMINMAXINFO`.
+- [x] `main.cpp`: centralizar a janela na tela principal, mantendo 1280×720 como padrão.
+- [x] `win32_window.cpp`: tamanho mínimo (por exemplo 960×600) tratado em `WM_GETMINMAXINFO`.
 - [ ] Lembrar a posição e o tamanho entre execuções: fica para depois, porque exige gravar em disco; avaliar se vale a pena.
 
 **E5. Limpeza**
-- [ ] Remover `lib/theme/smart_core_theme.dart` (sem referências).
+- [x] Remover `lib/theme/smart_core_theme.dart` (sem referências; confirmado em 29/10).
 - [ ] Atualizar o instalador: revisar `installer-splash.png` para combinar com a splash (fundo da marca em vez de branco). Depende da decisão 1.
 
 ### Fase V — Verificação
 
-- [ ] `dart analyze` e `dart format` nos módulos alterados, na máquina local.
-- [ ] CI verde: Flutter (testes de widget) e demais jobs.
-- [ ] Ensaio de release (`ci/release-windows-*`) com o teste de auto-update ponta a ponta.
-- [ ] Revisão visual: prints do app no Windows (feitos pelo dono do produto) comparados com o levantamento.
+- [x] `dart analyze` e `dart format` nos módulos alterados, na máquina local.
+- [x] CI verde: Flutter (testes de widget) e demais jobs (`25f3dbe7`, `9cf91124`).
+- [x] Ensaio de release (`ci/release-windows-sobre`) com o teste de auto-update ponta a ponta.
+- [x] Revisão visual pelo dono do produto, no app instalado (beta.9 validada). Prints: não anexados. (feitos pelo dono do produto) comparados com o levantamento.
 
 ### Fase C — Conclusão
 
-- [ ] Publicar a release beta seguinte (`win-v…`) e confirmar o feed.
-- [ ] Testar a atualização no app instalado: a splash aparece antes da tela e a marca está correta.
-- [ ] Registrar no `.context/docs` a paleta oficial escolhida.
+- [x] Publicar a release beta seguinte (beta.8 e beta.9). (`win-v…`) e confirmar o feed.
+- [x] Testar a atualização no app instalado (validado pelo dono do produto).: a splash aparece antes da tela e a marca está correta.
+- [ ] Registrar no `.context/docs` a paleta oficial escolhida. Pendente.
 
 ## Critérios de aceite
 
@@ -92,3 +92,11 @@ Levantamento feito no código em 12/10/2026, sem executar o app (o projeto não 
 - A splash mostra a marca com a paleta oficial, antes de qualquer tela.
 - A janela abre centralizada e não pode ser reduzida abaixo do tamanho mínimo.
 - Um só sistema de tema no app, e a documentação de marca descreve esse sistema.
+
+## Revisão de 29/10/2026
+
+- **Tamanhos de fonte fixos (58 ocorrências em `operacional_module`, mais 1–3 por tela em `tenant_module`): premissa revista.** O item pedia trocar por `textTheme`. Verificado no código: o Flutter aplica o fator de escala de texto do sistema também a `fontSize` fixo, então a acessibilidade não depende de estilo do tema. Trocar por `textTheme` mudaria tamanhos (`AppTypography` tem 11, 13, 14, 18, 24 e 32; a interface usa 10, 11.5, 12, 12.5, 16 e 22) e quebraria layouts densos sem ganho visual. **Decisão: manter os tamanhos.** Se a intenção era escala única, o caminho é ajustar `AppTypography` e migrar tela a tela com conferência visual.
+- **Cores fixas restantes:** `mini_barra_da_conversa.dart` (6), `painel_ficha.dart` (3), `midia_da_bolha.dart` (3), `dialogo_etapa.dart` (3), `galeria_do_atendimento.dart` (2), `atendimento_card_content.dart` (2), `avatar_do_contato.dart` (1), `pareamento_dialog.dart` (1), `tenant_drawer.dart` (1). Pendente.
+- **Janela:** lembrar a posição entre execuções fica fora desta fase (exige gravar em disco; a centralização e o tamanho mínimo já estão no ar).
+- **Instalador:** `installer-splash.png` ainda tem fundo branco. Pendente.
+- **Paleta no `.context/docs`:** pendente.
