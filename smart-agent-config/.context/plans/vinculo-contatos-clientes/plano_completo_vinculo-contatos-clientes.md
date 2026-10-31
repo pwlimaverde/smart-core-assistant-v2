@@ -188,3 +188,7 @@
 - **Release `0.2.0-beta.9`:** validada pelo dono do produto no app instalado.
 - **Entregue e validada:** cadastro de contato e cliente na ficha, vínculo e desvínculo, auditoria, e "Não atender este número".
 - **Pendente para fechar a V3:** decisão sobre o advisory `RUSTSEC-2026-0387` (`crypto-bigint` via `aws-sigv4`), que hoje reprova o job de advisories na `dev` e na branch `feature/validacao-documentos-cliente`.
+
+## Decisão sobre `minutos_inatividade_encerra` (29/10/2026)
+
+Mantido, sem remoção. O agendador de arquivamento foi removido e o campo não afeta mais o fluxo de atendimento. Remover exige: retirar o campo de `admin.proto` (com reserva do número 33 e do 11), regenerar `generated/fbs` e os stubs Dart, reescrever o SQL de `config_avancada.rs` e regenerar o cache `.sqlx`, e mudar a ferramenta MCP `configuracao_tenant.py`, que expõe o parâmetro a agentes externos (quebra de contrato). Só vale fazer com aprovação explícita do dono do produto.
