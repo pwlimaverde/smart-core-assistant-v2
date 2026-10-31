@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:operacional_module/src/features/atendimento/data/datasources/atendimento_datasources.dart';
 import 'package:operacional_module/src/features/atendimento/data/repositories/atendimento_repositories.dart';
 import 'package:operacional_module/src/features/atendimento/domain/errors/atendimento_errors.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/contato_da_conversa.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/ficha.dart';
 import 'package:operacional_module/src/features/atendimento/domain/parameters/ficha_parameters.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
@@ -142,6 +143,53 @@ void main() {
   });
 
   group('PainelFicha', () {
+    testWidgets('sugere o cliente cujo CPF a conversa trouxe e vincula', (
+      tester,
+    ) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = FichaAtendimento(
+          catalogo: const [],
+          aplicadas: const [],
+          notas: const [],
+        )
+        ..clientesDaBusca = const [
+          ClienteDaConversa(
+            id: 9,
+            nomeFantasia: 'Padaria Sol',
+            cpf: '52998224725',
+          ),
+        ];
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      final controller = controllerSobre(gateway);
+      addTearDown(controller.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PainelFicha(
+              controller: controller,
+              contato: const ContatoDaConversa(
+                contatoId: 4,
+                nome: 'Ana',
+                telefone: '5588999912191',
+                fotoUrl: '',
+              ),
+              documentos: const ['52998224725'],
+            ),
+          ),
+        ),
+      );
+      await controller.abrir(7);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Padaria Sol'), findsOneWidget);
+      await tester.tap(find.text('Vincular'));
+      await tester.pumpAndSettle();
+      expect(gateway.acoesDoCadastro, contains('vincular:9:4:true'));
+    });
+
     testWidgets('mostra as etiquetas da conversa e as disponíveis', (
       tester,
     ) async {

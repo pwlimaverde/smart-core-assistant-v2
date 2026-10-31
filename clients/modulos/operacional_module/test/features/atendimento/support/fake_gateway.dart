@@ -75,6 +75,9 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   Object? erroFicha;
   int chamadasFicha = 0;
 
+  /// Clientes que a busca por documento devolve.
+  List<ClienteDaConversa> clientesDaBusca = const [];
+
   /// Últimos valores recebidos pelas escritas da ficha.
   String? notaRecebida;
 
@@ -266,7 +269,7 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     required String busca,
   }) async {
     acoesDoCadastro.add('buscarClientes:$busca');
-    return <ClienteDaConversa>[];
+    return clientesDaBusca;
   }
 
   @override
