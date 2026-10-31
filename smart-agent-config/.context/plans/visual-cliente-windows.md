@@ -100,3 +100,7 @@ Levantamento feito no código em 12/10/2026, sem executar o app (o projeto não 
 - **Janela:** lembrar a posição entre execuções fica fora desta fase (exige gravar em disco; a centralização e o tamanho mínimo já estão no ar).
 - **Instalador:** `installer-splash.png` ainda tem fundo branco. Pendente.
 - **Paleta no `.context/docs`:** pendente.
+
+## Decisão sobre as cores fixas restantes (29/10/2026, revisão)
+
+As 24 ocorrências de `Colors.white`, `Colors.black87`, `Colors.transparent` e `Color.lerp` nas telas de atendimento ficam como estão. São overlays sobre mídia, foto ou barra escura (galeria, barra da conversa, miniatura da mídia, avatar), e o texto e o ícone precisam ser brancos para ter contraste sobre a imagem; o tema claro/escuro não muda o fundo delas. A cor de etiqueta vem de dado do usuário e é escurecida em código de propósito. Trocar por tokens quebraria o contraste sem ganho visual. Item encerrado.
