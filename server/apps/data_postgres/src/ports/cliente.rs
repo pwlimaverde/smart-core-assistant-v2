@@ -107,6 +107,14 @@ pub trait ClienteStore: Send + Sync {
         cep: String,
     ) -> Result<Option<i32>, DbError>;
 
+    /// V3 — preenche o e-mail do contato do atendimento, se estiver vazio.
+    async fn preencher_email_vazio(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        email: String,
+    ) -> Result<Option<i32>, DbError>;
+
     /// B10 — tira (ou devolve) o cliente da lista.
     async fn definir_cliente_ativo(
         &self,

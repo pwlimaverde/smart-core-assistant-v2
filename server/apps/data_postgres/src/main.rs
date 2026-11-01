@@ -6935,6 +6935,31 @@ fn extrair_cep(texto: &str) -> Option<String> {
     None
 }
 
+/// V3 — um e-mail escrito pelo cliente, só no formato `local@dominio.tld`.
+fn extrair_email(texto: &str) -> Option<String> {
+    for palavra in
+        texto.split(|c: char| c.is_whitespace() || matches!(c, ',' | ';' | '<' | '>' | '(' | ')'))
+    {
+        let limpa = palavra.trim_matches(|c: char| matches!(c, '.' | ':' | '"' | '\''));
+        let Some((local, dominio)) = limpa.split_once('@') else {
+            continue;
+        };
+        let valido = !local.is_empty()
+            && dominio.contains('.')
+            && !dominio.starts_with('.')
+            && !dominio.ends_with('.')
+            && !dominio.contains('@')
+            && limpa.len() <= 254
+            && limpa
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | '@'));
+        if valido {
+            return Some(limpa.to_lowercase());
+        }
+    }
+    None
+}
+
 /// Dígito verificador do CPF (Receita Federal). Recebe só dígitos.
 fn cpf_valido(cpf: &str) -> bool {
     let d: Vec<u32> = cpf.chars().filter_map(|c| c.to_digit(10)).collect();
@@ -7162,29 +7187,55 @@ async fn handler_preencher_dados_do_cliente(
             serde_json::json!({ "preenchido": false }),
         )
     };
-    let Some(cep) = extrair_cep(texto).filter(|_| atendimento_id > 0) else {
+    let cep = extrair_cep(texto).filter(|_| atendimento_id > 0);
+    let email = extrair_email(texto).filter(|_| atendimento_id > 0);
+    if cep.is_none() && email.is_none() {
         return sem_preenchimento(&env);
-    };
-    let ctx = contexto_do_envelope(&env);
-    match store.preencher_cep_vazio(&ctx, atendimento_id, cep).await {
-        Ok(Some(id)) => {
-            audit
-                .publish(
-                    &env,
-                    "cliente.dado_alterado_ia",
-                    format!("Cliente {id}: campo preenchido pela conversa"),
-                    serde_json::json!({ "id": id, "campos": ["cep"], "message_id": mensagem_id }),
-                )
-                .await;
-            ok_reply(
-                &env,
-                "PreencherDadosDoClienteReply",
-                serde_json::json!({ "preenchido": true }),
-            )
-        }
-        Ok(None) => sem_preenchimento(&env),
-        Err(e) => erro(e.into(), &env),
     }
+    let ctx = contexto_do_envelope(&env);
+    let mut preenchido = false;
+    if let Some(cep) = cep {
+        match store.preencher_cep_vazio(&ctx, atendimento_id, cep).await {
+            Ok(Some(id)) => {
+                audit
+                    .publish(
+                        &env,
+                        "cliente.dado_alterado_ia",
+                        format!("Cliente {id}: campo preenchido pela conversa"),
+                        serde_json::json!({ "id": id, "campos": ["cep"], "message_id": mensagem_id }),
+                    )
+                    .await;
+                preenchido = true;
+            }
+            Ok(None) => {}
+            Err(e) => return erro(e.into(), &env),
+        }
+    }
+    if let Some(email) = email {
+        match store
+            .preencher_email_vazio(&ctx, atendimento_id, email)
+            .await
+        {
+            Ok(Some(id)) => {
+                audit
+                    .publish(
+                        &env,
+                        "contato.dado_alterado_ia",
+                        format!("Contato {id}: campo preenchido pela conversa"),
+                        serde_json::json!({ "id": id, "campos": ["email"], "message_id": mensagem_id }),
+                    )
+                    .await;
+                preenchido = true;
+            }
+            Ok(None) => {}
+            Err(e) => return erro(e.into(), &env),
+        }
+    }
+    ok_reply(
+        &env,
+        "PreencherDadosDoClienteReply",
+        serde_json::json!({ "preenchido": preenchido }),
+    )
 }
 
 /// Auditado (`cliente.alterado`) com os **campos** que mudaram — o valor, nunca.
@@ -14165,6 +14216,17 @@ mod tests_atendimento_cliente_unit {
         assert!(
             dados_do_cliente(&serde_json::json!({ "nome_fantasia": "x", "tipo": "ong" })).is_err()
         );
+    }
+
+    #[test]
+    fn extrair_email_normaliza_e_recusa_formato_ruim() {
+        assert_eq!(
+            extrair_email("meu email é Ana.Silva@Exemplo.com.br, obrigado"),
+            Some("ana.silva@exemplo.com.br".into())
+        );
+        assert_eq!(extrair_email("ponto@"), None);
+        assert_eq!(extrair_email("a@b"), None);
+        assert_eq!(extrair_email("sem arroba nenhuma"), None);
     }
 
     #[test]
