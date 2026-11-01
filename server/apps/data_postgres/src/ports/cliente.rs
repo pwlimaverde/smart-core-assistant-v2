@@ -99,6 +99,14 @@ pub trait ClienteStore: Send + Sync {
         id: i32,
     ) -> Result<Option<infrastructure_postgres::clientes::clientes::ClienteResumo>, DbError>;
 
+    /// V3 — preenche o CEP do cliente vinculado ao atendimento, se estiver vazio.
+    async fn preencher_cep_vazio(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        cep: String,
+    ) -> Result<Option<i32>, DbError>;
+
     /// B10 — tira (ou devolve) o cliente da lista.
     async fn definir_cliente_ativo(
         &self,
