@@ -1644,6 +1644,8 @@ pub struct ContatoComFoto {
     pub cargo: String,
     pub segmento: String,
     pub observacoes: String,
+    /// Campos que a IA preencheu a partir da conversa (ex.: `email`).
+    pub campos_pela_ia: Vec<String>,
     /// 0 = o contato não está vinculado a nenhum cliente.
     pub cliente_id: i32,
     pub cliente_nome: String,
@@ -1668,6 +1670,7 @@ pub async fn contato_do_atendimento(
                   COALESCE(c.cargo, '') AS cargo,
                   COALESCE(c.segmento, '') AS segmento,
                   COALESCE(c.observacoes, '') AS observacoes,
+                  COALESCE(c.campos_pela_ia, '{}') AS campos_pela_ia,
                   COALESCE(cl.id, 0) AS cliente_id,
                   COALESCE(cl.nome_fantasia, '') AS cliente_nome
              FROM oraculo_atendimento a

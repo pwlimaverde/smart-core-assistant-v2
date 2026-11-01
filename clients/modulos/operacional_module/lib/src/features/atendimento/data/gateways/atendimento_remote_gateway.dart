@@ -238,6 +238,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
       observacoes: resp.observacoes,
       clienteId: resp.clienteId,
       clienteNome: resp.clienteNome,
+      camposPelaIa: resp.camposPelaIa.toList(),
     );
   }
 
@@ -782,6 +783,7 @@ ClienteDaConversa _clienteDoProto(proto.MyCliente c) {
     bairro: d.bairro,
     cidade: d.cidade,
     uf: d.uf,
+    camposPelaIa: d.camposPelaIa.toList(),
   );
 }
 
