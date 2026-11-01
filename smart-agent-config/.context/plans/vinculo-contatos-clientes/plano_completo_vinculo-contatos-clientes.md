@@ -192,3 +192,19 @@
 ## Decisão sobre `minutos_inatividade_encerra` (29/10/2026)
 
 Mantido, sem remoção. O agendador de arquivamento foi removido e o campo não afeta mais o fluxo de atendimento. Remover exige: retirar o campo de `admin.proto` (com reserva do número 33 e do 11), regenerar `generated/fbs` e os stubs Dart, reescrever o SQL de `config_avancada.rs` e regenerar o cache `.sqlx`, e mudar a ferramenta MCP `configuracao_tenant.py`, que expõe o parâmetro a agentes externos (quebra de contrato). Só vale fazer com aprovação explícita do dono do produto.
+
+## D4 — o que a IA pode gravar no cliente (definido em 31/10/2026)
+
+Situação: hoje a IA grava só campos do cartão. Nenhum campo base do cliente é alterado por ela.
+
+Regra adotada (padrão conservador, revisável pelo dono do produto):
+
+1. **Só preenche campo vazio.** Nunca sobrescreve valor já existente, nem o do atendente.
+2. **Nunca grava identidade nem documento.** Nome fantasia, razão social, CPF e CNPJ ficam de fora: um documento errado vincula a pessoa errada. A IA só sugere; o atendente confirma (D2).
+3. **Pode preencher, depois de validar:** e-mail (formato), CEP (8 dígitos), logradouro, número, complemento, bairro, cidade e UF (duas letras).
+4. **Observações, segmento e cargo ficam com o atendente**: são texto livre e a IA tende a inventar.
+5. **Toda gravação exige a frase do cliente que originou o valor.** Sem frase, não grava.
+6. **Auditoria:** `cliente.dado_alterado_ia` com nome do campo e `message_id` de origem; valor fora do log.
+7. **Visível e reversível:** campo preenchido pela IA aparece marcado na ficha, e o atendente pode editar ou limpar.
+
+Fora de escopo desta decisão: a implementação (schema de extração para campos do cliente no `ia_engine`, validação no servidor e marcação na ficha). É a próxima fatia da V3.
