@@ -536,6 +536,34 @@ pub async fn preencher_cep_vazio(
     Ok(id.map(|(i,)| i))
 }
 
+/// V3 — grava o e-mail no contato do atendimento, só se ele ainda não tem um.
+/// Devolve o id do contato gravado, ou `None` se não havia o que gravar.
+pub async fn preencher_email_vazio(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    email: &str,
+) -> Result<Option<i32>, DbError> {
+    ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
+    let id: Option<(i32,)> = sqlx::query_as(
+        r#"UPDATE oraculo_contato
+           SET email = $3
+           WHERE tenant_id = $1 AND excluido_em IS NULL
+             AND (email IS NULL OR email = '')
+             AND id = (
+               SELECT a.contato_id FROM oraculo_atendimento a
+               WHERE a.tenant_id = $1 AND a.id = $2
+             )
+           RETURNING id"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .bind(email)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(id.map(|(i,)| i))
+}
+
 /// Tira (ou devolve) o cliente da lista. Os vínculos com contatos ficam.
 pub async fn definir_cliente_ativo(
     tx: &mut Transaction<'_, Postgres>,

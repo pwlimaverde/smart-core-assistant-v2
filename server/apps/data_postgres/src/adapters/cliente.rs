@@ -66,6 +66,22 @@ impl ClienteStore for PgClienteStore {
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn preencher_email_vazio(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        email: String,
+    ) -> Result<Option<i32>, DbError> {
+        use infrastructure_postgres::clientes::clientes as repo;
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let id = repo::preencher_email_vazio(&mut tx, &ctx, atendimento_id, &email).await?;
+            Ok((id, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn criar_cliente(
         &self,
         ctx: &RequestContext,
