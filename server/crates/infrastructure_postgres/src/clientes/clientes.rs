@@ -504,6 +504,38 @@ pub async fn atualizar_cliente(
     Ok(res.rows_affected() > 0)
 }
 
+/// V3 — grava o CEP no cliente vinculado ao atendimento, só se ele ainda não
+/// tem CEP. Devolve o id do cliente gravado, ou `None` se não havia o que gravar.
+pub async fn preencher_cep_vazio(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    cep: &str,
+) -> Result<Option<i32>, DbError> {
+    ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
+    let id: Option<(i32,)> = sqlx::query_as(
+        r#"UPDATE oraculo_cliente
+           SET cep = $3, ultima_atualizacao = NOW()
+           WHERE tenant_id = $1 AND excluido_em IS NULL
+             AND (cep IS NULL OR cep = '')
+             AND id = (
+               SELECT cc.cliente_id
+               FROM oraculo_cliente_contatos cc
+               JOIN oraculo_atendimento a ON a.contato_id = cc.contato_id
+               WHERE a.tenant_id = $1 AND a.id = $2
+               ORDER BY cc.cliente_id
+               LIMIT 1
+             )
+           RETURNING id"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .bind(cep)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(id.map(|(i,)| i))
+}
+
 /// Tira (ou devolve) o cliente da lista. Os vínculos com contatos ficam.
 pub async fn definir_cliente_ativo(
     tx: &mut Transaction<'_, Postgres>,

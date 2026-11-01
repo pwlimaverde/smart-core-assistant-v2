@@ -546,6 +546,7 @@ async fn main() -> anyhow::Result<()> {
     let s_excluidos = state_clone.clone();
     let s_clientes_listar = state_clone.clone();
     let s_cliente_criar = state_clone.clone();
+    let s_cliente_preencher = state_clone.clone();
     let s_cliente_atualizar = state_clone.clone();
     let s_cliente_obter = state_clone.clone();
     let s_cliente_ativo = state_clone.clone();
@@ -1491,6 +1492,17 @@ async fn main() -> anyhow::Result<()> {
             let state = s_cliente_atualizar.clone();
             Box::pin(async move {
                 handler_update_cliente(state.cliente.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("PreencherDadosDoCliente", move |env| {
+            let state = s_cliente_preencher.clone();
+            Box::pin(async move {
+                handler_preencher_dados_do_cliente(
+                    state.cliente.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("GetCliente", move |env| {
@@ -6907,6 +6919,22 @@ async fn handler_create_contato(
     }
 }
 
+/// V3 — um CEP no texto do cliente, só quando vem com hífen (`50000-000`) ou
+/// quando a frase diz "cep". Oito dígitos soltos costumam ser telefone.
+fn extrair_cep(texto: &str) -> Option<String> {
+    let fala_de_cep = texto.to_lowercase().contains("cep");
+    for palavra in texto.split(|c: char| c.is_whitespace() || c == ',' || c == ';') {
+        let limpa = palavra.trim_matches(|c: char| matches!(c, '.' | '(' | ')' | ':'));
+        let digitos: String = limpa.chars().filter(|c| c.is_ascii_digit()).collect();
+        let com_hifen = limpa.len() == 9 && limpa.as_bytes()[5] == b'-' && digitos.len() == 8;
+        let puro = limpa.len() == 8 && digitos.len() == 8;
+        if com_hifen || (fala_de_cep && puro) {
+            return Some(digitos);
+        }
+    }
+    None
+}
+
 /// Dígito verificador do CPF (Receita Federal). Recebe só dígitos.
 fn cpf_valido(cpf: &str) -> bool {
     let d: Vec<u32> = cpf.chars().filter_map(|c| c.to_digit(10)).collect();
@@ -7102,6 +7130,59 @@ async fn handler_create_cliente(
                 .await;
             ok_reply(&env, "CreateClienteReply", serde_json::json!(cliente))
         }
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+/// V3 — o texto do cliente, quando traz um CEP, preenche o CEP do cliente
+/// vinculado ao atendimento, só se estiver vazio. Auditado sem o valor.
+#[tracing::instrument(skip_all, fields(rpc = "PreencherDadosDoCliente", tenant_id = %env.tenant_id))]
+async fn handler_preencher_dados_do_cliente(
+    store: &dyn ports::ClienteStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let atendimento_id = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let mensagem_id = payload
+        .get("mensagem_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let texto = payload
+        .get("texto")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let sem_preenchimento = |env: &Envelope| {
+        ok_reply(
+            env,
+            "PreencherDadosDoClienteReply",
+            serde_json::json!({ "preenchido": false }),
+        )
+    };
+    let Some(cep) = extrair_cep(texto).filter(|_| atendimento_id > 0) else {
+        return sem_preenchimento(&env);
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store.preencher_cep_vazio(&ctx, atendimento_id, cep).await {
+        Ok(Some(id)) => {
+            audit
+                .publish(
+                    &env,
+                    "cliente.dado_alterado_ia",
+                    format!("Cliente {id}: campo preenchido pela conversa"),
+                    serde_json::json!({ "id": id, "campos": ["cep"], "message_id": mensagem_id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "PreencherDadosDoClienteReply",
+                serde_json::json!({ "preenchido": true }),
+            )
+        }
+        Ok(None) => sem_preenchimento(&env),
         Err(e) => erro(e.into(), &env),
     }
 }
@@ -14084,6 +14165,17 @@ mod tests_atendimento_cliente_unit {
         assert!(
             dados_do_cliente(&serde_json::json!({ "nome_fantasia": "x", "tipo": "ong" })).is_err()
         );
+    }
+
+    #[test]
+    fn extrair_cep_so_aceita_forma_clara() {
+        assert_eq!(
+            extrair_cep("moro em 50000-000, Recife"),
+            Some("50000000".into())
+        );
+        assert_eq!(extrair_cep("cep 50000000"), Some("50000000".into()));
+        assert_eq!(extrair_cep("meu telefone é 88999992191"), None);
+        assert_eq!(extrair_cep("pedido 12345678 aprovado"), None);
     }
 
     #[test]

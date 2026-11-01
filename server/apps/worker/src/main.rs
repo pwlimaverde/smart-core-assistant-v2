@@ -2791,6 +2791,38 @@ async fn processar_mensagem_recebida(
     // mídia (transcrição/análise), não por aqui.
     // `to_string`: o texto atravessa a fronteira da `tokio::spawn` abaixo e não
     // pode continuar emprestando de `msg_normalized`.
+    // V3 — um CEP escrito pelo cliente preenche o cliente vinculado, se estiver
+    // vazio. Falha aqui não interrompe a conversa: a mensagem já foi gravada.
+    if let (false, Some(mensagem), Some(texto)) =
+        (de_mim, mensagem_id, msg_normalized.texto_para_ia())
+    {
+        let pedido = Envelope {
+            tenant_id: envelope.tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: envelope.event_id.to_string(),
+            traceparent: envelope.traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "PreencherDadosDoCliente".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "atendimento_id": atendimento_id,
+                "mensagem_id": mensagem,
+                "texto": texto,
+            }))
+            .unwrap_or_default(),
+            error: None,
+            auth_user_id: 0,
+            auth_scopes: escopos_sistema(),
+            auth_is_superuser: false,
+            flow_permissions: vec![],
+            user_agent: String::new(),
+        };
+        if let Err(e) = pg_client.call(pedido, Duration::from_secs(5)).await {
+            tracing::warn!(erro = %e, "preenchimento do cliente pela conversa falhou");
+        }
+    }
+
     let texto_do_contato = msg_normalized.texto_para_ia().map(str::to_string);
 
     // N8.5/E3 — a fala do contato num atendimento encerrado com pesquisa aberta é
