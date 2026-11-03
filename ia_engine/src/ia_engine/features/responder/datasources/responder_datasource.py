@@ -104,6 +104,24 @@ _REGRAS_PADRAO = (
 )
 
 
+_BLOCO_ENDERECO = (
+    "\n\n### ENDEREÇO DO CLIENTE (campos_extraidos):\n"
+    "Quando o CLIENTE informar NESTA mensagem algum dado do próprio "
+    "endereço, devolva-o em `campos_extraidos` com um destes slugs "
+    "exatos:\n"
+    "- `cliente.logradouro` (rua, avenida, travessa)\n"
+    "- `cliente.numero`\n"
+    "- `cliente.complemento`\n"
+    "- `cliente.bairro`\n"
+    "- `cliente.cidade`\n"
+    "- `cliente.uf` (sigla de duas letras, ex.: SP)\n"
+    "- Copie o texto EXATAMENTE como ele escreveu. Não corrija, não "
+    "complete, não deduza.\n"
+    "- Só o que ele disse nesta mensagem. Na dúvida, omita.\n"
+    "- Não devolva CEP, CPF, CNPJ, nome ou e-mail neste bloco.\n"
+)
+
+
 def _build_system_prompt(parameters: ResponderParameters) -> str:
     data_atual = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     fluxos_txt = _formatar_fluxos(dict(parameters.fluxos_disponiveis))
@@ -121,7 +139,7 @@ def _build_system_prompt(parameters: ResponderParameters) -> str:
         f"{_identidade(parameters)}\n\n"
         f"{regras}"
         f"{fluxos_txt}"
-        f"{campos_txt}\n\n"
+        f"{campos_txt}{_BLOCO_ENDERECO}\n\n"
         f"### DADOS DA EMPRESA:\n{parameters.dados_empresa}\n\n"
         f"### DADOS DO TREINAMENTO (RAG):\n{parameters.dados_treinamento}"
     )

@@ -15,6 +15,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 
 from ia_engine.domain.models import LlmProviderSpec, RespostaBot
 from ia_engine.features.responder.datasources.responder_datasource import (
+    _BLOCO_ENDERECO,
     ResponderDataSource,
     _formatar_campos,
 )
@@ -132,3 +133,16 @@ async def test_datasource_calcula_vetor_de_treinamento_quando_presente():
     )
     data = await datasource(_params(dados_treinamento="Horário: 8h-18h"))
     assert data.training_vec is not None
+
+
+def test_bloco_de_endereco_lista_os_slugs_do_cliente():
+    for slug in (
+        "cliente.logradouro",
+        "cliente.numero",
+        "cliente.complemento",
+        "cliente.bairro",
+        "cliente.cidade",
+        "cliente.uf",
+    ):
+        assert slug in _BLOCO_ENDERECO
+    assert "CEP" in _BLOCO_ENDERECO  # o CEP fica de fora deste bloco

@@ -82,6 +82,30 @@ impl ClienteStore for PgClienteStore {
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn preencher_enderecos_vazios(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        mensagem_id: i32,
+        candidatos: Vec<(&'static str, String)>,
+    ) -> Result<Vec<&'static str>, DbError> {
+        use infrastructure_postgres::clientes::clientes as repo;
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let colunas = repo::preencher_enderecos_vazios(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+                mensagem_id,
+                &candidatos,
+            )
+            .await?;
+            Ok((colunas, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn criar_cliente(
         &self,
         ctx: &RequestContext,

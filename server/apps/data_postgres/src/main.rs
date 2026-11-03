@@ -1020,6 +1020,7 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_gravar_campos_extraidos(
                     state.atendimento.as_ref(),
+                    state.cliente.as_ref(),
                     state.audit.as_ref(),
                     state.config_cache.as_ref(),
                     env,
@@ -5574,6 +5575,7 @@ async fn handler_atualizar_sentimento(
 /// não preenche" é indistinguível de "a IA preenche errado".
 async fn handler_gravar_campos_extraidos(
     store: &dyn ports::AtendimentoStore,
+    cliente: &dyn ports::ClienteStore,
     audit: &dyn ports::AuditPort,
     config_cache: &infrastructure_postgres::TenantConfigCache,
     env: Envelope,
@@ -5610,8 +5612,48 @@ async fn handler_gravar_campos_extraidos(
             crate::adapters::campos_extraidos::PISO_CONFIANCA_PADRAO
         }
     };
+    let (enderecos, cartao): (Vec<_>, Vec<_>) = campos
+        .into_iter()
+        .partition(|c| c.slug.starts_with("cliente."));
+    if let Some(mensagem_id) = mensagem_origem_id {
+        let candidatos: Vec<(&'static str, String)> = enderecos
+            .iter()
+            .filter(|c| c.confianca >= piso)
+            .filter_map(|c| {
+                let coluna = infrastructure_postgres::clientes::endereco::coluna_do_slug(&c.slug)?;
+                let valor: String = serde_json::from_str(&c.valor_json).ok()?;
+                Some((coluna, valor))
+            })
+            .collect();
+        if !candidatos.is_empty() {
+            match cliente
+                .preencher_enderecos_vazios(&ctx, atendimento_id, mensagem_id, candidatos)
+                .await
+            {
+                Ok(colunas) if !colunas.is_empty() => {
+                    audit
+                        .publish(
+                            &env,
+                            "cliente.dado_alterado_ia",
+                            format!(
+                                "Cliente do atendimento #{atendimento_id}: {} campo(s) de endereço preenchido(s) pela conversa",
+                                colunas.len()
+                            ),
+                            serde_json::json!({
+                                "atendimento_id": atendimento_id,
+                                "campos": colunas,
+                                "message_id": mensagem_id,
+                            }),
+                        )
+                        .await;
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!(erro = %e, "endereço pela IA não gravado"),
+            }
+        }
+    }
     match store
-        .gravar_campos_extraidos(&ctx, atendimento_id, campos, mensagem_origem_id, piso)
+        .gravar_campos_extraidos(&ctx, atendimento_id, cartao, mensagem_origem_id, piso)
         .await
     {
         Ok(resumo) => {
