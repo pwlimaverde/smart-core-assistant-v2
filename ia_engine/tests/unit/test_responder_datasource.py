@@ -15,8 +15,8 @@ from langchain_core.runnables import Runnable, RunnableLambda
 
 from ia_engine.domain.models import LlmProviderSpec, RespostaBot
 from ia_engine.features.responder.datasources.responder_datasource import (
-    ResponderDataSource,
     _BLOCO_ENDERECO,
+    ResponderDataSource,
     _formatar_campos,
 )
 from ia_engine.features.responder.domain.parameters import (

@@ -594,7 +594,8 @@ pub async fn preencher_enderecos_vazios(
                  )
                RETURNING id"#
         );
-        let id: Option<(i32,)> = sqlx::query_as(&sql)
+        // A coluna vem da whitelist de `endereco::coluna_do_slug`, nunca do cliente.
+        let id: Option<(i32,)> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
             .bind(ctx.tenant_id)
             .bind(atendimento_id)
             .bind(valor)
