@@ -1819,7 +1819,13 @@ final class _SecaoContatoECliente extends StatelessWidget {
             ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           if (c.telefone.isNotEmpty) Text(c.telefone, style: estilo),
-          if (c.email.isNotEmpty) Text(c.email, style: estilo),
+          if (c.email.isNotEmpty)
+            Text(
+              c.camposPelaIa.contains('email')
+                  ? '${c.email} · pela conversa'
+                  : c.email,
+              style: estilo,
+            ),
           if (c.cargo.isNotEmpty) Text('Cargo: ${c.cargo}', style: estilo),
           if (c.segmento.isNotEmpty)
             Text('Segmento: ${c.segmento}', style: estilo),
@@ -1919,16 +1925,24 @@ final class _SecaoContatoECliente extends StatelessWidget {
     context,
   ).showSnackBar(SnackBar(content: Text(mensagem)));
 
-  Widget _campo(TextEditingController c, String rotulo, {int linhas = 1}) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: TextField(
-          controller: c,
-          minLines: 1,
-          maxLines: linhas,
-          decoration: InputDecoration(labelText: rotulo, isDense: true),
-        ),
-      );
+  Widget _campo(
+    TextEditingController c,
+    String rotulo, {
+    int linhas = 1,
+    String? ajuda,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: TextField(
+      controller: c,
+      minLines: 1,
+      maxLines: linhas,
+      decoration: InputDecoration(
+        labelText: rotulo,
+        helperText: ajuda,
+        isDense: true,
+      ),
+    ),
+  );
 
   Future<void> _editarContato(BuildContext context, ContatoDaConversa c) async {
     final nome = TextEditingController(text: c.nome);
@@ -2067,7 +2081,13 @@ final class _SecaoContatoECliente extends StatelessWidget {
                     _campo(campos['segmento']!, 'Segmento'),
                     _campo(campos['cargo']!, 'Cargo do responsável'),
                     _campo(campos['observacoes']!, 'Observações', linhas: 3),
-                    _campo(campos['cep']!, 'CEP'),
+                    _campo(
+                      campos['cep']!,
+                      'CEP',
+                      ajuda: dados.camposPelaIa.contains('cep')
+                          ? 'Preenchido pela conversa'
+                          : null,
+                    ),
                     _campo(campos['logradouro']!, 'Logradouro'),
                     _campo(campos['numero']!, 'Número'),
                     _campo(campos['complemento']!, 'Complemento'),

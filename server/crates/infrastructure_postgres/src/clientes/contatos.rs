@@ -229,7 +229,11 @@ impl ContatoRepository for PostgresContatoRepository {
                       telefone     = COALESCE($5::text, telefone),
                       cargo        = COALESCE($6::text, cargo),
                       segmento     = COALESCE($7::text, segmento),
-                      observacoes  = COALESCE($8::text, observacoes)
+                      observacoes  = COALESCE($8::text, observacoes),
+                      campos_pela_ia = CASE
+                          WHEN $4::text IS NOT NULL AND $4::text IS DISTINCT FROM email
+                          THEN array_remove(campos_pela_ia, 'email')
+                          ELSE campos_pela_ia END
                 WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             id,

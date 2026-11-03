@@ -16,6 +16,9 @@ final class ContatoDaConversa {
   final String segmento;
   final String observacoes;
 
+  /// Campos que a IA preencheu a partir da conversa (ex.: `email`).
+  final List<String> camposPelaIa;
+
   /// 0 = sem cliente vinculado.
   final int clienteId;
   final String clienteNome;
@@ -30,6 +33,7 @@ final class ContatoDaConversa {
     this.cargo = '',
     this.segmento = '',
     this.observacoes = '',
+    this.camposPelaIa = const [],
     this.clienteId = 0,
     this.clienteNome = '',
   });
@@ -65,6 +69,9 @@ final class ClienteDaConversa {
   final String cidade;
   final String uf;
 
+  /// Campos que a IA preencheu a partir da conversa (ex.: `cep`).
+  final List<String> camposPelaIa;
+
   const ClienteDaConversa({
     required this.id,
     this.nomeFantasia = '',
@@ -84,5 +91,6 @@ final class ClienteDaConversa {
     this.bairro = '',
     this.cidade = '',
     this.uf = '',
+    this.camposPelaIa = const [],
   });
 }

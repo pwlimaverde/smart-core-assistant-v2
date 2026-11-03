@@ -6674,6 +6674,7 @@ impl AdminService for AdminFacade {
             cargo: texto_do(&contato, "cargo"),
             segmento: texto_do(&contato, "segmento"),
             observacoes: texto_do(&contato, "observacoes"),
+            campos_pela_ia: lista_do(&contato, "campos_pela_ia"),
             cliente_id: contato
                 .get("cliente_id")
                 .and_then(|v| v.as_i64())
@@ -11018,6 +11019,18 @@ fn atendimento_resumo_do_json(v: &serde_json::Value) -> ProtoAtendimentoResumo {
 }
 
 /// Texto de um campo do JSON do `data_postgres`; ausente ou nulo vira "".
+fn lista_do(v: &serde_json::Value, chave: &str) -> Vec<String> {
+    v.get(chave)
+        .and_then(|x| x.as_array())
+        .map(|itens| {
+            itens
+                .iter()
+                .filter_map(|i| i.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn texto_do(v: &serde_json::Value, chave: &str) -> String {
     v.get(chave)
         .and_then(|x| x.as_str())
@@ -11234,6 +11247,7 @@ fn cliente_do_json(v: &serde_json::Value) -> MyCliente {
             cidade: texto("cidade"),
             uf: texto("uf"),
             cargo_responsavel: texto("cargo_responsavel"),
+            campos_pela_ia: lista_do(v, "campos_pela_ia"),
         }),
         ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
         contatos: v.get("contatos").and_then(|x| x.as_i64()).unwrap_or(0) as i32,

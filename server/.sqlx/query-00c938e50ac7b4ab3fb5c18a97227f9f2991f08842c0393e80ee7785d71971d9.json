@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_contato\n                  SET nome_contato = COALESCE($3::text, nome_contato),\n                      email        = COALESCE($4::text, email),\n                      telefone     = COALESCE($5::text, telefone),\n                      cargo        = COALESCE($6::text, cargo),\n                      segmento     = COALESCE($7::text, segmento),\n                      observacoes  = COALESCE($8::text, observacoes),\n                      campos_pela_ia = CASE\n                          WHEN $4::text IS NOT NULL AND $4::text IS DISTINCT FROM email\n                          THEN array_remove(campos_pela_ia, 'email')\n                          ELSE campos_pela_ia END\n                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00c938e50ac7b4ab3fb5c18a97227f9f2991f08842c0393e80ee7785d71971d9"
+}

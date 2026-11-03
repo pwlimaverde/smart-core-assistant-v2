@@ -242,6 +242,8 @@ pub struct DadosCliente {
 /// contatos estão ligados a ele.
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
 pub struct ClienteResumo {
+    /// Campos que a IA preencheu a partir da conversa (ex.: `cep`).
+    pub campos_pela_ia: Vec<String>,
     pub id: i32,
     pub nome_fantasia: String,
     pub razao_social: String,
@@ -284,6 +286,7 @@ const SQL_LISTAR_CLIENTES: &str = r#"SELECT c.id, c.nome_fantasia,
     COALESCE(c.logradouro, '') AS logradouro, COALESCE(c.numero, '') AS numero,
     COALESCE(c.complemento, '') AS complemento, COALESCE(c.bairro, '') AS bairro,
     COALESCE(c.cidade, '') AS cidade, COALESCE(c.uf, '') AS uf, c.ativo,
+    COALESCE(c.campos_pela_ia, '{}') AS campos_pela_ia,
     (SELECT COUNT(*) FROM oraculo_cliente_contatos cc
        JOIN oraculo_contato o ON o.id = cc.contato_id AND o.tenant_id = cc.tenant_id
       WHERE cc.tenant_id = c.tenant_id AND cc.cliente_id = c.id
@@ -306,6 +309,7 @@ const SQL_BUSCAR_CLIENTE: &str = r#"SELECT c.id, c.nome_fantasia,
     COALESCE(c.logradouro, '') AS logradouro, COALESCE(c.numero, '') AS numero,
     COALESCE(c.complemento, '') AS complemento, COALESCE(c.bairro, '') AS bairro,
     COALESCE(c.cidade, '') AS cidade, COALESCE(c.uf, '') AS uf, c.ativo,
+    COALESCE(c.campos_pela_ia, '{}') AS campos_pela_ia,
     (SELECT COUNT(*) FROM oraculo_cliente_contatos cc
        JOIN oraculo_contato o ON o.id = cc.contato_id AND o.tenant_id = cc.tenant_id
       WHERE cc.tenant_id = c.tenant_id AND cc.cliente_id = c.id
@@ -328,6 +332,7 @@ fn cliente_da_linha(row: &sqlx::postgres::PgRow) -> Result<ClienteResumo, DbErro
         observacoes: row.try_get("observacoes")?,
         cargo_responsavel: row.try_get("cargo_responsavel")?,
         cep: row.try_get("cep")?,
+        campos_pela_ia: row.try_get("campos_pela_ia")?,
         logradouro: row.try_get("logradouro")?,
         numero: row.try_get("numero")?,
         complemento: row.try_get("complemento")?,
@@ -477,7 +482,10 @@ pub async fn atualizar_cliente(
                cpf = $7, telefone = $8, site = $9, ramo_atividade = $10,
                observacoes = $11, cep = $12, logradouro = $13, numero = $14,
                complemento = $15, bairro = $16, cidade = $17, uf = $18,
-               cargo_responsavel = $19, ultima_atualizacao = NOW()
+               cargo_responsavel = $19,
+               campos_pela_ia = CASE WHEN cep IS DISTINCT FROM $12
+                   THEN array_remove(campos_pela_ia, 'cep') ELSE campos_pela_ia END,
+               ultima_atualizacao = NOW()
            WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
     )
     .bind(ctx.tenant_id)
@@ -515,7 +523,8 @@ pub async fn preencher_cep_vazio(
     ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
     let id: Option<(i32,)> = sqlx::query_as(
         r#"UPDATE oraculo_cliente
-           SET cep = $3, ultima_atualizacao = NOW()
+           SET cep = $3, campos_pela_ia = array_append(campos_pela_ia, 'cep'),
+               ultima_atualizacao = NOW()
            WHERE tenant_id = $1 AND excluido_em IS NULL
              AND (cep IS NULL OR cep = '')
              AND id = (
@@ -547,7 +556,7 @@ pub async fn preencher_email_vazio(
     ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
     let id: Option<(i32,)> = sqlx::query_as(
         r#"UPDATE oraculo_contato
-           SET email = $3
+           SET email = $3, campos_pela_ia = array_append(campos_pela_ia, 'email')
            WHERE tenant_id = $1 AND excluido_em IS NULL
              AND (email IS NULL OR email = '')
              AND id = (
