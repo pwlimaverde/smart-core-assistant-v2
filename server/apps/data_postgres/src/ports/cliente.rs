@@ -107,6 +107,15 @@ pub trait ClienteStore: Send + Sync {
         cep: String,
     ) -> Result<Option<i32>, DbError>;
 
+    /// V3 — preenche os campos de endereço vazios a partir da mensagem de origem.
+    async fn preencher_enderecos_vazios(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        mensagem_id: i32,
+        candidatos: Vec<(&'static str, String)>,
+    ) -> Result<Vec<&'static str>, DbError>;
+
     /// V3 — preenche o e-mail do contato do atendimento, se estiver vazio.
     async fn preencher_email_vazio(
         &self,

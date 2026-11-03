@@ -2088,12 +2088,48 @@ final class _SecaoContatoECliente extends StatelessWidget {
                           ? 'Preenchido pela conversa'
                           : null,
                     ),
-                    _campo(campos['logradouro']!, 'Logradouro'),
-                    _campo(campos['numero']!, 'Número'),
-                    _campo(campos['complemento']!, 'Complemento'),
-                    _campo(campos['bairro']!, 'Bairro'),
-                    _campo(campos['cidade']!, 'Cidade'),
-                    _campo(campos['uf']!, 'UF'),
+                    _campo(
+                      campos['logradouro']!,
+                      'Logradouro',
+                      ajuda: dados.camposPelaIa.contains('logradouro')
+                          ? 'Preenchido pela conversa'
+                          : null,
+                    ),
+                    _campo(
+                      campos['numero']!,
+                      'Número',
+                      ajuda: dados.camposPelaIa.contains('numero')
+                          ? 'Preenchido pela conversa'
+                          : null,
+                    ),
+                    _campo(
+                      campos['complemento']!,
+                      'Complemento',
+                      ajuda: dados.camposPelaIa.contains('complemento')
+                          ? 'Preenchido pela conversa'
+                          : null,
+                    ),
+                    _campo(
+                      campos['bairro']!,
+                      'Bairro',
+                      ajuda: dados.camposPelaIa.contains('bairro')
+                          ? 'Preenchido pela conversa'
+                          : null,
+                    ),
+                    _campo(
+                      campos['cidade']!,
+                      'Cidade',
+                      ajuda: dados.camposPelaIa.contains('cidade')
+                          ? 'Preenchido pela conversa'
+                          : null,
+                    ),
+                    _campo(
+                      campos['uf']!,
+                      'UF',
+                      ajuda: dados.camposPelaIa.contains('uf')
+                          ? 'Preenchido pela conversa'
+                          : null,
+                    ),
                   ],
                 ),
               ),

@@ -483,8 +483,15 @@ pub async fn atualizar_cliente(
                observacoes = $11, cep = $12, logradouro = $13, numero = $14,
                complemento = $15, bairro = $16, cidade = $17, uf = $18,
                cargo_responsavel = $19,
-               campos_pela_ia = CASE WHEN cep IS DISTINCT FROM $12
-                   THEN array_remove(campos_pela_ia, 'cep') ELSE campos_pela_ia END,
+               campos_pela_ia = array_remove(array_remove(array_remove(array_remove(
+                   array_remove(array_remove(array_remove(campos_pela_ia,
+                   CASE WHEN cep IS DISTINCT FROM $12 THEN 'cep' ELSE '' END),
+                   CASE WHEN logradouro IS DISTINCT FROM $13 THEN 'logradouro' ELSE '' END),
+                   CASE WHEN numero IS DISTINCT FROM $14 THEN 'numero' ELSE '' END),
+                   CASE WHEN complemento IS DISTINCT FROM $15 THEN 'complemento' ELSE '' END),
+                   CASE WHEN bairro IS DISTINCT FROM $16 THEN 'bairro' ELSE '' END),
+                   CASE WHEN cidade IS DISTINCT FROM $17 THEN 'cidade' ELSE '' END),
+                   CASE WHEN uf IS DISTINCT FROM $18 THEN 'uf' ELSE '' END),
                ultima_atualizacao = NOW()
            WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
     )
@@ -543,6 +550,62 @@ pub async fn preencher_cep_vazio(
     .fetch_optional(&mut **tx)
     .await?;
     Ok(id.map(|(i,)| i))
+}
+
+/// V3 — grava os campos de endereço que a IA extraiu da mensagem de origem.
+/// Só preenche campo vazio, e só com valor que aparece no texto do cliente.
+/// Devolve as colunas gravadas.
+pub async fn preencher_enderecos_vazios(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    mensagem_id: i32,
+    candidatos: &[(&'static str, String)],
+) -> Result<Vec<&'static str>, DbError> {
+    ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
+    let texto: Option<(String,)> = sqlx::query_as(
+        "SELECT conteudo FROM oraculo_mensagem \
+         WHERE tenant_id = $1 AND id = $2 AND atendimento_id = $3",
+    )
+    .bind(ctx.tenant_id)
+    .bind(mensagem_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some((texto,)) = texto else {
+        return Ok(Vec::new());
+    };
+    let mut gravadas = Vec::new();
+    for &(coluna, ref bruto) in candidatos {
+        let Some(valor) = super::endereco::valor_de_endereco(coluna, bruto, &texto) else {
+            continue;
+        };
+        let sql = format!(
+            r#"UPDATE oraculo_cliente
+               SET {coluna} = $3, campos_pela_ia = array_append(campos_pela_ia, $4),
+                   ultima_atualizacao = NOW()
+               WHERE tenant_id = $1 AND excluido_em IS NULL
+                 AND ({coluna} IS NULL OR {coluna} = '')
+                 AND id = (
+                   SELECT cc.cliente_id FROM oraculo_cliente_contatos cc
+                   JOIN oraculo_atendimento a ON a.contato_id = cc.contato_id
+                   WHERE a.tenant_id = $1 AND a.id = $2
+                   ORDER BY cc.cliente_id LIMIT 1
+                 )
+               RETURNING id"#
+        );
+        let id: Option<(i32,)> = sqlx::query_as(&sql)
+            .bind(ctx.tenant_id)
+            .bind(atendimento_id)
+            .bind(valor)
+            .bind(coluna)
+            .fetch_optional(&mut **tx)
+            .await?;
+        if id.is_some() {
+            gravadas.push(coluna);
+        }
+    }
+    Ok(gravadas)
 }
 
 /// V3 — grava o e-mail no contato do atendimento, só se ele ainda não tem um.

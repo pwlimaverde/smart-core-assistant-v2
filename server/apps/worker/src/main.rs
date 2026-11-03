@@ -1324,6 +1324,7 @@ async fn responder_via_ia(
             serde_json::json!({
                 "atendimento_id": atendimento_id,
                 "campos": campos,
+                "mensagem_origem_id": mensagem_id,
             }),
             causation_id,
             traceparent,
