@@ -50,11 +50,11 @@ fn aparece_inteiro(texto: &str, valor: &str) -> bool {
         let antes_ok = texto[..ini]
             .chars()
             .next_back()
-            .map_or(true, |c| !c.is_alphanumeric());
+            .is_none_or(|c| !c.is_alphanumeric());
         let depois_ok = texto[fim..]
             .chars()
             .next()
-            .map_or(true, |c| !c.is_alphanumeric());
+            .is_none_or(|c| !c.is_alphanumeric());
         if antes_ok && depois_ok {
             return true;
         }
