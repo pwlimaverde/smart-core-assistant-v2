@@ -15,6 +15,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 
 from ia_engine.domain.models import LlmProviderSpec, RespostaBot
 from ia_engine.features.responder.datasources.responder_datasource import (
+    _BLOCO_DOCUMENTO,
     _BLOCO_ENDERECO,
     ResponderDataSource,
     _formatar_campos,
@@ -146,3 +147,8 @@ def test_bloco_de_endereco_lista_os_slugs_do_cliente():
     ):
         assert slug in _BLOCO_ENDERECO
     assert "CEP" in _BLOCO_ENDERECO  # o CEP fica de fora deste bloco
+
+
+def test_bloco_de_documento_nao_devolve_cpf_com_digitos_errados():
+    assert "11 ou 14 dígitos" in _BLOCO_DOCUMENTO
+    assert "não o devolva" in _BLOCO_DOCUMENTO

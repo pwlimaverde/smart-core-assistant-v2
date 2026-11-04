@@ -121,6 +121,13 @@ _BLOCO_ENDERECO = (
     "- Não devolva CEP, CPF, CNPJ, nome ou e-mail neste bloco.\n"
 )
 
+_BLOCO_DOCUMENTO = (
+    "\n\n### DOCUMENTO DO CLIENTE (CPF/CNPJ):\n"
+    "Se o CLIENTE escrever um CPF ou CNPJ que não tenha 11 ou 14 dígitos, "
+    "não o devolva em `campos_extraidos`. Peça com educação que ele confira "
+    "e envie o documento de novo.\n"
+)
+
 
 def _build_system_prompt(parameters: ResponderParameters) -> str:
     data_atual = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
@@ -139,7 +146,7 @@ def _build_system_prompt(parameters: ResponderParameters) -> str:
         f"{_identidade(parameters)}\n\n"
         f"{regras}"
         f"{fluxos_txt}"
-        f"{campos_txt}{_BLOCO_ENDERECO}\n\n"
+        f"{campos_txt}{_BLOCO_ENDERECO}{_BLOCO_DOCUMENTO}\n\n"
         f"### DADOS DA EMPRESA:\n{parameters.dados_empresa}\n\n"
         f"### DADOS DO TREINAMENTO (RAG):\n{parameters.dados_treinamento}"
     )

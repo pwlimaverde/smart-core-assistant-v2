@@ -179,8 +179,10 @@
 - **Auditoria da V1 e da V2 confirmada no servidor:** `cliente.criado`, `cliente.alterado`, `contato.vinculado_cliente`, `contato.desvinculado_cliente`, `contato_editado` e `whatsapp.numero_ignorado.criado/alterado/removido` (`server/apps/data_postgres/src/main.rs`). Divergência de nome: o código usa `contato_editado` (com underline), não `contato.editado`; manter o que existe e registrar como convenção.
 - **V2 "Não atender":** botão na ficha do contato com confirmação, usando o mesmo RPC da tela de números ignorados. No ar a partir de `3f715d31`, mergeado em `dev` (`9cf91124`).
 - **V4, catálogo de campos:** já liberado (ver acima).
-- **V3, validação de documento:** o servidor valida só o tamanho de CPF (11) e CNPJ (14) em `data_postgres/src/main.rs` (~6936). **Falta o dígito verificador.** Decisão pendente: rejeitar documento inválido ao salvar (bloqueia edição de cliente antigo com documento inválido até corrigir) ou só avisar.
-- **V3, extração pela conversa:** não iniciada. Depende da decisão acima e da conferência de `pydantic` 2.12 na documentação atual.
+- **V3, validação de documento:** feita. `cpf_valido` e `cnpj_valido` (dígito verificador) em `data_postgres/src/main.rs`, aplicados ao salvar cliente e à IA (`campos_extraidos.rs`). Documento inválido vindo da IA é descartado; ao salvar manualmente o servidor recusa com "CPF/CNPJ inválido".
+- **V3, extração pela conversa:** feita para CEP, e-mail, endereço (só campo vazio, com frase de origem) e documento (dígito verificador). A IA é orientada a não devolver CPF/CNPJ com número de dígitos errado.
+- **V3, sugestão de vínculo:** feita. "Pela conversa, parece ser X. Vincular" quando um cliente bate com o documento; "Criar cliente com estes dados?" quando nenhum bate (documento e nome do contato).
+- **V4, inventário:** feito em `inventario-campos-v4.md`. O conjunto mínimo por tipo continua dependendo da D3.
 - **Release beta.9:** publicada com build, auto-update e feed verificados. Validação no app pendente.
 
 ## Validação no app (29/10/2026)
