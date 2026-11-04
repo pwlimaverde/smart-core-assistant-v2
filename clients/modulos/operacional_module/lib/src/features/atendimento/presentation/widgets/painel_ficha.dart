@@ -1689,6 +1689,9 @@ final class _SugestaoDeCliente extends StatefulWidget {
 final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
   ClienteDaConversa? _sugerido;
 
+  /// Documento válido da conversa sem cliente cadastrado: oferece criar.
+  String? _documentoNovo;
+
   @override
   void initState() {
     super.initState();
@@ -1716,12 +1719,22 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
             cliente.id > 0 &&
             (cliente.cnpj == documento || cliente.cpf == documento);
         if (bate) {
-          setState(() => _sugerido = cliente);
+          setState(() {
+            _sugerido = cliente;
+            _documentoNovo = null;
+          });
           return;
         }
       }
     }
-    if (mounted) setState(() => _sugerido = null);
+    if (mounted) {
+      setState(() {
+        _sugerido = null;
+        _documentoNovo = widget.documentos.isEmpty
+            ? null
+            : widget.documentos.first;
+      });
+    }
   }
 
   Future<void> _vincular(ClienteDaConversa cliente) async {
@@ -1740,13 +1753,66 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
     widget.aoMudar?.call();
   }
 
+  /// Cria o cliente só com o documento válido e o nome do contato, e vincula.
+  /// Os demais campos ficam para o atendente preencher em "Editar cliente".
+  Future<void> _criarEVincular(String documento) async {
+    final pf = documento.length == 11;
+    final (idNovo, erroCriar) = await widget.controller.salvarCliente(
+      ClienteDaConversa(
+        id: 0,
+        tipo: pf ? 'pf' : 'pj',
+        cpf: pf ? documento : '',
+        cnpj: pf ? '' : documento,
+        nomeFantasia: widget.contato.nomeParaExibir,
+        telefone: widget.contato.telefone,
+      ),
+    );
+    if (!mounted) return;
+    if (erroCriar != null || idNovo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(erroCriar?.message ?? 'Não foi possível criar.'),
+        ),
+      );
+      return;
+    }
+    final erroVincular = await widget.controller.vincularCliente(
+      clienteId: idNovo,
+      contatoId: widget.contato.contatoId,
+      vincular: true,
+    );
+    if (!mounted) return;
+    if (erroVincular != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(erroVincular.message)));
+      return;
+    }
+    widget.aoMudar?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cliente = _sugerido;
-    if (cliente == null) return const SizedBox.shrink();
-    final nome = cliente.nomeFantasia.isNotEmpty
-        ? cliente.nomeFantasia
-        : 'cliente #${cliente.id}';
+    final documentoNovo = _documentoNovo;
+    if (cliente == null && documentoNovo == null) {
+      return const SizedBox.shrink();
+    }
+    final String texto;
+    final String acao;
+    final VoidCallback onPressed;
+    if (cliente != null) {
+      final nome = cliente.nomeFantasia.isNotEmpty
+          ? cliente.nomeFantasia
+          : 'cliente #${cliente.id}';
+      texto = 'Pela conversa, parece ser $nome.';
+      acao = 'Vincular';
+      onPressed = () => _vincular(cliente);
+    } else {
+      texto = 'Criar cliente com estes dados?';
+      acao = 'Criar';
+      onPressed = () => _criarEVincular(documentoNovo!);
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: DecoratedBox(
@@ -1760,14 +1826,11 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
             children: [
               Expanded(
                 child: Text(
-                  'Pela conversa, parece ser $nome.',
+                  texto,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
-              TextButton(
-                onPressed: () => _vincular(cliente),
-                child: const Text('Vincular'),
-              ),
+              TextButton(onPressed: onPressed, child: Text(acao)),
             ],
           ),
         ),
