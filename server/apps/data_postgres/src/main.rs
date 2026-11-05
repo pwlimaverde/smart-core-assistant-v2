@@ -7064,6 +7064,66 @@ fn validar_documentos_alterados(
     Ok(())
 }
 
+/// D3 — conjunto mínimo do cliente: nome, tipo (`pf`/`pj`) e o documento
+/// que o tipo exige (CPF para PF, CNPJ para PJ).
+///
+/// Na criação vale tudo. Na alteração, só o que o atendente mexeu: esvaziar
+/// o documento de um cliente que o tinha, ou trocar o tipo. Cliente antigo
+/// sem documento continua salvando enquanto ninguém mexe nisso.
+fn validar_minimo_do_cliente(
+    dados: &infrastructure_postgres::clientes::clientes::DadosCliente,
+    atual: Option<&infrastructure_postgres::clientes::clientes::ClienteResumo>,
+) -> Result<(), String> {
+    let criando = atual.is_none();
+    if criando && dados.nome_fantasia.trim().is_empty() {
+        return Err("Nome do cliente é obrigatório".into());
+    }
+    let tipo = dados.tipo.as_deref().filter(|t| !t.is_empty());
+    if let Some(t) = tipo {
+        if t != "pf" && t != "pj" {
+            return Err("Tipo do cliente deve ser pf ou pj".into());
+        }
+    } else if criando {
+        return Err("Tipo do cliente é obrigatório: pf ou pj".into());
+    }
+    let tipo_atual = atual.map(|a| a.tipo.as_str()).filter(|t| !t.is_empty());
+    let efetivo = tipo.or(tipo_atual);
+    let tipo_mudou = tipo.is_some() && tipo != tipo_atual;
+    let exigir_sempre = criando || tipo_mudou;
+    match efetivo {
+        Some("pf") => documento_minimo(
+            dados.cpf.as_deref(),
+            atual.map(|a| a.cpf.as_str()),
+            "CPF",
+            "PF",
+            exigir_sempre,
+        ),
+        Some("pj") => documento_minimo(
+            dados.cnpj.as_deref(),
+            atual.map(|a| a.cnpj.as_str()),
+            "CNPJ",
+            "PJ",
+            exigir_sempre,
+        ),
+        _ => Ok(()),
+    }
+}
+
+fn documento_minimo(
+    novo: Option<&str>,
+    antigo: Option<&str>,
+    rotulo: &str,
+    tipo: &str,
+    exigir_sempre: bool,
+) -> Result<(), String> {
+    let vazio = novo.map(str::trim).unwrap_or("").is_empty();
+    let tinha = antigo.is_some_and(|a| !a.trim().is_empty());
+    if vazio && (exigir_sempre || tinha) {
+        return Err(format!("{rotulo} é obrigatório para cliente {tipo}"));
+    }
+    Ok(())
+}
+
 /// B10 (N11 E5) — lê e confere os campos de um cliente.
 ///
 /// Documento vira só dígitos e precisa ter o tamanho certo (CNPJ 14, CPF 11);
@@ -7182,6 +7242,9 @@ async fn handler_create_cliente(
         Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
     };
     if let Err(msg) = validar_documentos_alterados(&dados, None) {
+        return erro(error_core::AppError::Validation(msg), &env);
+    }
+    if let Err(msg) = validar_minimo_do_cliente(&dados, None) {
         return erro(error_core::AppError::Validation(msg), &env);
     }
     let ctx = contexto_do_envelope(&env);
@@ -7305,6 +7368,9 @@ async fn handler_update_cliente(
         Err(e) => return erro(e.into(), &env),
     };
     if let Err(msg) = validar_documentos_alterados(&dados, atual.as_ref()) {
+        return erro(error_core::AppError::Validation(msg), &env);
+    }
+    if let Err(msg) = validar_minimo_do_cliente(&dados, atual.as_ref()) {
         return erro(error_core::AppError::Validation(msg), &env);
     }
     match store.atualizar_cliente(&ctx, id, dados).await {
@@ -14293,6 +14359,64 @@ mod tests_atendimento_cliente_unit {
         assert!(!cnpj_valido("11222333000182"));
         assert!(!cnpj_valido("00000000000000"));
         assert!(!cnpj_valido("1122233300018"));
+    }
+
+    /// D3: criação exige nome, tipo e o documento do tipo.
+    #[test]
+    fn minimo_do_cliente_exige_documento_do_tipo_na_criacao() {
+        use infrastructure_postgres::clientes::clientes::DadosCliente;
+        let base = |tipo: Option<&str>| DadosCliente {
+            nome_fantasia: "Ana".into(),
+            tipo: tipo.map(String::from),
+            ..Default::default()
+        };
+        assert!(validar_minimo_do_cliente(&base(Some("pf")), None).is_err());
+        assert!(validar_minimo_do_cliente(&base(None), None).is_err());
+        assert!(validar_minimo_do_cliente(&base(Some("xx")), None).is_err());
+        let com_cpf = DadosCliente {
+            cpf: Some("52998224725".into()),
+            ..base(Some("pf"))
+        };
+        assert!(validar_minimo_do_cliente(&com_cpf, None).is_ok());
+        assert!(validar_minimo_do_cliente(&base(Some("pj")), None).is_err());
+    }
+
+    /// D3: na alteração, cliente antigo sem documento continua salvando; só
+    /// esvaziar o documento ou trocar o tipo é recusado.
+    #[test]
+    fn minimo_do_cliente_na_alteracao_so_olha_o_que_mudou() {
+        use infrastructure_postgres::clientes::clientes::{ClienteResumo, DadosCliente};
+        let antigo = ClienteResumo {
+            tipo: "pf".into(),
+            cpf: "".into(),
+            ..Default::default()
+        };
+        let legado = DadosCliente {
+            nome_fantasia: "Ana".into(),
+            tipo: Some("pf".into()),
+            ..Default::default()
+        };
+        assert!(validar_minimo_do_cliente(&legado, Some(&antigo)).is_ok());
+
+        let com_cpf = ClienteResumo {
+            tipo: "pf".into(),
+            cpf: "52998224725".into(),
+            ..Default::default()
+        };
+        let apagou = DadosCliente {
+            nome_fantasia: "Ana".into(),
+            tipo: Some("pf".into()),
+            cpf: None,
+            ..Default::default()
+        };
+        assert!(validar_minimo_do_cliente(&apagou, Some(&com_cpf)).is_err());
+
+        let trocou_tipo = DadosCliente {
+            nome_fantasia: "Ana".into(),
+            tipo: Some("pj".into()),
+            ..Default::default()
+        };
+        assert!(validar_minimo_do_cliente(&trocou_tipo, Some(&antigo)).is_err());
     }
 
     /// Criação recusa documento com dígito errado antes de tocar no banco.
