@@ -1,0 +1,10 @@
+--- a/pkg/whatsmeow/service/whatsmeow.go	2026-11-06 20:29:59.137471000 -0300
++++ b/pkg/whatsmeow/service/whatsmeow.go	2026-11-06 20:30:07.247789700 -0300
+@@ -397,6 +397,7 @@
+ 		} else {
+ 			w.loggerWrapper.GetLogger(cd.Instance.Id).LogInfo("[%s] Setting whatsapp version from web to %d.%d.%d", cd.Instance.Id, webVersion.Major, webVersion.Minor, webVersion.Patch)
+ 			version = *webVersion
++			store.SetWAVersion(store.WAVersionContainer{uint32(version.Major), uint32(version.Minor), uint32(version.Patch)})
+ 			store.DeviceProps.Version.Primary = proto.Uint32(uint32(version.Major))
+ 			store.DeviceProps.Version.Secondary = proto.Uint32(uint32(version.Minor))
+ 			store.DeviceProps.Version.Tertiary = proto.Uint32(uint32(version.Patch))

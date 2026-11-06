@@ -41,15 +41,13 @@ services:
 
   evolution:
     # Versão FIXA (reprodutibilidade): evita que `:latest` mude e quebre o dev sem
-    # aviso. 0.7.1 é a última release estável. Para atualizar, troque a tag aqui e
-    # suba a stack manualmente de novo (serviço fundacional "sobe uma vez").
-    # 0.7.1 parou de conseguir parear: o WhatsApp passou a recusar o handshake
-    # com `ClientOutdated` (visível no log da própria Evolution como
-    # "Received QR code event err-client-outdated"), e sem completar o handshake
-    # o QR nunca chega a ser gerado — a tela de conexão fica girando para sempre.
-    # A versão do WhatsApp Web é embutida no whatsmeow, então destravar depende
-    # de subir a imagem, não de mexer no nosso código.
-    image: evoapicloud/evolution-go:${EVOLUTION_IMAGE_TAG:-0.7.2}
+    # aviso. Imagem própria: a 0.7.2 oficial recusa o pareamento com 405
+    # ClientOutdated, porque grava a versão atual do WhatsApp Web só em
+    # DeviceProps e o handshake segue com a versão embutida no whatsmeow. A nossa
+    # chama store.SetWAVersion com a versão que o próprio Evolution busca na web
+    # (docker/evolution/wa-version). Para atualizar, trocar a tag e publicar pelo
+    # workflow evolution-wa-version.
+    image: ghcr.io/pwlimaverde/evolution-go-wa:${EVOLUTION_IMAGE_TAG:-0.7.2-wa1}
     container_name: smartcore-evolution
     environment:
       SERVER_PORT: "8080"
