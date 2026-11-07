@@ -40,11 +40,19 @@ depende da **D3** e ainda não foi definido.
 | `metadados` | Não exposto | |
 | `ativo`, `slug`, `data_cadastro`, `ultima_atualizacao` | Não exibidos | Controle interno |
 
-## O que falta decidir (D3)
+## D3 — decidida
 
-- Quais campos são obrigatórios em contato, cliente PF e cliente PJ.
-- Se `pais` e `metadados` devem ser expostos ao operador.
-- Se `ramo_atividade` e o campo de segmento do contato são o mesmo conceito.
+Conjunto mínimo, aplicado no servidor (`validar_minimo_do_cliente`):
 
-Até a D3, a validação no servidor cobre só o que já é regra hoje: documento
-com dígito verificador, UF com duas letras e CEP com oito dígitos.
+- **Contato:** telefone (chave, já obrigatório). Nada além disso.
+- **Cliente, criação:** nome, tipo `pf` ou `pj`, e o documento do tipo —
+  CPF para PF, CNPJ para PJ.
+- **Cliente, alteração:** só se confere o que mudou. Esvaziar o documento de
+  quem o tinha, ou trocar o tipo, é recusado. Cadastro antigo sem documento
+  segue salvando enquanto ninguém mexe nisso.
+- Endereço, site, ramo, cargo e observações ficam **opcionais**.
+- `pais` e `metadados` continuam fora da tela; `ramo_atividade` segue como
+  segmento do cliente, separado do segmento do contato.
+
+Motivo: documento é o que identifica a pessoa para o vínculo automático (V3);
+exigir mais que isso travaria o cadastro sem ganho na operação.

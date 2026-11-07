@@ -182,7 +182,10 @@
 - **V3, validação de documento:** feita. `cpf_valido` e `cnpj_valido` (dígito verificador) em `data_postgres/src/main.rs`, aplicados ao salvar cliente e à IA (`campos_extraidos.rs`). Documento inválido vindo da IA é descartado; ao salvar manualmente o servidor recusa com "CPF/CNPJ inválido".
 - **V3, extração pela conversa:** feita para CEP, e-mail, endereço (só campo vazio, com frase de origem) e documento (dígito verificador). A IA é orientada a não devolver CPF/CNPJ com número de dígitos errado.
 - **V3, sugestão de vínculo:** feita. "Pela conversa, parece ser X. Vincular" quando um cliente bate com o documento; "Criar cliente com estes dados?" quando nenhum bate (documento e nome do contato).
-- **V4, inventário:** feito em `inventario-campos-v4.md`. O conjunto mínimo por tipo continua dependendo da D3.
+- **V4, inventário:** feito em `inventario-campos-v4.md`.
+- **V4, conjunto mínimo (D3, decidida por nós):** cliente exige nome, tipo pf/pj e o documento do tipo na criação; na alteração só se olha o que mudou. Feito no servidor (`validar_minimo_do_cliente`, merge `999a6371`).
+- **V3, campo inválido vira pergunta:** feito pelo mecanismo que já existia. Valor inválido não é gravado, então o campo de cartão continua pendente e a IA pergunta de novo (`ResolverCamposAtendimento`, campos com `extrair_automaticamente`). O prompt também pede para não devolver CPF/CNPJ com dígitos errados.
+- **D1 e D2:** decididas no próprio plano, ambas em (a).
 - **Release beta.9:** publicada com build, auto-update e feed verificados. Validação no app pendente.
 
 ## Validação no app (29/10/2026)

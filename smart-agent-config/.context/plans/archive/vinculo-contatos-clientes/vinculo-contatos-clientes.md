@@ -4,10 +4,39 @@ name: "Vínculo contato ↔ cliente, lista branca e campos do cadastro"
 planSlug: vinculo-contatos-clientes
 description: "Dar ao atendente e à IA a tarefa de vincular o contato WhatsApp a um cliente cadastrado: edição e vínculo manual no Kanban, vínculo automático coletando os dados do cliente na conversa, uma lista de contatos com tratamento próprio e a revisão dos campos do cadastro. Fecha as pendências C4 de painel-crm-e-campos-do-cartao e E4 de n11-operacao-cadastros, que estão com progresso 0."
 summary: "V0 decide o significado de 'lista branca' e a política de vínculo automático; V1 editar e vincular no Kanban; V2 lista branca; V3 vínculo pela conversa; V4 campos do cadastro; V5 validação em CI e dev. Nada roda na máquina local."
-status: draft
+status: completed
 progress: 0
 generated: "2026-10-17"
 scaffoldVersion: "2.0.0"
+phases:
+  - id: "phase-p"
+    name: "Planning"
+    prevc: "P"
+    agent: "architect-specialist"
+    status: "completed"
+  - id: "phase-r"
+    name: "Review"
+    prevc: "R"
+    agent: "architect-specialist"
+    status: "completed"
+  - id: "phase-2"
+    name: "Execution"
+    prevc: "E"
+    agent: "feature-developer"
+    status: "completed"
+    required_sensors: [tests-passing]
+    required_artifacts: [handoff-summary]
+  - id: "phase-v"
+    name: "Validation"
+    prevc: "V"
+    agent: "test-writer"
+    status: "in_progress"
+  - id: "phase-c"
+    name: "Confirmation"
+    prevc: "C"
+    agent: "documentation-writer"
+    status: "pending"
+lastUpdated: "2026-11-05T00:39:43.022Z"
 ---
 
 # Vínculo contato ↔ cliente, lista branca e campos do cadastro
@@ -104,3 +133,7 @@ Objetivo: a IA coleta os dados do cliente na conversa e propõe o cadastro.
 - `painel-crm-e-campos-do-cartao` (C4 e o laço da IA): este plano assume o C4 e o laço aberto de V3.
 - `n11-operacao-cadastros` (E4, whitelist): V2 assume a whitelist, com a semântica corrigida por D1.
 - `regras-do-bot-e-permissoes`: a lista branca de V2 depende da decisão de permissões desse plano se D1 = (b).
+
+## Execution History
+
+> Last updated: 2026-11-05T00:39:43.022Z | Progress: 0%
