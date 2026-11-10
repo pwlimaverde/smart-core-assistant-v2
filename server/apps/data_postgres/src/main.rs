@@ -7058,6 +7058,30 @@ async fn handler_create_contato(
     }
 }
 
+/// Telefone para a trilha de auditoria: só os 4 últimos dígitos à mostra
+/// (V2 do plano de vínculo — o número completo não entra em log nem em
+/// auditoria). Mesma regra do `worker` e do `webhook_ingress`.
+fn mascarar_telefone(telefone: &str) -> String {
+    let caracteres: Vec<char> = telefone.chars().collect();
+    if caracteres.len() <= 4 {
+        return "*".repeat(caracteres.len());
+    }
+    let visiveis: String = caracteres[caracteres.len() - 4..].iter().collect();
+    format!("{}{}", "*".repeat(caracteres.len() - 4), visiveis)
+}
+
+#[cfg(test)]
+mod tests_mascarar_telefone {
+    use super::mascarar_telefone;
+
+    #[test]
+    fn so_os_quatro_ultimos_digitos_ficam_a_mostra() {
+        assert_eq!(mascarar_telefone("5511999998888"), "*********8888");
+        assert_eq!(mascarar_telefone("123"), "***");
+        assert_eq!(mascarar_telefone(""), "");
+    }
+}
+
 /// V3 — um CEP no texto do cliente, só quando vem com hífen (`50000-000`) ou
 /// quando a frase diz "cep". Oito dígitos soltos costumam ser telefone.
 fn extrair_cep(texto: &str) -> Option<String> {
@@ -11855,7 +11879,10 @@ async fn handler_criar_numero_ignorado(
                 .publish(
                     &env,
                     "whatsapp.numero_ignorado.criado",
-                    format!("número '{}' passou a ser ignorado", item.phone_number),
+                    format!(
+                        "número '{}' passou a ser ignorado",
+                        mascarar_telefone(&item.phone_number)
+                    ),
                     serde_json::json!({ "id": item.id, "nome": item.name }),
                 )
                 .await;
@@ -11924,7 +11951,7 @@ async fn handler_atualizar_numero_ignorado(
                     "whatsapp.numero_ignorado.alterado",
                     format!(
                         "número '{}' {}",
-                        item.phone_number,
+                        mascarar_telefone(&item.phone_number),
                         if item.active {
                             "voltou a ser ignorado"
                         } else {
