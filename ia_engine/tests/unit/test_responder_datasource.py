@@ -152,3 +152,12 @@ def test_bloco_de_endereco_lista_os_slugs_do_cliente():
 def test_bloco_de_documento_nao_devolve_cpf_com_digitos_errados():
     assert "11 ou 14 dígitos" in _BLOCO_DOCUMENTO
     assert "não o devolva" in _BLOCO_DOCUMENTO
+
+
+def test_campo_extraido_sem_frase_de_origem_fica_vazio_por_padrao():
+    # V3: a frase do cliente é o que autoriza a gravação. Sem ela o campo
+    # chega vazio, e o servidor descarta.
+    from ia_engine.domain.models import CampoExtraidoItem
+
+    campo = CampoExtraidoItem(slug="cliente.cidade", valor="Recife")
+    assert campo.frase_origem == ""

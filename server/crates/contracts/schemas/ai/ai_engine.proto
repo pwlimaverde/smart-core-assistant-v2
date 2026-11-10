@@ -268,6 +268,11 @@ message CampoExtraido {
   // gravar: o LLM nao define o esquema.
   string valor_json = 2;
   double confianca = 3;
+  // Trecho exato da mensagem do cliente que originou o valor. O servidor só
+  // grava se este trecho aparece inteiro na mensagem de origem: valor sem
+  // frase não entra na ficha (V3 do plano de vínculo). Aditivo: um
+  // `ia_engine` antigo não envia, e o servidor descarta o campo.
+  string frase_origem = 4;
 }
 
 message ResponderResponse {

@@ -147,3 +147,167 @@ def esta_no_texto(valor: str, mensagem: str) -> bool:
     """O valor aparece na mensagem (sem diferenciar acento nem caixa)?"""
     v = _sem_acento(valor).strip()
     return bool(v) and v in _sem_acento(mensagem)
+
+
+def _normal_com_origem(texto: str) -> tuple[str, list[int]]:
+    """Texto sem acento, minúsculo e com espaços colapsados, mais o índice do
+    caractere original de cada caractere normalizado."""
+    saida: list[str] = []
+    origem: list[int] = []
+    for i, c in enumerate(texto):
+        if c.isspace():
+            if saida and saida[-1] != " ":
+                saida.append(" ")
+                origem.append(i)
+            continue
+        for n in _sem_acento(c):
+            saida.append(n)
+            origem.append(i)
+    return "".join(saida), origem
+
+
+# Documento (CPF/CNPJ): só dígitos e a pontuação de máscara.
+_RE_DOCUMENTO = re.compile(r"[\d.\-/\s]+")
+# Número simples ("1500", "1500,5", "-3") e número com milhar ("1.500,50").
+_RE_NUMERO_SIMPLES = re.compile(r"(-?)(\d+)(?:[.,](\d+))?")
+_RE_NUMERO_MILHAR = re.compile(r"(-?)(\d{1,3}(?:[.\s]\d{3})+)(?:,(\d+))?")
+
+
+def _agrupado(inteiro: str, separador: str) -> str:
+    """'1500000' → '1' + sep + '500' + sep + '000' (sep já em regex)."""
+    grupos: list[str] = []
+    while len(inteiro) > 3:
+        grupos.insert(0, inteiro[-3:])
+        inteiro = inteiro[:-3]
+    grupos.insert(0, inteiro)
+    return separador.join(grupos)
+
+
+def _formas_do_numero(inteiro: str, decimais: str | None) -> list[str]:
+    """Regex de cada forma escrita do número: sem milhar, com ponto e com
+    espaço de milhar; a parte decimal aceita vírgula ou ponto."""
+    inteiros = [inteiro]
+    if len(inteiro) > 3:
+        inteiros += [_agrupado(inteiro, r"\."), _agrupado(inteiro, r"\s")]
+    sufixo = rf"[.,]{decimais}" if decimais else ""
+    return [i + sufixo for i in inteiros]
+
+
+def _padrao_numerico(valor: str) -> re.Pattern[str] | None:
+    """Padrão que acha o valor numérico na mensagem, ou `None` se o valor não
+    é número nem documento.
+
+    - CPF/CNPJ (11 ou 14 dígitos): casa por dígitos, aceitando a máscara que o
+      cliente usou ("529.982.247-25" casa "52998224725" e vice-versa).
+    - Número: casa ignorando separador de milhar ("1500" casa "1.500").
+
+    Vizinho dígito, letra, ou ponto/vírgula seguido de dígito invalida o
+    casamento: "500" não é achado dentro de "1.500", nem "12" em "1.2".
+    """
+    digitos = "".join(c for c in valor if c.isdigit())
+    if len(digitos) in (11, 14) and _RE_DOCUMENTO.fullmatch(valor):
+        corpo = r"[.\-/\s]?".join(digitos)
+        return re.compile(rf"(?<![\w.,/-]){corpo}(?![\w]|[.,/-]\d)")
+    formas: list[str] = []
+    for regex in (_RE_NUMERO_MILHAR, _RE_NUMERO_SIMPLES):
+        if m := regex.fullmatch(valor):
+            inteiro = re.sub(r"\D", "", m.group(2))
+            formas += [
+                f"{m.group(1)}{f}" for f in _formas_do_numero(inteiro, m.group(3))
+            ]
+    if not formas:
+        return None
+    # Forma mais longa primeiro: "1.500,50" antes de "1.500".
+    alternativas = "|".join(
+        f"(?:{f})" for f in sorted(set(formas), key=len, reverse=True)
+    )
+    return re.compile(rf"(?<![\w.,])(?:{alternativas})(?![\w]|[.,]\d)")
+
+
+def trecho_no_texto(valor: str, mensagem: str) -> str:
+    """O trecho da mensagem, como o cliente escreveu, onde o valor aparece.
+
+    A busca ignora acento, caixa e espaços repetidos, mas só aceita palavra
+    inteira (o servidor confere assim). Devolve o recorte original da
+    mensagem — é ele a `frase_origem` que o servidor procura. Sem ocorrência,
+    devolve vazio: valor sem frase não é gravado.
+
+    Valor numérico casa pela forma, não pela letra: CPF/CNPJ por dígitos
+    (com ou sem máscara) e número sem olhar o separador de milhar. O recorte
+    devolvido é o da mensagem, com a máscara e a pontuação do cliente.
+
+    Limitação conhecida (regra estrita, de propósito): data, booleano e id de
+    lista normalizados pela LLM ("2026-05-03", "true", "couche_fosco") só
+    acham frase se estiverem escritos assim na mensagem. "dia 3 de maio" não
+    vira frase de "2026-05-03": sem recorte literal, o campo não sai — não se
+    inventa frase. O motor principal (ia_engine) não tem esse limite porque
+    lá a própria LLM escreve a frase.
+    """
+    padrao = _padrao_numerico(valor.strip())
+    if padrao is not None:
+        achado = padrao.search(mensagem)
+        return achado.group(0) if achado else ""
+    alvo, _ = _normal_com_origem(valor.strip())
+    alvo = alvo.strip()
+    if not alvo:
+        return ""
+    normal, origem = _normal_com_origem(mensagem)
+    inicio = 0
+    while (pos := normal.find(alvo, inicio)) >= 0:
+        fim = pos + len(alvo)
+        antes_ok = pos == 0 or not normal[pos - 1].isalnum()
+        depois_ok = fim == len(normal) or not normal[fim].isalnum()
+        if antes_ok and depois_ok:
+            ate = origem[fim - 1] + 1
+            # Acento já decomposto na mensagem (NFD) fica com a letra.
+            while ate < len(mensagem) and unicodedata.category(mensagem[ate]) == "Mn":
+                ate += 1
+            return mensagem[origem[pos] : ate]
+        inicio = pos + 1
+    return ""
+
+
+def _como_o_servidor_compara(texto: str) -> str:
+    """Caixa e espaço repetido não contam; acento conta (o servidor não o
+    normaliza). Espelha o `normalizar` de `endereco.rs`."""
+    return " ".join(texto.split()).lower()
+
+
+def valor_e_frase(valor: str, mensagem: str) -> tuple[str, str] | None:
+    """(valor a enviar, frase de origem) de um campo do cartão, ou `None`
+    se a mensagem não traz o valor — campo sem frase não é enviado.
+
+    O servidor exige, no campo de texto, o valor dentro da frase, comparando
+    acento letra a letra. A cópia da LLM pode vir sem o acento do cliente
+    ("sao paulo" para "São Paulo"): nesse caso o valor enviado passa a ser o
+    próprio recorte, igual à frase. Quando a cópia só difere em caixa ou
+    espaço, ela fica como veio — o servidor já aceita, e um id de lista
+    escrito pela LLM ("couche") não é trocado à toa pelo texto do cliente.
+
+    O tipo do campo não chega ao Jev (o `CampoPendente` do contrato só tem
+    slug, nome, descrição e dica); por isso a troca vale para todo valor que
+    não é número nem documento. Em campo de lista cujo id é a forma sem
+    acento do que o cliente escreveu, a troca faz o servidor recusar o id.
+
+    Valor com cara de número ou documento segue com o valor da LLM, e a frase
+    é o recorte com a máscara do cliente. Em todo tipo o servidor exige a
+    frase inteira na mensagem; além disso, pelo tipo do catálogo:
+    - `cpf`/`cnpj`: os dígitos do valor precisam estar nos dígitos da frase
+      (a máscara não importa) — o par passa;
+    - `numero`, data, booleano, lista: só a frase é conferida — o par passa;
+    - `texto`: o valor precisa estar dentro da frase, letra a letra (só caixa
+      e espaço não contam). Telefone ou CEP em campo `texto` com máscara
+      diferente da do valor ("11987654321" contra "11 98765-4321") é
+      recusado pelo servidor. É falha fechada, de propósito: o campo não é
+      gravado, nada errado entra. Trocar o valor pelo recorte só aqui
+      exigiria saber o tipo, que o Jev não recebe.
+    """
+    v = valor.strip()
+    frase = trecho_no_texto(v, mensagem)
+    if not frase:
+        return None
+    if _padrao_numerico(v) is not None:
+        return v, frase
+    if _como_o_servidor_compara(v) != _como_o_servidor_compara(frase):
+        return frase, frase
+    return v, frase

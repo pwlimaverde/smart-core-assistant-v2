@@ -516,6 +516,14 @@ table ObterContatoDoAtendimentoResponse {
   nome:string;
   telefone:string;
   foto_url:string;
+  email:string;
+  nome_perfil_whatsapp:string;
+  cargo:string;
+  segmento:string;
+  observacoes:string;
+  cliente_id:int;
+  cliente_nome:string;
+  campos_pela_ia:[string];
 }
 
 table ListAtendimentosRequest {
@@ -1181,6 +1189,9 @@ table MyContato {
   ativo:bool;
   ultima_interacao:long;
   cadastrado_em:long;
+  cargo:string;
+  segmento:string;
+  observacoes:string;
 }
 
 table OpcaoCampo {
@@ -1278,6 +1289,9 @@ table UpdateMyContatoRequest {
   id:int;
   nome_contato:string;
   email:string;
+  cargo:string;
+  segmento:string;
+  observacoes:string;
   telefone:string;
 }
 
@@ -1342,6 +1356,8 @@ table DadosMyCliente {
   bairro:string;
   cidade:string;
   uf:string;
+  cargo_responsavel:string;
+  campos_pela_ia:[string];
 }
 
 table MyCliente {

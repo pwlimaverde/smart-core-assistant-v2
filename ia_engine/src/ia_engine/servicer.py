@@ -333,6 +333,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                             slug=c.slug,
                             valor_json=json.dumps(c.valor, ensure_ascii=False),
                             confianca=c.confianca,
+                            frase_origem=c.frase_origem,
                         )
                         for c in final.campos_extraidos
                     ],

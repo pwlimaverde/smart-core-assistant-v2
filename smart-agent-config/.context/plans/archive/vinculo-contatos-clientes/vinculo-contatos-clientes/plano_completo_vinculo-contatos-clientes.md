@@ -184,6 +184,10 @@
 - **V3, sugestão de vínculo:** feita. "Pela conversa, parece ser X. Vincular" quando um cliente bate com o documento; "Criar cliente com estes dados?" quando nenhum bate (documento e nome do contato).
 - **V4, inventário:** feito em `inventario-campos-v4.md`.
 - **V4, conjunto mínimo (D3, decidida por nós):** cliente exige nome, tipo pf/pj e o documento do tipo na criação; na alteração só se olha o que mudou. Feito no servidor (`validar_minimo_do_cliente`, merge `999a6371`).
+- **Convenção de auditoria (fechamento da revisão):** os eventos já gravados no histórico mantêm o nome que têm (`contato_editado`, `campo_personalizado.*`, `whatsapp.numero_ignorado.*`), porque renomear quebra a trilha existente. Os eventos novos desta fase seguem o nome do plano: `contato.vinculo_sugerido_ia` (com `atendimento_id` e `cliente_id`, nunca o documento). `whitelist.*` do plano equivale a `whatsapp.numero_ignorado.*` no código.
+- **V3, frase de origem obrigatória (fechamento):** todo campo de cartão extraído pela IA só é gravado se a frase devolvida (`frase_origem`) estiver, inteira, na mensagem de origem e o valor de texto estiver na frase. Sem isso, conta como `sem_frase_de_origem` no log do servidor. Endereço já exigia o mesmo.
+- **V1, busca por telefone (fechamento):** a busca de clientes casa telefone pelos dígitos, com 4 dígitos ou mais.
+- **V1/V5, CPF/CNPJ fora do log (fechamento):** o `Debug` de `DadosCliente` e `ClienteResumo` mascara o documento. Não se usou `SecretString` porque o campo atravessa cerca de 50 pontos de código e o risco que o plano quer evitar é o de log.
 - **V3, campo inválido vira pergunta:** feito pelo mecanismo que já existia. Valor inválido não é gravado, então o campo de cartão continua pendente e a IA pergunta de novo (`ResolverCamposAtendimento`, campos com `extrair_automaticamente`). O prompt também pede para não devolver CPF/CNPJ com dígitos errados.
 - **D1 e D2:** decididas no próprio plano, ambas em (a).
 - **Release beta.9:** publicada com build, auto-update e feed verificados. Validação no app pendente.

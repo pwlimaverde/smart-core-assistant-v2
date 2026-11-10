@@ -107,12 +107,13 @@ pub trait ClienteStore: Send + Sync {
         cep: String,
     ) -> Result<Option<i32>, DbError>;
 
-    /// V3 — preenche os campos de endereço vazios a partir da mensagem de origem.
+    /// V3 — preenche os campos de endereço vazios a partir das mensagens de
+    /// origem (a rajada que a IA leu, na ordem).
     async fn preencher_enderecos_vazios(
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
-        mensagem_id: i32,
+        mensagens_ids: Vec<i32>,
         candidatos: Vec<(&'static str, String)>,
     ) -> Result<Vec<&'static str>, DbError>;
 

@@ -32,7 +32,7 @@ class _IgnoradosPageState extends State<IgnoradosPage> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Números ignorados',
+      title: 'Não atender',
       drawer: const TenantDrawer(),
       actions: [
         if (_podeAlterar)
@@ -62,36 +62,38 @@ class _IgnoradosPageState extends State<IgnoradosPage> {
                 'e não recebe pesquisa de satisfação. Serve para o número da '
                 'equipe, do contador, do fornecedor — quem escreve mas não é '
                 'atendimento.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: context.colors.fgMuted,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
               ),
             ),
             Expanded(
-              child: ViewStateBuilder<IgnoradosController, List<NumeroIgnorado>>(
-                controller: _controller,
-                onError: (context, error) => AppErrorView(
-                  message: error.message,
-                  onRetry: _controller.carregar,
-                ),
-                onSuccess: (context, itens) => itens.isEmpty
-                    ? const AppEmptyView(
-                        icon: Icons.block,
-                        title: 'Nenhum número ignorado',
-                        subtitle: 'Todas as mensagens abrem atendimento.',
-                      )
-                    : ListView.separated(
-                        itemCount: itens.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (_, i) => _Linha(
-                          item: itens[i],
-                          podeAlterar: _podeAlterar,
-                          onEditar: () => _editar(context, item: itens[i]),
-                          onAlternar: (v) => _alternar(itens[i], v),
-                          onRemover: () => _remover(context, itens[i]),
-                        ),
-                      ),
-              ),
+              child:
+                  ViewStateBuilder<IgnoradosController, List<NumeroIgnorado>>(
+                    controller: _controller,
+                    onError: (context, error) => AppErrorView(
+                      message: error.message,
+                      onRetry: _controller.carregar,
+                    ),
+                    onSuccess: (context, itens) => itens.isEmpty
+                        ? const AppEmptyView(
+                            icon: Icons.block,
+                            title: 'Nenhum número ignorado',
+                            subtitle: 'Todas as mensagens abrem atendimento.',
+                          )
+                        : ListView.separated(
+                            itemCount: itens.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1),
+                            itemBuilder: (_, i) => _Linha(
+                              item: itens[i],
+                              podeAlterar: _podeAlterar,
+                              onEditar: () => _editar(context, item: itens[i]),
+                              onAlternar: (v) => _alternar(itens[i], v),
+                              onRemover: () => _remover(context, itens[i]),
+                            ),
+                          ),
+                  ),
             ),
           ],
         ),

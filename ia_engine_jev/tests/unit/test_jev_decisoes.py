@@ -6,7 +6,14 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
-from ia_engine_jev.candidatos import esta_no_texto, por_data, por_lista, por_regex
+from ia_engine_jev.candidatos import (
+    esta_no_texto,
+    por_data,
+    por_lista,
+    por_regex,
+    trecho_no_texto,
+    valor_e_frase,
+)
 from ia_engine_jev.config.models import RegraTransferencia
 from ia_engine_jev.conversao import (
     dados_da_coleta,
@@ -131,6 +138,76 @@ def test_lista_e_texto():
     assert por_lista("x", ("couchê", "offset", "couchê")) == ["couchê", "offset"]
     assert esta_no_texto("Couche", "papel couchê fosco")
     assert not esta_no_texto("", "qualquer")
+
+
+def test_trecho_no_texto_recorta_como_o_cliente_escreveu():
+    # Acento, caixa e espaços repetidos não impedem achar; o recorte é o
+    # original da mensagem (é ele que o servidor confere).
+    assert trecho_no_texto("sao paulo", "Moro em São   Paulo.") == "São   Paulo"
+    assert trecho_no_texto("Couche", "papel COUCHÊ fosco") == "COUCHÊ"
+    # Acento já decomposto (NFD) fica junto da letra.
+    assert trecho_no_texto("cafe", "um café forte") == "café"
+    # Só palavra inteira: "Rio" dentro de "Rioja" não serve.
+    assert trecho_no_texto("Rio", "vinho Rioja") == ""
+    assert trecho_no_texto("Rio", "vinho Rioja do Rio") == "Rio"
+    assert trecho_no_texto("  ", "qualquer") == ""
+
+
+def test_trecho_numerico_casa_pela_forma():
+    # Mudança: "1500" agora casa "1.500" (antes saía vazio, o que contradizia
+    # o servidor, que para número só confere a frase). O recorte é o do cliente.
+    assert trecho_no_texto("1500", "quero 1.500") == "1.500"
+    assert trecho_no_texto("1500", "quero 1 500 unidades") == "1 500"
+    assert trecho_no_texto("1.500", "quero 1500") == "1500"
+    assert trecho_no_texto("1500,50", "total 1.500,50.") == "1.500,50"
+    # Pedaço de outro número não serve.
+    assert trecho_no_texto("500", "quero 1.500") == ""
+    assert trecho_no_texto("12", "nota 1.2") == ""
+    assert trecho_no_texto("500", "quero 1.500 ou 500") == "500"
+    # CPF/CNPJ por dígitos, com ou sem máscara dos dois lados.
+    assert trecho_no_texto("52998224725", "cpf 529.982.247-25 ok") == "529.982.247-25"
+    assert trecho_no_texto("529.982.247-25", "cpf 52998224725") == "52998224725"
+    assert (
+        trecho_no_texto("11222333000181", "CNPJ: 11.222.333/0001-81.")
+        == "11.222.333/0001-81"
+    )
+    assert trecho_no_texto("52998224725", "cpf 529.982.247-250") == ""
+
+
+def test_trecho_sem_recorte_literal_nao_inventa_frase():
+    # Limitação conhecida do motor Jev: valor normalizado pela LLM que o
+    # cliente não escreveu assim fica sem frase — e o campo não sai.
+    assert trecho_no_texto("2026-05-03", "entrega dia 3 de maio") == ""
+    assert trecho_no_texto("true", "sim, tenho a arte") == ""
+    assert trecho_no_texto("2026-05-03", "entrega 2026-05-03") == "2026-05-03"
+
+
+def test_valor_e_frase_do_campo():
+    # Texto sem o acento do cliente: o valor vira o recorte, igual à frase.
+    assert valor_e_frase("sao paulo", "Moro em São Paulo") == ("São Paulo", "São Paulo")
+    # Só caixa/espaço diferem: o servidor aceita, a cópia fica como veio.
+    assert valor_e_frase("azul", "cor AZUL") == ("azul", "AZUL")
+    # Número e documento ficam com o valor da LLM; a frase é a do cliente.
+    assert valor_e_frase("1500", "quero 1.500") == ("1500", "1.500")
+    assert valor_e_frase("52998224725", "cpf 529.982.247-25") == (
+        "52998224725",
+        "529.982.247-25",
+    )
+    # Sem recorte, o campo não é enviado.
+    assert valor_e_frase("2026-05-03", "dia 3 de maio") is None
+    assert valor_e_frase("Recife", "moro em Olinda") is None
+
+
+def test_valor_e_frase_telefone_em_campo_texto_e_recusado_no_servidor():
+    # Limite documentado, não um acerto: telefone de 11 dígitos tem cara de
+    # documento, então o par mantém o valor da LLM e usa o recorte com a
+    # máscara do cliente. Se o campo do catálogo for do tipo `texto`, o
+    # servidor exige o valor letra a letra dentro da frase e recusa o par
+    # (falha fechada: o campo não é gravado).
+    assert valor_e_frase("11987654321", "tel 11 98765-4321") == (
+        "11987654321",
+        "11 98765-4321",
+    )
 
 
 def test_datas_numericas_extenso_e_relativas():

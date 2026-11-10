@@ -169,5 +169,5 @@ class DecisaoResposta:
     requisicoes: int = 0
     duracao_ms: int = 0
     etapas: tuple[tuple[str, int], ...] = ()
-    campos_extraidos: tuple[tuple[str, str, float], ...] = field(default=())
+    campos_extraidos: tuple[tuple[str, str, float, str], ...] = field(default=())
     analise: AnaliseJev | None = None

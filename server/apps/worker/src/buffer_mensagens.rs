@@ -61,6 +61,25 @@ pub(crate) fn ultima_mensagem_id(rajada: &[MensagemBufferizada]) -> Option<i32> 
     rajada.iter().rev().find_map(|m| m.mensagem_id)
 }
 
+/// V3 — as mensagens persistidas cujo texto entrou no [`compilar`], na mesma
+/// ordem. É o conjunto contra o qual o `data_postgres` confere a frase que a IA
+/// diz ter copiado: com só a última, um CPF dito antes dela na rajada nunca
+/// seria encontrado. Mesmo filtro do `compilar` (texto vazio fica de fora) para
+/// o texto de origem ser exatamente o que a IA leu.
+pub(crate) fn mensagens_da_rajada(rajada: &[MensagemBufferizada]) -> Vec<i32> {
+    let mut ids: Vec<i32> = Vec::new();
+    for id in rajada
+        .iter()
+        .filter(|m| !m.texto.trim().is_empty())
+        .filter_map(|m| m.mensagem_id)
+    {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
+}
+
 /// Resultado de enfileirar uma mensagem na janela do contato.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Enfileiramento {
@@ -340,6 +359,30 @@ mod tests {
         let antiga: MensagemBufferizada =
             serde_json::from_str(r#"{"message_id":"m","texto":"t"}"#).unwrap();
         assert_eq!(antiga.mensagem_id, None);
+    }
+
+    /// V3 — os ids de origem são exatamente as mensagens que entraram no texto
+    /// compilado, na mesma ordem: sem a vazia, sem a que não tem id persistido.
+    #[test]
+    fn origem_da_rajada_acompanha_o_texto_compilado() {
+        let mut sem_id = msg("x", "sem id");
+        sem_id.mensagem_id = None;
+        let rajada = vec![
+            msg("10", "meu CPF é 123.456.789-09"),
+            msg("11", "   "),
+            sem_id,
+            msg("12", "pode cadastrar?"),
+        ];
+        assert_eq!(mensagens_da_rajada(&rajada), vec![10, 12]);
+        assert!(mensagens_da_rajada(&[]).is_empty());
+    }
+
+    #[test]
+    fn origem_da_rajada_nao_repete_mensagem() {
+        assert_eq!(
+            mensagens_da_rajada(&[msg("5", "oi"), msg("5", "oi"), msg("6", "tudo bem?")]),
+            vec![5, 6]
+        );
     }
 
     /// O comportamento central da fase: a rajada vira UMA pergunta, na ordem em

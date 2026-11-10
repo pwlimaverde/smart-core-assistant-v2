@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{errors::DbError, security::RequestContext};
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct Cliente {
     pub id: i32,
     pub tenant_id: Uuid,
@@ -214,7 +214,7 @@ impl ClienteRepository for PostgresClienteRepository {
 // ---------------------------------------------------------------------------
 
 /// Os campos editáveis de um cliente. `None` = vazio.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Clone, Default, PartialEq)]
 pub struct DadosCliente {
     pub nome_fantasia: String,
     pub razao_social: Option<String>,
@@ -240,7 +240,7 @@ pub struct DadosCliente {
 
 /// Um cliente como a tela o mostra: textos vazios em vez de nulos, e quantos
 /// contatos estão ligados a ele.
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+#[derive(Clone, Default, PartialEq, serde::Serialize)]
 pub struct ClienteResumo {
     /// Campos que a IA preencheu a partir da conversa (ex.: `cep`).
     pub campos_pela_ia: Vec<String>,
@@ -264,6 +264,85 @@ pub struct ClienteResumo {
     pub uf: String,
     pub ativo: bool,
     pub contatos: i64,
+}
+
+/// Texto que o `Debug` escreve como está, sem as aspas que `&str` ganharia.
+struct Cru(&'static str);
+
+impl std::fmt::Debug for Cru {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+/// CPF/CNPJ não aparecem em `Debug`: log e panic imprimem `Debug`, e documento
+/// é dado pessoal (V5 do plano de vínculo). O valor segue para o banco e a API
+/// pelos campos normais; só a formatação de depuração é mascarada (ver os
+/// `impl Debug` de `Cliente`, `DadosCliente` e `ClienteResumo` abaixo).
+fn redigido(valor: &Option<String>) -> Cru {
+    match valor {
+        Some(v) if !v.is_empty() => Cru("Some([REDIGIDO])"),
+        Some(_) => Cru("Some(\"\")"),
+        None => Cru("None"),
+    }
+}
+
+fn redigido_texto(valor: &str) -> Cru {
+    if valor.is_empty() {
+        Cru("\"\"")
+    } else {
+        Cru("[REDIGIDO]")
+    }
+}
+
+impl std::fmt::Debug for Cliente {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cliente")
+            .field("id", &self.id)
+            .field("tenant_id", &self.tenant_id)
+            .field("nome_fantasia", &self.nome_fantasia)
+            .field("slug", &self.slug)
+            .field("tipo", &self.tipo)
+            .field("cnpj", &redigido(&self.cnpj))
+            .field("cpf", &redigido(&self.cpf))
+            .field("ativo", &self.ativo)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for DadosCliente {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DadosCliente")
+            .field("nome_fantasia", &self.nome_fantasia)
+            .field("razao_social", &self.razao_social)
+            .field("tipo", &self.tipo)
+            .field("cnpj", &redigido(&self.cnpj))
+            .field("cpf", &redigido(&self.cpf))
+            .field("telefone", &self.telefone)
+            .field("site", &self.site)
+            .field("ramo_atividade", &self.ramo_atividade)
+            .field("observacoes", &self.observacoes)
+            .field("cargo_responsavel", &self.cargo_responsavel)
+            .field("cep", &self.cep)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for ClienteResumo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClienteResumo")
+            .field("id", &self.id)
+            .field("nome_fantasia", &self.nome_fantasia)
+            .field("razao_social", &self.razao_social)
+            .field("tipo", &self.tipo)
+            .field("cnpj", &redigido_texto(&self.cnpj))
+            .field("cpf", &redigido_texto(&self.cpf))
+            .field("telefone", &self.telefone)
+            .field("ativo", &self.ativo)
+            .field("contatos", &self.contatos)
+            .field("campos_pela_ia", &self.campos_pela_ia)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Um contato ligado a um cliente.
@@ -296,7 +375,12 @@ const SQL_LISTAR_CLIENTES: &str = r#"SELECT c.id, c.nome_fantasia,
              AND ($3 = '' OR c.nome_fantasia ILIKE '%' || $3 || '%'
                   OR COALESCE(c.razao_social, '') ILIKE '%' || $3 || '%'
                   OR COALESCE(c.cnpj, '') LIKE '%' || $3 || '%'
-                  OR COALESCE(c.cpf, '') LIKE '%' || $3 || '%')
+                  OR COALESCE(c.cpf, '') LIKE '%' || $3 || '%'
+                  -- Telefone casa só por dígitos (a busca pode vir com máscara),
+                  -- e só com 4+ dígitos, para não casar tudo com um termo curto.
+                  OR (length(regexp_replace($3, '\D', '', 'g')) >= 4
+                      AND regexp_replace(COALESCE(c.telefone, ''), '\D', '', 'g')
+                          LIKE '%' || regexp_replace($3, '\D', '', 'g') || '%'))
            ORDER BY c.ativo DESC, c.nome_fantasia
            LIMIT $4"#;
 
@@ -344,8 +428,8 @@ fn cliente_da_linha(row: &sqlx::postgres::PgRow) -> Result<ClienteResumo, DbErro
     })
 }
 
-/// Clientes do tenant, ativos primeiro. `busca` casa nome fantasia, razão social
-/// e documento; vazia = sem filtro.
+/// Clientes do tenant, ativos primeiro. `busca` casa nome fantasia, razão social,
+/// documento e telefone (por dígitos); vazia = sem filtro.
 pub async fn listar_clientes(
     tx: &mut Transaction<'_, Postgres>,
     ctx: &RequestContext,
@@ -552,27 +636,47 @@ pub async fn preencher_cep_vazio(
     Ok(id.map(|(i,)| i))
 }
 
-/// V3 — grava os campos de endereço que a IA extraiu da mensagem de origem.
-/// Só preenche campo vazio, e só com valor que aparece no texto do cliente.
-/// Devolve as colunas gravadas.
+/// V3 — o texto que a IA leu: o `conteudo` das mensagens da rajada, na ordem
+/// de `mensagens_ids`, unido por `\n` (ver
+/// [`super::endereco::montar_texto_de_origem`]). Só mensagens deste tenant e
+/// deste atendimento entram. `None` quando nenhuma é encontrada.
+pub async fn texto_de_origem(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    atendimento_id: i32,
+    mensagens_ids: &[i32],
+) -> Result<Option<String>, DbError> {
+    if mensagens_ids.is_empty() {
+        return Ok(None);
+    }
+    let linhas: Vec<(i32, String)> = sqlx::query_as(
+        "SELECT id, conteudo FROM oraculo_mensagem \
+         WHERE tenant_id = $1 AND atendimento_id = $2 AND id = ANY($3)",
+    )
+    .bind(tenant_id)
+    .bind(atendimento_id)
+    .bind(mensagens_ids)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(super::endereco::montar_texto_de_origem(
+        mensagens_ids,
+        &linhas,
+    ))
+}
+
+/// V3 — grava os campos de endereço que a IA extraiu das mensagens de origem
+/// (a rajada inteira que a IA leu). Só preenche campo vazio, e só com valor
+/// que aparece no texto do cliente. Devolve as colunas gravadas.
 pub async fn preencher_enderecos_vazios(
     tx: &mut Transaction<'_, Postgres>,
     ctx: &RequestContext,
     atendimento_id: i32,
-    mensagem_id: i32,
+    mensagens_ids: &[i32],
     candidatos: &[(&'static str, String)],
 ) -> Result<Vec<&'static str>, DbError> {
     ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
-    let texto: Option<(String,)> = sqlx::query_as(
-        "SELECT conteudo FROM oraculo_mensagem \
-         WHERE tenant_id = $1 AND id = $2 AND atendimento_id = $3",
-    )
-    .bind(ctx.tenant_id)
-    .bind(mensagem_id)
-    .bind(atendimento_id)
-    .fetch_optional(&mut **tx)
-    .await?;
-    let Some((texto,)) = texto else {
+    let Some(texto) = texto_de_origem(tx, ctx.tenant_id, atendimento_id, mensagens_ids).await?
+    else {
         return Ok(Vec::new());
     };
     let mut gravadas = Vec::new();

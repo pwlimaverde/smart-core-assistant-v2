@@ -232,11 +232,25 @@ pub struct ResponderOutput {
 /// `valor_json` é texto de propósito: o tipo real (número, data, lista) mora
 /// no catálogo do tenant, que esta crate não conhece. Quem converte e recusa
 /// é o `data_postgres`.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct CampoExtraidoOutput {
     pub slug: String,
     pub valor_json: String,
     pub confianca: f64,
+    /// Trecho da mensagem do cliente que originou o valor (V3). Vazio = sem frase.
+    pub frase_origem: String,
+}
+
+/// `Debug` manual: `valor_json` e `frase_origem` são fala do cliente e podem
+/// trazer CPF, endereço ou telefone (V5). Log e panic imprimem `Debug`, então
+/// só o slug e a confiança aparecem.
+impl std::fmt::Debug for CampoExtraidoOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CampoExtraidoOutput")
+            .field("slug", &self.slug)
+            .field("confianca", &self.confianca)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Clone, Default)]

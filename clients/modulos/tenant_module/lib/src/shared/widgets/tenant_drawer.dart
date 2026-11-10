@@ -47,7 +47,7 @@ class TenantDrawer extends StatelessWidget {
         'Conexões de WhatsApp',
         '/tenant/conexoes',
       ),
-      item(Icons.block_outlined, 'Números ignorados', '/tenant/ignorados'),
+      item(Icons.block_outlined, 'Não atender', '/tenant/ignorados'),
       item(Icons.school_outlined, 'Treinamento da IA', '/tenant/treinamento'),
     ].nonNulls.toList();
 
