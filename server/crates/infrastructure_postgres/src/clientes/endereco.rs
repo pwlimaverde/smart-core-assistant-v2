@@ -82,6 +82,24 @@ pub fn frase_sustenta_valor(
     }
 }
 
+/// V3 — o texto de origem de uma rajada: o `conteudo` de cada mensagem, na
+/// ordem de `ids`, unido por `\n`, sem as entradas vazias.
+///
+/// Espelha o `buffer_mensagens::compilar` do worker, que é como o texto que a
+/// IA leu foi montado: sem a mesma junção, a frase que a IA copiou de uma
+/// mensagem anterior à última da rajada nunca seria encontrada. `linhas` vem
+/// do banco em ordem qualquer; id ausente nela (de outro atendimento, apagado)
+/// é ignorado. `None` quando nada sobra.
+pub fn montar_texto_de_origem(ids: &[i32], linhas: &[(i32, String)]) -> Option<String> {
+    let partes: Vec<&str> = ids
+        .iter()
+        .filter_map(|id| linhas.iter().find(|(l, _)| l == id))
+        .map(|(_, texto)| texto.trim())
+        .filter(|t| !t.is_empty())
+        .collect();
+    (!partes.is_empty()).then(|| partes.join("\n"))
+}
+
 /// Devolve o valor pronto para gravar, ou `None` se ele não passa nas regras.
 pub fn valor_de_endereco(coluna: &str, valor: &str, texto_da_mensagem: &str) -> Option<String> {
     let valor = valor.trim();
@@ -193,6 +211,54 @@ mod tests {
         assert_eq!(valor_de_endereco("cidade", "   ", "x"), None);
         let longo = "a".repeat(121);
         assert_eq!(valor_de_endereco("cidade", &longo, &longo), None);
+    }
+
+    #[test]
+    fn texto_de_origem_junta_a_rajada_na_ordem_dos_ids() {
+        // O banco devolve em ordem qualquer; vale a ordem da rajada.
+        let linhas = vec![
+            (12, "do produto X".to_string()),
+            (10, "oi".to_string()),
+            (11, "meu CPF é 123.456.789-09".to_string()),
+        ];
+        assert_eq!(
+            montar_texto_de_origem(&[10, 11, 12], &linhas).as_deref(),
+            Some("oi\nmeu CPF é 123.456.789-09\ndo produto X")
+        );
+    }
+
+    #[test]
+    fn frase_de_mensagem_anterior_da_rajada_e_encontrada() {
+        let linhas = vec![
+            (1, "meu CPF é 123.456.789-09".to_string()),
+            (2, "pode cadastrar?".to_string()),
+        ];
+        let texto = montar_texto_de_origem(&[1, 2], &linhas).unwrap_or_default();
+        assert!(frase_sustenta_valor(
+            &texto,
+            "meu CPF é 123.456.789-09",
+            None
+        ));
+    }
+
+    #[test]
+    fn texto_de_origem_ignora_id_ausente_e_entrada_vazia() {
+        let linhas = vec![(1, "oi".to_string()), (2, "   ".to_string())];
+        assert_eq!(
+            montar_texto_de_origem(&[1, 2, 99], &linhas).as_deref(),
+            Some("oi")
+        );
+        assert_eq!(montar_texto_de_origem(&[99], &linhas), None);
+        assert_eq!(montar_texto_de_origem(&[], &linhas), None);
+    }
+
+    #[test]
+    fn mensagem_unica_sai_como_esta() {
+        let linhas = vec![(7, "moro em Recife".to_string())];
+        assert_eq!(
+            montar_texto_de_origem(&[7], &linhas).as_deref(),
+            Some("moro em Recife")
+        );
     }
 
     #[test]

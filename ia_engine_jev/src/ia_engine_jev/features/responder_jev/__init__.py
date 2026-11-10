@@ -46,6 +46,7 @@ from py_return_success_or_error import (
     UsecaseBaseCallData,
 )
 
+from ia_engine_jev.candidatos import valor_e_frase
 from ia_engine_jev.config.models import RegraTransferencia
 from ia_engine_jev.decisoes.ato import (
     CONFIAVEIS,
@@ -487,11 +488,28 @@ def _coleta_ja_concluida(
     )
 
 
-def _valor_json(valor: str) -> str:
+# Milhar no padrão brasileiro, um só separador (ponto OU espaço) entre grupos
+# de três dígitos, com vírgula decimal opcional: "1.500", "1 500", "1.500,50".
+_RE_MILHAR_BR = re.compile(r"(-?\d{1,3})((?:\.\d{3})+|(?: \d{3})+)(?:,(\d+))?")
+
+
+def valor_json(valor: str) -> str:
     """O valor tipado como JSON; o servidor revalida contra o catálogo."""
     v = valor.strip()
     if v.lower() in ("true", "false"):
         return v.lower()
+    # 11+ dígitos é documento ou telefone, não quantidade: vai como texto. Como
+    # número, o servidor recusaria o CPF/CNPJ (exige string) e o zero à
+    # esquerda se perderia. Campo `numero` também aceita string numérica.
+    if re.fullmatch(r"\d{11,}", v):
+        return json.dumps(v)
+    # Separador de milhar sai antes de serializar: "1.500" como JSON seria
+    # 1,5. Só o formato inequívoco acima; o resto segue as regras de baixo
+    # ("1.50" continua 1.50, "1,500" continua 1.5).
+    if m := _RE_MILHAR_BR.fullmatch(v):
+        inteiro = m.group(1) + re.sub(r"\D", "", m.group(2))
+        decimais = (m.group(3) or "").rstrip("0")
+        return f"{inteiro}.{decimais}" if decimais else inteiro
     if re.fullmatch(r"-?\d+(?:,\d+)?", v):
         return v.replace(",", ".")
     if re.fullmatch(r"-?\d+(?:\.\d+)?", v):
@@ -524,15 +542,22 @@ class ResponderJevUsecase(
             limiares=p.limiares,
             uso=data.uso,
         )
-        campos = tuple(
-            (slug, _valor_json(v), c, v if isinstance(v, str) else str(v))
-            for slug, v, c in campos_conferidos(
-                data.valores,
-                data.conferencia_valores,
-                p.mensagem,
-                p.limiares.piso_entidade,
-            )
-        )
+        # V3: a frase de origem é o recorte literal da mensagem onde o valor
+        # aparece (número e CPF/CNPJ casam pela forma; ver `trecho_no_texto`).
+        # Texto cuja cópia perdeu o acento do cliente vai com o recorte como
+        # valor, igual à frase. Sem recorte (data ISO, booleano, id de lista
+        # que o cliente não escreveu assim) o campo não é enviado.
+        enviados: list[tuple[str, str, float, str]] = []
+        for slug, v, c in campos_conferidos(
+            data.valores,
+            data.conferencia_valores,
+            p.mensagem,
+            p.limiares.piso_entidade,
+        ):
+            par = valor_e_frase(v, p.mensagem)
+            if par is not None:
+                enviados.append((slug, valor_json(par[0]), c, par[1]))
+        campos = tuple(enviados)
         comum: dict[str, Any] = {
             "ato": plano.ato,
             "trechos": data.trechos,
@@ -649,4 +674,5 @@ __all__ = [
     "ResponderJevParameters",
     "ResponderJevRepository",
     "ResponderJevUsecase",
+    "valor_json",
 ]

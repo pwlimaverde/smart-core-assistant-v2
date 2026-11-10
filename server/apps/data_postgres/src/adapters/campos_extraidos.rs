@@ -139,10 +139,87 @@ pub fn valor_para_o_tipo(valor_json: &str, tipo: &str, opcoes: &Value) -> Option
     }
 }
 
+/// Literal que a frase de origem tem de conter para o campo ser gravado (V3).
+///
+/// Só o tipo `texto` exige literal. Usa o mesmo parse de [`valor_para_o_tipo`]:
+/// valor que não é JSON válido (ex.: `0123` sem aspas) vale como texto cru e
+/// continua exigindo o literal — sem isso a trava sumia justamente aí.
+pub fn literal_exigido(valor_json: &str, tipo: &str) -> Option<String> {
+    match tipo {
+        "texto" => valor_para_o_tipo(valor_json, "texto", &Value::Null)
+            .and_then(|v| v.as_str().map(str::to_string)),
+        _ => None,
+    }
+}
+
+/// `true` quando os dígitos de `valor` aparecem na `frase` como número
+/// inteiro, não como pedaço de um número maior.
+///
+/// A frase é cortada em tokens numéricos — dígitos e a máscara de CPF/CNPJ
+/// (`.`, `-`, `/`) — e algum token tem de ter exatamente os dígitos do valor.
+/// Assim `123.456.789-09` casa com `12345678909`, mas o CNPJ
+/// `11.222.333/0001-81` não sustenta o "CPF" `11222333000`.
+pub fn digitos_delimitados(frase: &str, valor: &str) -> bool {
+    let digitos = |s: &str| -> String { s.chars().filter(char::is_ascii_digit).collect() };
+    let alvo = digitos(valor);
+    if alvo.is_empty() {
+        return false;
+    }
+    frase
+        .split(|c: char| !(c.is_ascii_digit() || matches!(c, '.' | '-' | '/')))
+        .any(|token| digitos(token) == alvo)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn digitos_delimitados_cpf_com_mascara_casa() {
+        assert!(digitos_delimitados(
+            "meu cpf é 123.456.789-09, obrigado",
+            "12345678909"
+        ));
+    }
+
+    #[test]
+    fn digitos_delimitados_sequencia_maior_nao_casa() {
+        assert!(!digitos_delimitados(
+            "o cnpj é 11.222.333/0001-81",
+            "11222333000"
+        ));
+        assert!(!digitos_delimitados("tel 5511999998888", "11999998888"));
+    }
+
+    #[test]
+    fn digitos_delimitados_cnpj_com_mascara_casa() {
+        assert!(digitos_delimitados(
+            "CNPJ:11.222.333/0001-81.",
+            "11222333000181"
+        ));
+    }
+
+    #[test]
+    fn digitos_delimitados_valor_sem_digitos_nao_casa() {
+        assert!(!digitos_delimitados("qualquer coisa", ""));
+    }
+
+    #[test]
+    fn literal_exigido_aceita_texto_cru_como_literal() {
+        // `0123` não é JSON válido: vira texto cru e o literal continua exigido.
+        assert_eq!(literal_exigido("0123", "texto"), Some("0123".to_string()));
+        assert_eq!(
+            literal_exigido("\" Rua A \"", "texto"),
+            Some("Rua A".to_string())
+        );
+    }
+
+    #[test]
+    fn literal_exigido_so_para_texto() {
+        assert_eq!(literal_exigido("\"2026-01-02\"", "data"), None);
+        assert_eq!(literal_exigido("\"12345678909\"", "cpf"), None);
+    }
 
     #[test]
     fn texto_aceita_string_e_apara() {

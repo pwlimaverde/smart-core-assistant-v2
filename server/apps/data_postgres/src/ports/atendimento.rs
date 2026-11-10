@@ -33,7 +33,7 @@ pub struct CampoPendenteDto {
 /// `valor_json` chega como o LLM devolveu: é texto até o servidor conferir
 /// contra o `tipo` do catálogo. Confiar na forma aqui seria confiar no LLM
 /// para definir o esquema.
-#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[derive(Clone, Default, serde::Deserialize)]
 pub struct CampoExtraidoDto {
     pub slug: String,
     pub valor_json: String,
@@ -45,12 +45,23 @@ pub struct CampoExtraidoDto {
     pub frase_origem: String,
 }
 
+/// `Debug` manual: `valor_json` e `frase_origem` são fala do cliente e podem
+/// trazer CPF, endereço ou telefone (V5). Só o slug e a confiança aparecem.
+impl std::fmt::Debug for CampoExtraidoDto {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CampoExtraidoDto")
+            .field("slug", &self.slug)
+            .field("confianca", &self.confianca)
+            .finish_non_exhaustive()
+    }
+}
+
 /// O que aconteceu com cada campo que a IA mandou.
 ///
 /// Os descartes vêm separados por motivo de propósito: é a diferença entre
 /// "a IA não preenche" e "a IA preenche errado", e sem ela não há como
 /// calibrar o piso de confiança.
-#[derive(Debug, Clone, Default, serde::Serialize)]
+#[derive(Clone, Default, serde::Serialize)]
 pub struct ResumoCamposExtraidos {
     pub recebidos: usize,
     pub gravados: usize,
@@ -63,10 +74,30 @@ pub struct ResumoCamposExtraidos {
     pub sem_frase_de_origem: usize,
     /// Humano escreveu ou apagou ali. Não é erro da IA: é a guarda operando.
     pub humano_no_caminho: usize,
-    /// CPF/CNPJ (só dígitos) que a IA gravou nesta rodada. Alimenta a sugestão
-    /// de vínculo com cliente já cadastrado (auditada como `contato.vinculo_sugerido_ia`).
+    /// CPF/CNPJ (só dígitos) que a IA gravou nesta rodada e que o campo ainda
+    /// não tinha. Alimenta a sugestão de vínculo com cliente já cadastrado
+    /// (auditada como `contato.vinculo_sugerido_ia`); o documento regravado
+    /// igual fica de fora, para a sugestão não se repetir a cada rajada.
     #[serde(skip)]
     pub documentos_gravados: Vec<String>,
+}
+
+/// `Debug` manual: `documentos_gravados` é CPF/CNPJ puro e não pode sair em
+/// log nem em panic (V5). Mostra só quantos são.
+impl std::fmt::Debug for ResumoCamposExtraidos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResumoCamposExtraidos")
+            .field("recebidos", &self.recebidos)
+            .field("gravados", &self.gravados)
+            .field("slug_desconhecido", &self.slug_desconhecido)
+            .field("extracao_desligada", &self.extracao_desligada)
+            .field("tipo_invalido", &self.tipo_invalido)
+            .field("abaixo_do_piso", &self.abaixo_do_piso)
+            .field("sem_frase_de_origem", &self.sem_frase_de_origem)
+            .field("humano_no_caminho", &self.humano_no_caminho)
+            .field("documentos_gravados", &self.documentos_gravados.len())
+            .finish()
+    }
 }
 
 /// Campos personalizados resolvidos de um atendimento: já coletados (com valor)
@@ -764,12 +795,17 @@ pub trait AtendimentoStore: Send + Sync {
     /// `piso_confianca` vem da config do tenant (B4): é a mesma
     /// `confianca_minima_automatica` que decide se a resposta precisa de
     /// revisão — um número só para "quando confio na IA".
+    ///
+    /// `mensagens_origem_ids` é a rajada que a IA leu, na ordem: a frase é
+    /// conferida contra o texto delas unido por `\n`. `mensagem_origem_id`
+    /// (a última) segue como a origem gravada no valor.
     async fn gravar_campos_extraidos(
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
         campos: Vec<CampoExtraidoDto>,
         mensagem_origem_id: Option<i32>,
+        mensagens_origem_ids: Vec<i32>,
         piso_confianca: f64,
     ) -> Result<ResumoCamposExtraidos, DbError>;
 

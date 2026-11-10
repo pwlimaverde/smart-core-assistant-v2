@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:api_client/api_client.dart' show GrpcError;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -79,6 +81,11 @@ void main() {
         buscarClientes: BuscarClientesUsecase(
           repository: BuscarClientesRepository(
             datasource: BuscarClientesDatasource(gateway: gateway),
+          ),
+        ),
+        salvarCliente: SalvarClienteUsecase(
+          repository: SalvarClienteRepository(
+            datasource: SalvarClienteDatasource(gateway: gateway),
           ),
         ),
       );
@@ -198,6 +205,147 @@ void main() {
       await tester.tap(find.text('Vincular'));
       await tester.pumpAndSettle();
       expect(gateway.acoesDoCadastro, contains('vincular:9:4:true'));
+    });
+
+    // Documento válido sem cliente cadastrado: a sugestão oferece "Criar".
+    Future<void> montarComDocumentoNovo(
+      WidgetTester tester,
+      FakeAtendimentoGateway gateway,
+    ) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      final controller = controllerSobre(gateway);
+      addTearDown(controller.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PainelFicha(
+              controller: controller,
+              contato: const ContatoDaConversa(
+                contatoId: 4,
+                nome: 'Ana',
+                telefone: '5588999912191',
+                fotoUrl: '',
+              ),
+              documentos: const ['52998224725'],
+            ),
+          ),
+        ),
+      );
+      await controller.abrir(7);
+      await tester.pumpAndSettle();
+    }
+
+    int contar(FakeAtendimentoGateway gateway, String prefixo) =>
+        gateway.acoesDoCadastro.where((a) => a.startsWith(prefixo)).length;
+
+    testWidgets('vínculo que falhou depois de criar não cria o cliente de '
+        'novo no próximo clique', (tester) async {
+      // Criar de novo duplicaria o cliente com o mesmo documento.
+      final gateway = FakeAtendimentoGateway()
+        ..erroVincular = GrpcError.unavailable('fora do ar');
+      await montarComDocumentoNovo(tester, gateway);
+
+      expect(find.text('Criar cliente com estes dados?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Criar'));
+      await tester.pumpAndSettle();
+
+      expect(contar(gateway, 'salvarCliente:'), 1);
+      expect(contar(gateway, 'vincular:1:4:true'), 1);
+      expect(find.byType(SnackBar), findsOneWidget);
+
+      gateway.erroVincular = null;
+      await tester.tap(find.widgetWithText(TextButton, 'Criar'));
+      await tester.pumpAndSettle();
+
+      expect(contar(gateway, 'salvarCliente:'), 1);
+      expect(contar(gateway, 'vincular:1:4:true'), 2);
+    });
+
+    testWidgets('duplo clique em "Criar" enquanto a chamada roda cria uma '
+        'vez só', (tester) async {
+      final gateway = FakeAtendimentoGateway()
+        ..travaSalvarCliente = Completer<void>();
+      await montarComDocumentoNovo(tester, gateway);
+
+      final botao = find.widgetWithText(TextButton, 'Criar');
+      await tester.tap(botao);
+      await tester.pump();
+
+      // Ocupado: o botão fica desabilitado e o segundo toque não dispara nada.
+      expect(tester.widget<TextButton>(botao).onPressed, isNull);
+      await tester.tap(botao, warnIfMissed: false);
+      await tester.pump();
+
+      gateway.travaSalvarCliente!.complete();
+      await tester.pumpAndSettle();
+
+      expect(contar(gateway, 'salvarCliente:'), 1);
+      expect(contar(gateway, 'vincular:1:4:true'), 1);
+    });
+
+    testWidgets('documento que muda durante "Criar" não vincula o contato ao '
+        'cliente do documento anterior', (tester) async {
+      // A conversa trazia o documento A; durante a criação chega mensagem e o
+      // documento vira B. O cliente de A não pode ser ligado ao contato, nem
+      // reaproveitado quando o atendente clicar "Criar" para B.
+      final gateway = FakeAtendimentoGateway()
+        ..travaSalvarCliente = Completer<void>();
+      await montarComDocumentoNovo(tester, gateway);
+      final controller = tester
+          .widget<PainelFicha>(find.byType(PainelFicha))
+          .controller;
+
+      await tester.tap(find.widgetWithText(TextButton, 'Criar'));
+      await tester.pump();
+
+      // Mesmo painel, outro documento: dispara o didUpdateWidget da sugestão.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PainelFicha(
+              controller: controller,
+              contato: const ContatoDaConversa(
+                contatoId: 4,
+                nome: 'Ana',
+                telefone: '5588999912191',
+                fotoUrl: '',
+              ),
+              documentos: const ['11144477735'],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      gateway.travaSalvarCliente!.complete();
+      await tester.pumpAndSettle();
+
+      // A criação de A voltou com o documento já trocado: nada de vínculo,
+      // só o aviso para o atendente conferir.
+      expect(contar(gateway, 'salvarCliente:'), 1);
+      expect(contar(gateway, 'vincular:'), 0);
+      expect(find.byType(SnackBar), findsOneWidget);
+
+      // "Criar" para B cria o cliente de B, não reusa o id de A.
+      await tester.tap(find.widgetWithText(TextButton, 'Criar'));
+      await tester.pumpAndSettle();
+
+      expect(contar(gateway, 'salvarCliente:'), 2);
+      // A segunda criação levou o documento B, e o vínculo usou o id dela (2),
+      // não o da criação de A (1).
+      expect(gateway.documentosCriados, ['52998224725', '11144477735']);
+      expect(contar(gateway, 'vincular:'), 1);
+      expect(gateway.acoesDoCadastro, contains('vincular:2:4:true'));
+      expect(
+        gateway.acoesDoCadastro.indexWhere((a) => a.startsWith('vincular:')),
+        greaterThan(
+          gateway.acoesDoCadastro.lastIndexWhere(
+            (a) => a.startsWith('salvarCliente:'),
+          ),
+        ),
+      );
     });
 
     testWidgets('mostra as etiquetas da conversa e as disponíveis', (

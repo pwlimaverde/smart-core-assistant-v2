@@ -865,6 +865,7 @@ mod tests_decisao {
 /// `skip_all` + `fields` explícitos: a mensagem do usuário é PII e nunca entra no
 /// span; só ids de correlação (`tenant_id`/`atendimento_id`) e a confiança, que é
 /// número e não revela conteúdo.
+#[allow(clippy::too_many_arguments)]
 #[tracing::instrument(
     skip_all,
     name = "ia.responder",
@@ -891,6 +892,7 @@ async fn responder_via_ia(
     tenant_uuid: Uuid,
     atendimento_id: i32,
     mensagem_id: Option<i32>,
+    mensagens_origem_ids: &[i32],
     mensagem_texto: &str,
     causation_id: &str,
     traceparent: &str,
@@ -1325,7 +1327,10 @@ async fn responder_via_ia(
             serde_json::json!({
                 "atendimento_id": atendimento_id,
                 "campos": campos,
+                // A última segue por compatibilidade com `data_postgres`
+                // antigo; a rajada inteira é o que a IA leu (V3).
                 "mensagem_origem_id": mensagem_id,
+                "mensagens_origem_ids": mensagens_origem_ids,
             }),
             causation_id,
             traceparent,
@@ -2764,6 +2769,8 @@ async fn processar_mensagem_recebida(
     let mut contexto_bot = ContextoBot {
         tenant_uuid,
         mensagem_id,
+        // Sem agregação, a IA lê só esta mensagem; a janela troca abaixo.
+        mensagens_origem_ids: mensagem_id.into_iter().collect(),
         tenant_str: envelope.tenant_id.to_string(),
         atendimento_id,
         instance_id,
@@ -2907,6 +2914,13 @@ async fn processar_mensagem_recebida(
                 // A análise da rajada vai para a última mensagem que a compôs.
                 if let Some(ultima) = buffer_mensagens::ultima_mensagem_id(&acumuladas) {
                     contexto_bot.mensagem_id = Some(ultima);
+                }
+                // V3 — a frase de origem é conferida contra a rajada inteira,
+                // o mesmo conjunto que o `compilar` juntou para a IA. Rajada
+                // drenada vazia (Redis caiu no meio) mantém só esta mensagem.
+                let origem = buffer_mensagens::mensagens_da_rajada(&acumuladas);
+                if !origem.is_empty() {
+                    contexto_bot.mensagens_origem_ids = origem;
                 }
 
                 // Span próprio: a task não herda o do handler, e sem ele a cadeia
@@ -3110,6 +3124,10 @@ struct ContextoBot {
     /// Última mensagem persistida da rajada: recebe a análise que o motor Jev
     /// devolve junto com a resposta.
     mensagem_id: Option<i32>,
+    /// V3 — todas as mensagens da rajada cujo texto a IA leu, na ordem do
+    /// texto compilado. O `data_postgres` confere a frase de origem contra o
+    /// texto delas, e não só contra o da última.
+    mensagens_origem_ids: Vec<i32>,
     tenant_str: String,
     atendimento_id: i32,
     instance_id: i32,
@@ -3188,6 +3206,7 @@ async fn acionar_bot(
             tenant_uuid,
             atendimento_id,
             ctx.mensagem_id,
+            &ctx.mensagens_origem_ids,
             &pergunta,
             &ctx.event_id,
             &ctx.traceparent,

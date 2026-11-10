@@ -471,6 +471,96 @@ async def test_campos_do_cartao_copiados_e_conferidos(fake_embeddings_factory):
             )
         )
     assert [(c.slug, c.valor_json) for c in r.campos_extraidos] == [("cor", '"azul"')]
+    # V3: o 4º elemento da tupla vira a frase de origem — o recorte da mensagem.
+    assert [c.frase_origem for c in r.campos_extraidos] == ["azul"]
+
+
+async def test_frase_de_origem_sai_como_o_cliente_escreveu(fake_embeddings_factory):
+    # A cópia volta sem acento e minúscula; a frase tem de ser o texto do
+    # cliente, senão o servidor não acha o trecho na mensagem.
+    def roteiro(etapa: str, _s: Any, _p: Any) -> RespostaJev:
+        if etapa == "leitura":
+            return resposta(nouls={"campo_presente::cidade": 0.9})
+        return resposta(nouls={pc.RESPOSTA_APOIADA: 0.9, "confere::campo_cidade": 0.92})
+
+    chat = _chat_json('{"campo_cidade": "sao paulo"}')
+    async with _stub(FakeJev(roteiro), chat, fake_embeddings_factory) as stub:
+        r = await stub.Responder(
+            _responder(
+                mensagem="Moro em São Paulo, capital",
+                campos_pendentes=[pb.CampoPendente(slug="cidade", nome="Cidade")],
+            )
+        )
+    # O valor também sai como o cliente escreveu: o servidor compara acento
+    # letra a letra e descartaria "sao paulo" dentro de "São Paulo".
+    assert [(c.slug, c.valor_json, c.frase_origem) for c in r.campos_extraidos] == [
+        ("cidade", '"São Paulo"', "São Paulo")
+    ]
+
+
+def _roteiro_campo(slug: str) -> Callable[..., RespostaJev]:
+    def roteiro(etapa: str, _s: Any, _p: Any) -> RespostaJev:
+        if etapa == "leitura":
+            return resposta(nouls={f"campo_presente::{slug}": 0.9})
+        return resposta(
+            nouls={pc.RESPOSTA_APOIADA: 0.9, f"confere::campo_{slug}": 0.92}
+        )
+
+    return roteiro
+
+
+async def test_numero_normalizado_sai_com_a_frase_do_cliente(fake_embeddings_factory):
+    # Mudança (antes: test_numero_normalizado_sai_sem_frase, que afirmava frase
+    # vazia): "1500" casa "1.500" ignorando o separador de milhar. O servidor,
+    # para número, só confere a frase — e ela é o recorte literal do cliente.
+    async with _stub(
+        FakeJev(_roteiro_campo("qtd")),
+        _chat_json('{"campo_qtd": "1500"}'),
+        fake_embeddings_factory,
+    ) as stub:
+        r = await stub.Responder(
+            _responder(
+                mensagem="quero 1.500 unidades",
+                campos_pendentes=[pb.CampoPendente(slug="qtd", nome="Quantidade")],
+            )
+        )
+    assert [(c.slug, c.valor_json, c.frase_origem) for c in r.campos_extraidos] == [
+        ("qtd", "1500", "1.500")
+    ]
+
+
+async def test_cpf_sem_mascara_acha_a_frase_mascarada(fake_embeddings_factory):
+    async with _stub(
+        FakeJev(_roteiro_campo("cpf")),
+        _chat_json('{"campo_cpf": "52998224725"}'),
+        fake_embeddings_factory,
+    ) as stub:
+        r = await stub.Responder(
+            _responder(
+                mensagem="meu cpf é 529.982.247-25",
+                campos_pendentes=[pb.CampoPendente(slug="cpf", nome="CPF")],
+            )
+        )
+    assert [(c.slug, c.valor_json, c.frase_origem) for c in r.campos_extraidos] == [
+        ("cpf", '"52998224725"', "529.982.247-25")
+    ]
+
+
+async def test_data_sem_recorte_literal_nao_e_enviada(fake_embeddings_factory):
+    # Limitação conhecida do motor Jev: "2026-05-03" não está no texto ("dia 3
+    # de maio") e não se inventa frase — o campo não sai.
+    async with _stub(
+        FakeJev(_roteiro_campo("prazo")),
+        _chat_json('{"campo_prazo": "2026-05-03"}'),
+        fake_embeddings_factory,
+    ) as stub:
+        r = await stub.Responder(
+            _responder(
+                mensagem="preciso para o dia 3 de maio",
+                campos_pendentes=[pb.CampoPendente(slug="prazo", nome="Prazo")],
+            )
+        )
+    assert list(r.campos_extraidos) == []
 
 
 async def test_entidade_livre_na_transferencia_e_no_analyse(fake_embeddings_factory):

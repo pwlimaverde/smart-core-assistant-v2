@@ -219,8 +219,12 @@ def _formatar_campos(
             "mensagens, e um campo errado na ficha do cliente é pior que um "
             "campo em branco.\n"
             "- `frase_origem`: copie, letra por letra, o trecho da mensagem do "
-            "CLIENTE que traz o valor. Sem esse trecho, omita o campo; o valor "
-            "sem frase não é gravado.\n"
+            'CLIENTE que traz o valor, com as palavras dele ("dia 3 de maio", '
+            'não "2026-05-03"). Sem esse trecho, omita o campo; o valor sem '
+            "frase não é gravado.\n"
+            "- Em campo de texto, escreva o valor como o cliente escreveu, "
+            "com os acentos dele: o valor tem de aparecer dentro da "
+            "`frase_origem`.\n"
             "- `confianca` alta só quando ele disse o valor com todas as "
             "letras; baixa quando você interpretou.\n"
             "- Datas em AAAA-MM-DD; números sem unidade; em campos de "

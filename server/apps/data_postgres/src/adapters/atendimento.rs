@@ -2072,9 +2072,12 @@ impl AtendimentoStore for PgAtendimentoStore {
         atendimento_id: i32,
         campos: Vec<CampoExtraidoDto>,
         mensagem_origem_id: Option<i32>,
+        mensagens_origem_ids: Vec<i32>,
         piso_confianca: f64,
     ) -> Result<ResumoCamposExtraidos, DbError> {
-        use crate::adapters::campos_extraidos::valor_para_o_tipo;
+        use crate::adapters::campos_extraidos::{
+            digitos_delimitados, literal_exigido, valor_para_o_tipo,
+        };
 
         let repo_atendimento = PostgresAtendimentoRepository;
         let repo_campo = PostgresCampoPersonalizadoRepository;
@@ -2107,21 +2110,29 @@ impl AtendimentoStore for PgAtendimentoStore {
                 );
             }
 
-            // V3 — a frase do cliente só vale contra o texto da mensagem que
-            // originou a extração. Sem essa mensagem, nada é verificável.
-            let texto_da_mensagem: Option<String> = match mensagem_origem_id {
-                Some(mensagem_id) => sqlx::query_as::<_, (String,)>(
-                    "SELECT conteudo FROM oraculo_mensagem \
-                     WHERE tenant_id = $1 AND id = $2 AND atendimento_id = $3",
-                )
-                .bind(tenant_id)
-                .bind(mensagem_id)
-                .bind(atendimento_id)
-                .fetch_optional(&mut *tx)
-                .await?
-                .map(|(texto,)| texto),
-                None => None,
+            // V3 — a frase do cliente só vale contra o texto que a IA leu: a
+            // rajada inteira, unida por `\n` como o worker a compilou. Lista
+            // vazia (worker antigo) cai na última mensagem, como antes. Sem
+            // mensagem nenhuma, nada é verificável.
+            let ids_origem: Vec<i32> = if mensagens_origem_ids.is_empty() {
+                mensagem_origem_id.into_iter().collect()
+            } else {
+                mensagens_origem_ids
             };
+            let texto_da_mensagem: Option<String> =
+                infrastructure_postgres::clientes::clientes::texto_de_origem(
+                    &mut tx,
+                    tenant_id,
+                    atendimento_id,
+                    &ids_origem,
+                )
+                .await?;
+
+            // Valores já gravados no atendimento, lidos sob demanda (ver a
+            // idempotência da sugestão de vínculo, abaixo).
+            let mut valores_atuais: Option<
+                Vec<infrastructure_postgres::atendimentos::campos::ValorCampoAtendimento>,
+            > = None;
 
             for extraido in campos {
                 // 1. O slug tem de existir no catálogo aplicável.
@@ -2141,15 +2152,27 @@ impl AtendimentoStore for PgAtendimentoStore {
                 }
 
                 // 2b. Sem frase literal da mensagem do cliente, não grava (V3).
+                //     Só o tipo `texto` exige o valor letra a letra na frase:
+                //     data (AAAA-MM-DD), número, booleano e id de lista chegam
+                //     normalizados e nunca aparecem assim no que o cliente
+                //     escreveu. CPF/CNPJ comparam por dígitos (máscara varia).
                 let valor_texto: Option<String> =
                     serde_json::from_str::<String>(&extraido.valor_json).ok();
+                let valor_literal = literal_exigido(&extraido.valor_json, &def.tipo);
                 let frase_ok = texto_da_mensagem.as_deref().is_some_and(|texto| {
                     infrastructure_postgres::clientes::endereco::frase_sustenta_valor(
                         texto,
                         &extraido.frase_origem,
-                        valor_texto.as_deref(),
+                        valor_literal.as_deref(),
                     )
-                });
+                }) && match def.tipo.as_str() {
+                    // Dígitos do valor como número inteiro na frase, não
+                    // como pedaço de um número maior.
+                    "cpf" | "cnpj" => valor_texto
+                        .as_deref()
+                        .is_some_and(|v| digitos_delimitados(&extraido.frase_origem, v)),
+                    _ => true,
+                };
                 if !frase_ok {
                     resumo.sem_frase_de_origem += 1;
                     continue;
@@ -2170,10 +2193,34 @@ impl AtendimentoStore for PgAtendimentoStore {
 
                 // 5. A quinta guarda mora no SQL: não passa por cima de gente
                 //    nem repreenche o que gente apagou.
-                let documento: Option<String> = valor_texto
-                    .as_deref()
-                    .map(|t| t.chars().filter(|c| c.is_ascii_digit()).collect::<String>())
-                    .filter(|d| d.len() == 11 || d.len() == 14);
+                // Só campo do tipo cpf/cnpj vira documento da sugestão de
+                // vínculo: um telefone de 11 dígitos num campo de texto não é CPF.
+                let mut documento: Option<String> = match def.tipo.as_str() {
+                    "cpf" | "cnpj" => valor.as_str().map(str::to_string),
+                    _ => None,
+                };
+                // Idempotência da sugestão: o mesmo documento que já estava
+                // gravado neste campo do atendimento já foi sugerido quando
+                // entrou. A IA reextrai o CPF a cada rajada; sem isto, a trilha
+                // ganharia uma sugestão igual por mensagem. Só lê os valores
+                // atuais quando há documento, e uma vez por chamada.
+                if documento.is_some() {
+                    if valores_atuais.is_none() {
+                        valores_atuais = Some(
+                            repo_valor
+                                .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
+                                .await?,
+                        );
+                    }
+                    let ja_estava = valores_atuais
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .any(|v| v.campo_id == def.id && v.valor == valor);
+                    if ja_estava {
+                        documento = None;
+                    }
+                }
                 let gravou = repo_valor
                     .upsert_da_ia(
                         &mut tx,

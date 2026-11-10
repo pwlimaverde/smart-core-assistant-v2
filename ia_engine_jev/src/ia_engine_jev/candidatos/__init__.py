@@ -5,6 +5,15 @@ from ia_engine_jev.candidatos.extratores import (
     por_data,
     por_lista,
     por_regex,
+    trecho_no_texto,
+    valor_e_frase,
 )
 
-__all__ = ["esta_no_texto", "por_data", "por_lista", "por_regex"]
+__all__ = [
+    "esta_no_texto",
+    "por_data",
+    "por_lista",
+    "por_regex",
+    "trecho_no_texto",
+    "valor_e_frase",
+]

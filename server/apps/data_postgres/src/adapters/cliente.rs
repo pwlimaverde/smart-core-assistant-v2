@@ -86,7 +86,7 @@ impl ClienteStore for PgClienteStore {
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
-        mensagem_id: i32,
+        mensagens_ids: Vec<i32>,
         candidatos: Vec<(&'static str, String)>,
     ) -> Result<Vec<&'static str>, DbError> {
         use infrastructure_postgres::clientes::clientes as repo;
@@ -96,7 +96,7 @@ impl ClienteStore for PgClienteStore {
                 &mut tx,
                 &ctx,
                 atendimento_id,
-                mensagem_id,
+                &mensagens_ids,
                 &candidatos,
             )
             .await?;

@@ -1692,6 +1692,13 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
   /// Documento válido da conversa sem cliente cadastrado: oferece criar.
   String? _documentoNovo;
 
+  /// Cliente criado por "Criar" cujo vínculo ainda não deu certo, junto do
+  /// documento com que foi criado: só vale para esse mesmo documento.
+  ({String documento, int id})? _criadoPendente;
+
+  /// Uma ação (criar ou vincular) em andamento.
+  bool _ocupado = false;
+
   @override
   void initState() {
     super.initState();
@@ -1705,14 +1712,21 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
       antigo.documentos,
       widget.documentos,
     )) {
+      // O pendente fica guardado com o seu documento: _criarEVincular só o
+      // reaproveita se o documento da ação for o mesmo.
       _buscar();
     }
   }
 
+  /// Conta as buscas: só a mais recente pode mexer na sugestão. Uma busca de
+  /// documentos antigos que termina depois da atual é descartada.
+  int _geracaoBusca = 0;
+
   Future<void> _buscar() async {
+    final geracao = ++_geracaoBusca;
     for (final documento in widget.documentos.take(3)) {
       final (lista, erro) = await widget.controller.buscarClientes(documento);
-      if (!mounted) return;
+      if (!mounted || geracao != _geracaoBusca) return;
       if (erro != null || lista == null) continue;
       for (final cliente in lista) {
         final bate =
@@ -1737,7 +1751,34 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
     }
   }
 
+  /// Executa [acao] uma por vez: enquanto roda, os botões ficam desabilitados
+  /// e um segundo disparo é ignorado (evita duplo clique).
+  Future<void> _exclusivo(Future<void> Function() acao) async {
+    if (_ocupado) return;
+    setState(() => _ocupado = true);
+    try {
+      await acao();
+    } finally {
+      if (mounted) setState(() => _ocupado = false);
+    }
+  }
+
   Future<void> _vincular(ClienteDaConversa cliente) async {
+    // A sugestão pode ser de documentos que a conversa já não mostra (a nova
+    // busca ainda não voltou): não liga o contato a um cliente desatualizado.
+    final atual = widget.documentos.any(
+      (d) => cliente.cpf == d || cliente.cnpj == d,
+    );
+    if (!atual) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Os documentos da conversa mudaram. Confira antes de vincular.',
+          ),
+        ),
+      );
+      return;
+    }
     final erro = await widget.controller.vincularCliente(
       clienteId: cliente.id,
       contatoId: widget.contato.contatoId,
@@ -1755,26 +1796,53 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
 
   /// Cria o cliente só com o documento válido e o nome do contato, e vincula.
   /// Os demais campos ficam para o atendente preencher em "Editar cliente".
+  /// Se o cliente já foi criado numa tentativa anterior cujo vínculo falhou,
+  /// só tenta vincular de novo — criar outra vez duplicaria o documento.
+  /// O pendente só é reaproveitado se foi criado com este mesmo [documento].
   Future<void> _criarEVincular(String documento) async {
-    final pf = documento.length == 11;
-    final (idNovo, erroCriar) = await widget.controller.salvarCliente(
-      ClienteDaConversa(
-        id: 0,
-        tipo: pf ? 'pf' : 'pj',
-        cpf: pf ? documento : '',
-        cnpj: pf ? '' : documento,
-        nomeFantasia: widget.contato.nomeParaExibir,
-        telefone: widget.contato.telefone,
-      ),
-    );
-    if (!mounted) return;
-    if (erroCriar != null || idNovo == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(erroCriar?.message ?? 'Não foi possível criar.'),
+    final pendente = _criadoPendente;
+    int? idNovo = pendente != null && pendente.documento == documento
+        ? pendente.id
+        : null;
+    if (idNovo == null) {
+      final pf = documento.length == 11;
+      final (idCriado, erroCriar) = await widget.controller.salvarCliente(
+        ClienteDaConversa(
+          id: 0,
+          tipo: pf ? 'pf' : 'pj',
+          cpf: pf ? documento : '',
+          cnpj: pf ? '' : documento,
+          nomeFantasia: widget.contato.nomeParaExibir,
+          telefone: widget.contato.telefone,
         ),
       );
-      return;
+      if (!mounted) return;
+      if (erroCriar != null || idCriado == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(erroCriar?.message ?? 'Não foi possível criar.'),
+          ),
+        );
+        return;
+      }
+      // Os documentos da conversa mudaram durante a criação: o cliente foi
+      // criado com um documento que a conversa não mostra mais. Não vincula
+      // nem guarda o id — vincular agora poderia ligar o contato ao cliente
+      // errado. O atendente confere.
+      if (!widget.documentos.contains(documento)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Cliente criado com o documento $documento, mas os documentos '
+              'da conversa mudaram. Confira antes de vincular.',
+            ),
+          ),
+        );
+        return;
+      }
+      // Guarda já: se o vínculo falhar, o próximo clique reaproveita este id.
+      _criadoPendente = (documento: documento, id: idCriado);
+      idNovo = idCriado;
     }
     final erroVincular = await widget.controller.vincularCliente(
       clienteId: idNovo,
@@ -1788,6 +1856,7 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
       ).showSnackBar(SnackBar(content: Text(erroVincular.message)));
       return;
     }
+    _criadoPendente = null;
     widget.aoMudar?.call();
   }
 
@@ -1800,18 +1869,20 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
     }
     final String texto;
     final String acao;
-    final VoidCallback onPressed;
+    final VoidCallback? onPressed;
     if (cliente != null) {
       final nome = cliente.nomeFantasia.isNotEmpty
           ? cliente.nomeFantasia
           : 'cliente #${cliente.id}';
       texto = 'Pela conversa, parece ser $nome.';
       acao = 'Vincular';
-      onPressed = () => _vincular(cliente);
+      onPressed = _ocupado ? null : () => _exclusivo(() => _vincular(cliente));
     } else {
       texto = 'Criar cliente com estes dados?';
       acao = 'Criar';
-      onPressed = () => _criarEVincular(documentoNovo!);
+      onPressed = _ocupado
+          ? null
+          : () => _exclusivo(() => _criarEVincular(documentoNovo!));
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),

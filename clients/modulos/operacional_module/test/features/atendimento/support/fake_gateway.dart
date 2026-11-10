@@ -249,10 +249,31 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     return ClienteDaConversa(id: clienteId, nomeFantasia: 'Cliente $clienteId');
   }
 
+  /// Segura a criação do cliente até ser completado (testa duplo clique).
+  Completer<void>? travaSalvarCliente;
+
+  /// Quando preenchido, o vínculo contato ↔ cliente falha com este erro.
+  Object? erroVincular;
+
+  /// Documento (CPF ou CNPJ) de cada cliente novo criado, na ordem.
+  final List<String> documentosCriados = [];
+
+  /// Id devolvido à próxima criação; cresce a cada uma (1, 2, 3...), então
+  /// quem cria uma vez só continua recebendo 1.
+  int proximoIdCriado = 1;
+
   @override
   Future<int> salvarCliente({required ClienteDaConversa dados}) async {
     acoesDoCadastro.add('salvarCliente:${dados.id}:${dados.nomeFantasia}');
-    return dados.id > 0 ? dados.id : 1;
+    // Reserva id e documento antes da trava: a ordem é a do pedido.
+    final novo = dados.id <= 0;
+    final id = novo ? proximoIdCriado++ : dados.id;
+    if (novo) {
+      documentosCriados.add(dados.cpf.isNotEmpty ? dados.cpf : dados.cnpj);
+    }
+    final trava = travaSalvarCliente;
+    if (trava != null) await trava.future;
+    return id;
   }
 
   @override
@@ -262,6 +283,7 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     required bool vincular,
   }) async {
     acoesDoCadastro.add('vincular:$clienteId:$contatoId:$vincular');
+    if (erroVincular != null) throw erroVincular!;
   }
 
   @override

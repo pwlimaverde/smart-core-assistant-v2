@@ -5567,6 +5567,69 @@ async fn handler_atualizar_sentimento(
 
 /// Resolve campos personalizados (coletados + pendentes obrigatórios) do
 /// atendimento para o Responder — input-only, sem write-back (N6.3).
+/// V3 — as mensagens de origem da extração: `(última, rajada em ordem)`.
+///
+/// `mensagens_origem_ids` é a rajada que a IA leu, na ordem em que o worker a
+/// compilou. Worker antigo só manda `mensagem_origem_id`: a rajada vira essa
+/// mensagem sozinha, que é o comportamento de antes. Quando só a lista vem, a
+/// última dela faz o papel de `mensagem_origem_id`.
+fn ids_de_origem(payload: &serde_json::Value) -> (Option<i32>, Vec<i32>) {
+    let ultima = payload
+        .get("mensagem_origem_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    let mut rajada: Vec<i32> = Vec::new();
+    for id in payload
+        .get("mensagens_origem_ids")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_i64())
+        .map(|v| v as i32)
+    {
+        if !rajada.contains(&id) {
+            rajada.push(id);
+        }
+    }
+    if rajada.is_empty() {
+        rajada.extend(ultima);
+    }
+    (ultima.or_else(|| rajada.last().copied()), rajada)
+}
+
+#[cfg(test)]
+mod tests_ids_de_origem {
+    use super::ids_de_origem;
+
+    #[test]
+    fn rajada_vem_na_ordem_do_worker_sem_repeticao() {
+        let p = serde_json::json!({
+            "mensagem_origem_id": 12,
+            "mensagens_origem_ids": [10, 11, 11, 12],
+        });
+        assert_eq!(ids_de_origem(&p), (Some(12), vec![10, 11, 12]));
+    }
+
+    #[test]
+    fn worker_antigo_so_com_a_ultima_cai_nela_sozinha() {
+        let p = serde_json::json!({ "mensagem_origem_id": 7 });
+        assert_eq!(ids_de_origem(&p), (Some(7), vec![7]));
+        let vazia = serde_json::json!({ "mensagem_origem_id": 7, "mensagens_origem_ids": [] });
+        assert_eq!(ids_de_origem(&vazia), (Some(7), vec![7]));
+    }
+
+    #[test]
+    fn so_a_lista_define_a_ultima() {
+        let p = serde_json::json!({ "mensagens_origem_ids": [3, 4] });
+        assert_eq!(ids_de_origem(&p), (Some(4), vec![3, 4]));
+    }
+
+    #[test]
+    fn sem_mensagem_nenhuma_nada_e_verificavel() {
+        assert_eq!(ids_de_origem(&serde_json::json!({})), (None, vec![]));
+    }
+}
+
 /// C1 — write-back do que a IA extraiu.
 ///
 /// Chamado pelo worker depois de responder. As guardas ficam no adaptador; o
@@ -5597,10 +5660,7 @@ async fn handler_gravar_campos_extraidos(
         .get("campos")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
-    let mensagem_origem_id = payload
-        .get("mensagem_origem_id")
-        .and_then(|v| v.as_i64())
-        .map(|v| v as i32);
+    let (mensagem_origem_id, mensagens_origem_ids) = ids_de_origem(&payload);
 
     let ctx = contexto_do_envelope(&env);
     // B4 — o piso é o do tenant. Sem conseguir ler a config, vale o padrão de
@@ -5615,7 +5675,7 @@ async fn handler_gravar_campos_extraidos(
     let (enderecos, cartao): (Vec<_>, Vec<_>) = campos
         .into_iter()
         .partition(|c| c.slug.starts_with("cliente."));
-    if let Some(mensagem_id) = mensagem_origem_id {
+    if let Some(mensagem_id) = mensagens_origem_ids.last().copied() {
         let candidatos: Vec<(&'static str, String)> = enderecos
             .iter()
             .filter(|c| c.confianca >= piso)
@@ -5627,7 +5687,12 @@ async fn handler_gravar_campos_extraidos(
             .collect();
         if !candidatos.is_empty() {
             match cliente
-                .preencher_enderecos_vazios(&ctx, atendimento_id, mensagem_id, candidatos)
+                .preencher_enderecos_vazios(
+                    &ctx,
+                    atendimento_id,
+                    mensagens_origem_ids.clone(),
+                    candidatos,
+                )
                 .await
             {
                 Ok(colunas) if !colunas.is_empty() => {
@@ -5653,13 +5718,26 @@ async fn handler_gravar_campos_extraidos(
         }
     }
     match store
-        .gravar_campos_extraidos(&ctx, atendimento_id, cartao, mensagem_origem_id, piso)
+        .gravar_campos_extraidos(
+            &ctx,
+            atendimento_id,
+            cartao,
+            mensagem_origem_id,
+            mensagens_origem_ids,
+            piso,
+        )
         .await
     {
         Ok(resumo) => {
             // V3 — CPF/CNPJ que a IA gravou e que já pertence a um cliente
             // cadastrado: a sugestão de vínculo fica na trilha. Só ids, nunca o
             // documento. Falha de busca não desfaz a gravação; só não audita.
+            //
+            // Idempotência: o documento regravado igual já sai do resumo (ver
+            // o adaptador); aqui, o mesmo cliente não é sugerido duas vezes na
+            // rodada, nem quando o contato do atendimento já é dele.
+            let mut ja_sugeridos: std::collections::HashSet<i32> = std::collections::HashSet::new();
+            let mut contato_do_atendimento: Option<Option<i32>> = None;
             for documento in &resumo.documentos_gravados {
                 let valido = if documento.len() == 11 {
                     cpf_valido(documento)
@@ -5685,6 +5763,36 @@ async fn handler_gravar_campos_extraidos(
                     .iter()
                     .find(|c| digitos(&c.cpf) == *documento || digitos(&c.cnpj) == *documento)
                 {
+                    if !ja_sugeridos.insert(achado.id) {
+                        continue;
+                    }
+                    // O contato do atendimento, lido uma vez só (e só quando há
+                    // cliente achado). Falha de leitura não bloqueia a sugestão:
+                    // sugerir de novo é ruído; deixar de sugerir é perder o sinal.
+                    if contato_do_atendimento.is_none() {
+                        contato_do_atendimento = Some(
+                            match store.contato_do_atendimento(&ctx, atendimento_id).await {
+                                Ok(c) => c.map(|c| c.contato_id),
+                                Err(e) => {
+                                    tracing::warn!(erro = %e, "contato do atendimento indisponível para a sugestão");
+                                    None
+                                }
+                            },
+                        );
+                    }
+                    if let Some(contato_id) = contato_do_atendimento.flatten() {
+                        let ja_vinculado = match cliente.contatos_do_cliente(&ctx, achado.id).await
+                        {
+                            Ok(contatos) => contatos.iter().any(|c| c.id == contato_id),
+                            Err(e) => {
+                                tracing::warn!(erro = %e, "contatos do cliente indisponíveis para a sugestão");
+                                false
+                            }
+                        };
+                        if ja_vinculado {
+                            continue;
+                        }
+                    }
                     audit
                         .publish(
                             &env,
