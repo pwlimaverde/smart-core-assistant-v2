@@ -7732,13 +7732,15 @@ async fn handler_update_contato(
 
     let ctx = contexto_do_envelope(&env);
     match store.atualizar_contato(&ctx, id, edicao).await {
-        Ok(ports::DesfechoEdicaoContato::Atualizado) => {
+        Ok(ports::DesfechoEdicaoContato::Atualizado { campos }) => {
+            // Os nomes dos campos que mudaram, nunca o valor: nome, e-mail e
+            // telefone são dado pessoal (V1).
             audit
                 .publish(
                     &env,
                     "contato_editado",
                     format!("Contato {id} editado"),
-                    serde_json::json!({ "id": id }),
+                    serde_json::json!({ "id": id, "campos": campos }),
                 )
                 .await;
             ok_reply(

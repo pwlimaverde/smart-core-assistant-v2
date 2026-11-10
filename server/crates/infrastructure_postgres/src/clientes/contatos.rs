@@ -40,6 +40,29 @@ pub struct EdicaoContato {
     pub observacoes: Option<String>,
 }
 
+/// Quais campos a edição muda — é o que vai para a auditoria, nunca o valor.
+///
+/// Campo ausente na edição (`None`) não conta: é "não mexe". Vazio contra
+/// nulo também não: apagar o que já estava vazio não é mudança.
+pub fn campos_alterados(antes: &Contato, edicao: &EdicaoContato) -> Vec<&'static str> {
+    let pares: [(&'static str, &Option<String>, &Option<String>); 6] = [
+        ("nome_contato", &antes.nome_contato, &edicao.nome_contato),
+        ("email", &antes.email, &edicao.email),
+        ("telefone", &antes.telefone, &edicao.telefone),
+        ("cargo", &antes.cargo, &edicao.cargo),
+        ("segmento", &antes.segmento, &edicao.segmento),
+        ("observacoes", &antes.observacoes, &edicao.observacoes),
+    ];
+    pares
+        .into_iter()
+        .filter(|(_, atual, novo)| {
+            novo.as_deref()
+                .is_some_and(|n| n != atual.as_deref().unwrap_or_default())
+        })
+        .map(|(campo, _, _)| campo)
+        .collect()
+}
+
 #[async_trait]
 pub trait ContatoRepository: Send + Sync {
     async fn salvar(
@@ -684,5 +707,54 @@ mod testes_p15 {
         );
         assert_eq!(v.nome.as_deref(), Some("Ana Lima"));
         assert_eq!(v.email.as_deref(), Some("ana@x.com.br"));
+    }
+}
+
+#[cfg(test)]
+mod testes_campos_alterados {
+    use super::*;
+
+    fn contato() -> Contato {
+        Contato {
+            id: 1,
+            tenant_id: Uuid::nil(),
+            telefone: Some("5511999998888".into()),
+            nome_contato: Some("Ana".into()),
+            slug: "ana".into(),
+            email: None,
+            nome_perfil_whatsapp: None,
+            data_cadastro: Utc::now(),
+            ultima_interacao: Utc::now(),
+            ativo: true,
+            metadados: serde_json::json!({}),
+            foto_perfil: None,
+            foto_perfil_url_origem: None,
+            cargo: Some("Compras".into()),
+            segmento: None,
+            observacoes: None,
+        }
+    }
+
+    #[test]
+    fn so_lista_o_que_mudou_de_fato() {
+        // A tela manda o formulário inteiro: igual ao que estava não conta, e
+        // vazio contra nulo também não.
+        let edicao = EdicaoContato {
+            nome_contato: Some("Ana".into()),
+            email: Some("ana@exemplo.com".into()),
+            telefone: None,
+            cargo: Some(String::new()),
+            segmento: Some(String::new()),
+            observacoes: Some("prefere e-mail".into()),
+        };
+        assert_eq!(
+            campos_alterados(&contato(), &edicao),
+            vec!["email", "cargo", "observacoes"]
+        );
+    }
+
+    #[test]
+    fn campo_ausente_nao_e_mudanca() {
+        assert!(campos_alterados(&contato(), &EdicaoContato::default()).is_empty());
     }
 }

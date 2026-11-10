@@ -12,7 +12,11 @@ use infrastructure_postgres::{DbError, RequestContext};
 /// carregar uma regra de negócio — ele fala de banco.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DesfechoEdicaoContato {
-    Atualizado,
+    /// `campos`: nomes das colunas que a edição mudou de fato — é o que vai
+    /// para a auditoria (V1). Nunca o valor.
+    Atualizado {
+        campos: Vec<String>,
+    },
     NaoEncontrado,
     /// O contato já conversou: o número está amarrado a esse histórico.
     TelefoneTravado {

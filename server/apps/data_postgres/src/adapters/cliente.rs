@@ -300,9 +300,21 @@ impl ClienteStore for PgClienteStore {
                 }
             }
 
+            // Lido antes do UPDATE, na mesma transação: a auditoria diz
+            // quais campos mudaram, e a tela manda o formulário inteiro.
+            let campos: Vec<String> = repo
+                .buscar_por_id(&mut tx, &ctx, id)
+                .await?
+                .map(|antes| {
+                    infrastructure_postgres::clientes::contatos::campos_alterados(&antes, &edicao)
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default();
             let achou = repo.atualizar(&mut tx, &ctx, id, edicao).await?;
             let desfecho = if achou {
-                DesfechoEdicaoContato::Atualizado
+                DesfechoEdicaoContato::Atualizado { campos }
             } else {
                 DesfechoEdicaoContato::NaoEncontrado
             };
