@@ -244,6 +244,10 @@ Cada item do plano foi conferido contra o código da `dev` (merge `930cde8e`), s
 
 **V1 — auditoria do vínculo.** `contato.vinculado_cliente` e `contato.desvinculado_cliente` levam `origem: "atendente"`.
 
+**V1 — auditoria da edição do contato.** `contato_editado` levava só o id; o plano pede os nomes dos campos alterados. O adaptador lê o contato antes do `UPDATE`, na mesma transação, e o evento leva `campos` com o que mudou de fato (a tela manda o formulário inteiro). Nunca o valor.
+
+**V2 — telefone mascarado na auditoria.** A descrição de `whatsapp.numero_ignorado.criado` e `.alterado` levava o número completo. Agora só os quatro últimos dígitos, como o `worker` e o `webhook_ingress` já faziam.
+
 **Decisões desta revisão**
 
 - **Mensagem da rajada sem id persistido:** não foi mexido. O id só falta se a resposta do `PersistMessage` vier sem `message_id`, o que o código atual não faz. Quando falta, a frase daquela mensagem não é verificável e o campo não é gravado — falha fechada, que é o comportamento certo.
