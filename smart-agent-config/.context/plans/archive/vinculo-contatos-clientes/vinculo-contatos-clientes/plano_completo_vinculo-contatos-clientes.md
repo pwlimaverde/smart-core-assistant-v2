@@ -217,3 +217,38 @@ Regra adotada (padrão conservador, revisável pelo dono do produto):
 7. **Visível e reversível:** campo preenchido pela IA aparece marcado na ficha, e o atendente pode editar ou limpar.
 
 Fora de escopo desta decisão: a implementação (schema de extração para campos do cliente no `ia_engine`, validação no servidor e marcação na ficha). É a próxima fatia da V3.
+
+## Revisão final (10/11/2026)
+
+Cada item do plano foi conferido contra o código da `dev` (merge `930cde8e`), sem usar as notas de status acima como prova. O que mudou nesta revisão (branch `feature/vinculo-revisao-final`):
+
+**V3 — a frase de origem tem de sustentar o valor, não só existir na mensagem.** Antes, data, lista e número só exigiam que a frase estivesse na rajada: com "oi" como frase a IA gravava qualquer data. Agora, no servidor (`campos_extraidos.rs`, aplicado em `gravar_campos_extraidos`):
+
+- **data:** a frase traz o dia — `03/05` ou ISO (dia, mês e ano escrito têm de bater), o número do dia, o dia por extenso, o dia da semana do valor, ou `hoje`/`amanhã`/`depois de amanhã` (um dia de folga para o fuso). Mês citado por nome tem de ser o do valor. "Fim do mês" não sustenta data: o campo segue pendente e a IA pergunta.
+- **lista:** a frase traz o rótulo, o id, ou uma palavra da opção que nenhuma outra opção tem.
+- **número:** se a frase tem algarismos, um deles é o valor (`1.500`, `1 500`, `2 mil`, `10k`). Número por extenso continua valendo só pela frase.
+- **booleano:** sem forma verificável além da frase; segue como estava.
+- O prompt dos dois motores avisa a regra. O motor Jev passou a enviar data em ISO com o trecho que o próprio código lê como aquela data (`frase_da_data`); antes a data nunca saía.
+
+**V3 — CPF/CNPJ com espaço.** Servidor, Jev e app usam a mesma regra: além do documento sem espaço (com ou sem máscara), valem os blocos da máscara oficial separados por um espaço (`529 982 247 25`, `11 222 333 0001 81`). Fora desse desenho o espaço separa números diferentes. O Jev aceitava espaço e quebra de linha entre quaisquer dígitos e o servidor recusava a frase; o Jev foi apertado e o servidor passou a aceitar só o desenho exato.
+
+**V3 — sugestão de vínculo sem falso negativo.** A busca do cliente pelo documento saiu do handler e foi para a transação que grava o campo (`cliente_do_documento_sem_vinculo`): se a busca falha, o valor também não entra e a próxima extração refaz as duas coisas. Antes, uma falha de busca deixava o documento gravado e a sugestão sem trilha para sempre. O documento não sai mais do adaptador (o resumo leva só ids de cliente). A comparação é por dígitos dos dois lados, então cadastro antigo com documento mascarado também é achado.
+
+**V3 — origem do valor.** O `mensagem_origem_id` do campo passa a ser a mensagem da rajada que traz a frase, não sempre a última.
+
+**V1 — busca por documento com máscara.** `ListClientes` casa `529.982.247-25` com o documento gravado só em dígitos (e o inverso), quando o termo não tem letra. O campo da tela diz "Nome, CPF/CNPJ ou telefone". A lista de "Vincular a cliente" ignora resposta de busca antiga que chega depois da atual.
+
+**V1 — nome do perfil do WhatsApp.** O plano pedia e a ficha não mostrava: agora aparece "No WhatsApp: …" quando difere do nome do cadastro. "Criar cliente com estes dados?" usa esse nome quando o contato não tem nome, em vez do telefone.
+
+**V1/V4 — documento repetido.** Criar ou alterar cliente com CPF/CNPJ que já existe no tenant devolvia erro de banco genérico. Agora devolve conflito com mensagem legível, sem o documento. Acontecia quando o cliente existente estava inativo (a busca da sugestão não o mostra, e a tela oferecia "Criar").
+
+**V1 — auditoria do vínculo.** `contato.vinculado_cliente` e `contato.desvinculado_cliente` levam `origem: "atendente"`.
+
+**Decisões desta revisão**
+
+- **Mensagem da rajada sem id persistido:** não foi mexido. O id só falta se a resposta do `PersistMessage` vier sem `message_id`, o que o código atual não faz. Quando falta, a frase daquela mensagem não é verificável e o campo não é gravado — falha fechada, que é o comportamento certo.
+- **Spans `contato.editar` / `contato.vincular` / `ia.extrair_campos`:** os spans existem com o nome do RPC (`UpdateContato`, `VincularContatoCliente`, `ia.campos_extraidos`) e os campos pedidos (`tenant_id`, ids, contagens por motivo). Renomear quebraria painéis e alertas já montados sobre esses nomes; ficou como convenção, igual aos nomes de evento de auditoria.
+- **`SecretString` para CPF/CNPJ:** mantida a decisão de 28/10 (`Debug` mascarado). O documento agora nem sai do adaptador na sugestão de vínculo.
+- **`RUSTSEC-2026-0459` (`libsqlite3-sys` 0.37, SQLite do `local_engine`):** não corrigido e não ignorado. A correção exige `libsqlite3-sys >= 0.39.0`; o `sqlx-sqlite 0.9.0` exige `< 0.38.0`, e o sqlx só subiu o limite no `main` (PR #4502, 08/11/2026), sem versão publicada. Os atalhos (sqlx do git, cópia local do `sqlx-sqlite`) trocam o driver Postgres de todos os serviços ou quebram o `cargo chef` da imagem do servidor. O motivo, o risco aceito e o passo a passo da correção estão em `server/.cargo/audit.toml`.
+
+**Sem verificação nesta revisão:** o ensaio manual na dev (V5: editar, vincular, "Não atender", conversar com a IA e conferir a sugestão no app) e o `grep` de CPF/CNPJ nos logs da dev depois do ensaio. Dependem de uma pessoa no app e de acesso ao VPS, que esta revisão não usa.
