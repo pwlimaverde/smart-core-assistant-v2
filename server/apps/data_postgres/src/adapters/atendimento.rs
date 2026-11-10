@@ -2076,8 +2076,10 @@ impl AtendimentoStore for PgAtendimentoStore {
         piso_confianca: f64,
     ) -> Result<ResumoCamposExtraidos, DbError> {
         use crate::adapters::campos_extraidos::{
-            digitos_delimitados, literal_exigido, valor_para_o_tipo,
+            digitos_delimitados, frase_sustenta_data, frase_sustenta_lista, frase_sustenta_numero,
+            literal_exigido, valor_para_o_tipo,
         };
+        use infrastructure_postgres::clientes::{clientes as repo_cliente, endereco};
 
         let repo_atendimento = PostgresAtendimentoRepository;
         let repo_campo = PostgresCampoPersonalizadoRepository;
@@ -2119,14 +2121,14 @@ impl AtendimentoStore for PgAtendimentoStore {
             } else {
                 mensagens_origem_ids
             };
+            let linhas_de_origem =
+                repo_cliente::linhas_de_origem(&mut tx, tenant_id, atendimento_id, &ids_origem)
+                    .await?;
             let texto_da_mensagem: Option<String> =
-                infrastructure_postgres::clientes::clientes::texto_de_origem(
-                    &mut tx,
-                    tenant_id,
-                    atendimento_id,
-                    &ids_origem,
-                )
-                .await?;
+                endereco::montar_texto_de_origem(&ids_origem, &linhas_de_origem);
+            // "Hoje" e "amanhã" são conferidos contra a data do servidor (UTC),
+            // com a folga de um dia que `frase_sustenta_data` já dá ao fuso.
+            let hoje = chrono::Utc::now().date_naive();
 
             // Valores já gravados no atendimento, lidos sob demanda (ver a
             // idempotência da sugestão de vínculo, abaixo).
@@ -2152,27 +2154,18 @@ impl AtendimentoStore for PgAtendimentoStore {
                 }
 
                 // 2b. Sem frase literal da mensagem do cliente, não grava (V3).
-                //     Só o tipo `texto` exige o valor letra a letra na frase:
-                //     data (AAAA-MM-DD), número, booleano e id de lista chegam
-                //     normalizados e nunca aparecem assim no que o cliente
-                //     escreveu. CPF/CNPJ comparam por dígitos (máscara varia).
-                let valor_texto: Option<String> =
-                    serde_json::from_str::<String>(&extraido.valor_json).ok();
+                //     Só o tipo `texto` exige o valor letra a letra na frase;
+                //     os demais tipos chegam normalizados (AAAA-MM-DD, id de
+                //     lista, número sem milhar) e são conferidos pelo sentido
+                //     no passo 3b, depois de tipados.
                 let valor_literal = literal_exigido(&extraido.valor_json, &def.tipo);
                 let frase_ok = texto_da_mensagem.as_deref().is_some_and(|texto| {
-                    infrastructure_postgres::clientes::endereco::frase_sustenta_valor(
+                    endereco::frase_sustenta_valor(
                         texto,
                         &extraido.frase_origem,
                         valor_literal.as_deref(),
                     )
-                }) && match def.tipo.as_str() {
-                    // Dígitos do valor como número inteiro na frase, não
-                    // como pedaço de um número maior.
-                    "cpf" | "cnpj" => valor_texto
-                        .as_deref()
-                        .is_some_and(|v| digitos_delimitados(&extraido.frase_origem, v)),
-                    _ => true,
-                };
+                });
                 if !frase_ok {
                     resumo.sem_frase_de_origem += 1;
                     continue;
@@ -2184,6 +2177,40 @@ impl AtendimentoStore for PgAtendimentoStore {
                     resumo.tipo_invalido += 1;
                     continue;
                 };
+
+                // 3b. A frase tem de sustentar ESTE valor, não só existir na
+                //     mensagem: senão qualquer trecho ("oi") serviria de
+                //     origem para uma data, uma opção ou um documento.
+                let frase = extraido.frase_origem.as_str();
+                let valor_sustentado = match def.tipo.as_str() {
+                    // Dígitos do valor como número inteiro na frase, não
+                    // como pedaço de um número maior.
+                    "cpf" | "cnpj" => valor
+                        .as_str()
+                        .is_some_and(|v| digitos_delimitados(frase, v)),
+                    "data" => valor
+                        .as_str()
+                        .and_then(|v| chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d").ok())
+                        .is_some_and(|data| frase_sustenta_data(frase, data, hoje)),
+                    "lista" => valor
+                        .as_str()
+                        .is_some_and(|id| frase_sustenta_lista(frase, id, &def.opcoes)),
+                    "numero" => valor
+                        .as_f64()
+                        .is_some_and(|n| frase_sustenta_numero(frase, n)),
+                    // Texto já foi conferido letra a letra (2b); booleano não
+                    // tem forma verificável além da frase.
+                    _ => true,
+                };
+                if !valor_sustentado {
+                    resumo.sem_frase_de_origem += 1;
+                    continue;
+                }
+                // A mensagem da rajada que traz a frase é a origem do valor na
+                // trilha; frase que atravessa duas mensagens fica na última.
+                let origem_do_valor =
+                    endereco::mensagem_da_frase(&ids_origem, &linhas_de_origem, frase)
+                        .or(mensagem_origem_id);
 
                 // 4. Abaixo do piso é palpite, e palpite não entra na ficha.
                 if extraido.confianca < piso_confianca {
@@ -2229,13 +2256,29 @@ impl AtendimentoStore for PgAtendimentoStore {
                         def.id,
                         valor,
                         extraido.confianca,
-                        mensagem_origem_id,
+                        origem_do_valor,
                     )
                     .await?;
                 if gravou {
                     resumo.gravados += 1;
+                    // Sugestão de vínculo na MESMA transação da gravação: se
+                    // a busca falhar, o valor também não entra, e a próxima
+                    // extração refaz as duas coisas. Com a busca fora daqui,
+                    // uma falha deixava o documento gravado e a sugestão sem
+                    // trilha para sempre (o valor "já estava" na vez seguinte).
                     if let Some(doc) = documento {
-                        resumo.documentos_gravados.push(doc);
+                        let sugerido = repo_cliente::cliente_do_documento_sem_vinculo(
+                            &mut tx,
+                            &ctx,
+                            atendimento_id,
+                            &doc,
+                        )
+                        .await?;
+                        if let Some(cliente_id) = sugerido {
+                            if !resumo.clientes_sugeridos.contains(&cliente_id) {
+                                resumo.clientes_sugeridos.push(cliente_id);
+                            }
+                        }
                     }
                 } else {
                     resumo.humano_no_caminho += 1;

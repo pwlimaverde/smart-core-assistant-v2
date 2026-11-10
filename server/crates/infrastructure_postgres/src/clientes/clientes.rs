@@ -376,6 +376,15 @@ const SQL_LISTAR_CLIENTES: &str = r#"SELECT c.id, c.nome_fantasia,
                   OR COALESCE(c.razao_social, '') ILIKE '%' || $3 || '%'
                   OR COALESCE(c.cnpj, '') LIKE '%' || $3 || '%'
                   OR COALESCE(c.cpf, '') LIKE '%' || $3 || '%'
+                  -- Documento digitado com máscara ("123.456.789-09") casa
+                  -- pelos dígitos. Só quando o termo não tem letra: "Loja
+                  -- 2000" procura nome, não documento.
+                  OR ($3 !~ '[[:alpha:]]'
+                      AND length(regexp_replace($3, '\D', '', 'g')) >= 4
+                      AND (regexp_replace(COALESCE(c.cnpj, ''), '\D', '', 'g')
+                               LIKE '%' || regexp_replace($3, '\D', '', 'g') || '%'
+                           OR regexp_replace(COALESCE(c.cpf, ''), '\D', '', 'g')
+                               LIKE '%' || regexp_replace($3, '\D', '', 'g') || '%'))
                   -- Telefone casa só por dígitos (a busca pode vir com máscara),
                   -- e só com 4+ dígitos, para não casar tudo com um termo curto.
                   OR (length(regexp_replace($3, '\D', '', 'g')) >= 4
@@ -496,7 +505,10 @@ pub async fn criar_cliente(
     .bind(&d.uf)
     .bind(&d.cargo_responsavel)
     .fetch_one(&mut **tx)
-    .await?;
+    .await
+    // CPF/CNPJ é único por tenant: o chamador distingue a repetição das
+    // outras falhas para dizer ao atendente o que houve.
+    .map_err(DbError::from_sqlx_unique)?;
     Ok(id)
 }
 
@@ -599,7 +611,8 @@ pub async fn atualizar_cliente(
     .bind(&d.uf)
     .bind(&d.cargo_responsavel)
     .execute(&mut **tx)
-    .await?;
+    .await
+    .map_err(DbError::from_sqlx_unique)?;
     Ok(res.rows_affected() > 0)
 }
 
@@ -646,8 +659,26 @@ pub async fn texto_de_origem(
     atendimento_id: i32,
     mensagens_ids: &[i32],
 ) -> Result<Option<String>, DbError> {
+    let linhas = linhas_de_origem(tx, tenant_id, atendimento_id, mensagens_ids).await?;
+    Ok(super::endereco::montar_texto_de_origem(
+        mensagens_ids,
+        &linhas,
+    ))
+}
+
+/// V3 — `(id, conteudo)` das mensagens de origem, em ordem qualquer. Só
+/// mensagens deste tenant e deste atendimento: id de outra conversa que
+/// venha na lista é ignorado. Quem precisa do texto junto usa
+/// [`texto_de_origem`]; quem precisa saber de qual mensagem saiu uma frase
+/// usa [`super::endereco::mensagem_da_frase`].
+pub async fn linhas_de_origem(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    atendimento_id: i32,
+    mensagens_ids: &[i32],
+) -> Result<Vec<(i32, String)>, DbError> {
     if mensagens_ids.is_empty() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let linhas: Vec<(i32, String)> = sqlx::query_as(
         "SELECT id, conteudo FROM oraculo_mensagem \
@@ -658,10 +689,50 @@ pub async fn texto_de_origem(
     .bind(mensagens_ids)
     .fetch_all(&mut **tx)
     .await?;
-    Ok(super::endereco::montar_texto_de_origem(
-        mensagens_ids,
-        &linhas,
-    ))
+    Ok(linhas)
+}
+
+/// V3 — o cliente já cadastrado com este CPF/CNPJ (só dígitos), quando o
+/// contato do atendimento ainda não está ligado a ele. É a base da sugestão
+/// de vínculo: a IA não vincula, só aponta (D2).
+///
+/// Compara pelos dígitos dos dois lados: cadastro antigo pode ter o documento
+/// gravado com máscara. Cliente inativo também conta — o documento é dele, e
+/// criar outro esbarraria no índice único. `None` quando não há cliente, ou
+/// quando o contato já é dele.
+pub async fn cliente_do_documento_sem_vinculo(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    documento: &str,
+) -> Result<Option<i32>, DbError> {
+    ctx.exigir_qualquer(&["clientes:read", "tenant:admin"])?;
+    let digitos: String = documento.chars().filter(char::is_ascii_digit).collect();
+    if digitos.len() != 11 && digitos.len() != 14 {
+        return Ok(None);
+    }
+    let id: Option<(i32,)> = sqlx::query_as(
+        r#"SELECT c.id
+           FROM oraculo_cliente c
+           WHERE c.tenant_id = $1 AND c.excluido_em IS NULL
+             AND (regexp_replace(COALESCE(c.cpf, ''), '\D', '', 'g') = $3
+                  OR regexp_replace(COALESCE(c.cnpj, ''), '\D', '', 'g') = $3)
+             AND NOT EXISTS (
+               SELECT 1
+               FROM oraculo_cliente_contatos cc
+               JOIN oraculo_atendimento a
+                 ON a.contato_id = cc.contato_id AND a.tenant_id = cc.tenant_id
+               WHERE cc.tenant_id = $1 AND cc.cliente_id = c.id AND a.id = $2
+             )
+           ORDER BY c.ativo DESC, c.id
+           LIMIT 1"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .bind(&digitos)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(id.map(|(i,)| i))
 }
 
 /// V3 — grava os campos de endereço que a IA extraiu das mensagens de origem

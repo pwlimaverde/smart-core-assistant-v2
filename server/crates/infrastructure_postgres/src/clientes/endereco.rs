@@ -100,6 +100,21 @@ pub fn montar_texto_de_origem(ids: &[i32], linhas: &[(i32, String)]) -> Option<S
     (!partes.is_empty()).then(|| partes.join("\n"))
 }
 
+/// V3 — a mensagem da rajada que traz a frase inteira: é ela a origem do
+/// valor na trilha de auditoria. Percorre na ordem de `ids` e devolve a
+/// primeira. `None` quando nenhuma mensagem sozinha tem a frase (frase que
+/// atravessa duas mensagens, ou vazia) — o chamador fica com a última.
+pub fn mensagem_da_frase(ids: &[i32], linhas: &[(i32, String)], frase: &str) -> Option<i32> {
+    let frase = frase.trim();
+    if frase.is_empty() {
+        return None;
+    }
+    ids.iter()
+        .filter_map(|id| linhas.iter().find(|(l, _)| l == id))
+        .find(|(_, texto)| aparece_inteiro(texto, frase))
+        .map(|(id, _)| *id)
+}
+
 /// Devolve o valor pronto para gravar, ou `None` se ele não passa nas regras.
 pub fn valor_de_endereco(coluna: &str, valor: &str, texto_da_mensagem: &str) -> Option<String> {
     let valor = valor.trim();
@@ -250,6 +265,29 @@ mod tests {
         );
         assert_eq!(montar_texto_de_origem(&[99], &linhas), None);
         assert_eq!(montar_texto_de_origem(&[], &linhas), None);
+    }
+
+    #[test]
+    fn mensagem_da_frase_aponta_a_mensagem_certa_da_rajada() {
+        let linhas = vec![
+            (12, "pode cadastrar?".to_string()),
+            (10, "oi".to_string()),
+            (11, "meu CPF é 123.456.789-09".to_string()),
+        ];
+        let ids = [10, 11, 12];
+        assert_eq!(
+            mensagem_da_frase(&ids, &linhas, "CPF é 123.456.789-09"),
+            Some(11)
+        );
+        assert_eq!(mensagem_da_frase(&ids, &linhas, " oi "), Some(10));
+        // Frase que atravessa duas mensagens não é de nenhuma sozinha.
+        assert_eq!(
+            mensagem_da_frase(&ids, &linhas, "123.456.789-09 pode cadastrar"),
+            None
+        );
+        assert_eq!(mensagem_da_frase(&ids, &linhas, ""), None);
+        // Mensagem fora da rajada não conta, mesmo que venha do banco.
+        assert_eq!(mensagem_da_frase(&[10], &linhas, "pode cadastrar?"), None);
     }
 
     #[test]

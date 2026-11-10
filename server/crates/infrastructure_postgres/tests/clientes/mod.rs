@@ -216,3 +216,163 @@ async fn test_clientes_rls_isolation() {
 
     tx.rollback().await.unwrap();
 }
+
+/// V1 — a busca de cliente casa o documento digitado com máscara, e o
+/// documento gravado com máscara em cadastro antigo. V3 — a sugestão de
+/// vínculo acha o cliente pelo documento e some quando o contato já é dele.
+#[tokio::test]
+async fn test_busca_por_documento_com_mascara_e_sugestao_de_vinculo() {
+    use infrastructure_postgres::atendimentos::atendimentos::{
+        AtendimentoRepository, PostgresAtendimentoRepository,
+    };
+    use infrastructure_postgres::clientes::clientes::{self as repo, DadosCliente};
+    use infrastructure_postgres::operacional::departamentos::{
+        DepartamentoRepository, PostgresDepartamentoRepository,
+    };
+
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Busca Documento").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let id_pf = repo::criar_cliente(
+        &mut tx,
+        &ctx,
+        &DadosCliente {
+            nome_fantasia: "Padaria Sol".into(),
+            tipo: Some("pf".into()),
+            cpf: Some("52998224725".into()),
+            ..Default::default()
+        },
+    )
+    .await
+    .expect("Falha ao criar cliente PF");
+    // Cadastro antigo: documento gravado com a máscara.
+    let antigo = PostgresClienteRepository
+        .criar(
+            &mut tx,
+            &ctx,
+            "Empresa Antiga",
+            Some("pj"),
+            Some("11.222.333/0001-81"),
+            None,
+        )
+        .await
+        .expect("Falha ao criar cliente antigo");
+
+    let ids = |lista: Vec<repo::ClienteResumo>| lista.into_iter().map(|c| c.id).collect::<Vec<_>>();
+    let com_mascara = repo::listar_clientes(&mut tx, &ctx, "529.982.247-25", false, 10)
+        .await
+        .unwrap();
+    assert_eq!(ids(com_mascara), vec![id_pf]);
+    let so_digitos = repo::listar_clientes(&mut tx, &ctx, "52998224725", false, 10)
+        .await
+        .unwrap();
+    assert_eq!(ids(so_digitos), vec![id_pf]);
+    let antigo_por_digitos = repo::listar_clientes(&mut tx, &ctx, "11222333000181", false, 10)
+        .await
+        .unwrap();
+    assert_eq!(ids(antigo_por_digitos), vec![antigo.id]);
+    // Termo com letra procura nome: os dígitos dele não casam documento.
+    let nome_com_numero = repo::listar_clientes(&mut tx, &ctx, "Loja 2247", false, 10)
+        .await
+        .unwrap();
+    assert!(nome_com_numero.is_empty());
+
+    let depto = PostgresDepartamentoRepository
+        .criar(&mut tx, &ctx, "Suporte", None)
+        .await
+        .unwrap();
+    let contato = PostgresContatoRepository
+        .salvar(&mut tx, &ctx, "5511955554444", Some("Cliente Sugestão"))
+        .await
+        .unwrap();
+    let atendimento = PostgresAtendimentoRepository
+        .criar(&mut tx, &ctx, contato.id, Some(depto.id), None, None)
+        .await
+        .unwrap();
+
+    let a = atendimento.id;
+    assert_eq!(
+        repo::cliente_do_documento_sem_vinculo(&mut tx, &ctx, a, "529.982.247-25")
+            .await
+            .unwrap(),
+        Some(id_pf)
+    );
+    assert_eq!(
+        repo::cliente_do_documento_sem_vinculo(&mut tx, &ctx, a, "11222333000181")
+            .await
+            .unwrap(),
+        Some(antigo.id),
+        "documento gravado com máscara tem de casar pelos dígitos"
+    );
+    // Documento válido que ninguém tem, e documento de tamanho errado.
+    assert_eq!(
+        repo::cliente_do_documento_sem_vinculo(&mut tx, &ctx, a, "11144477735")
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        repo::cliente_do_documento_sem_vinculo(&mut tx, &ctx, a, "5299822472")
+            .await
+            .unwrap(),
+        None
+    );
+
+    // Contato já ligado ao cliente: não há o que sugerir.
+    assert!(
+        repo::vincular_contato(&mut tx, &ctx, id_pf, contato.id, true)
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        repo::cliente_do_documento_sem_vinculo(&mut tx, &ctx, a, "52998224725")
+            .await
+            .unwrap(),
+        None
+    );
+
+    tx.rollback().await.unwrap();
+}
+
+/// V4 — CPF repetido no mesmo tenant vira `UniqueViolation`, que o
+/// `data_postgres` devolve como conflito legível em vez de erro de banco.
+#[tokio::test]
+async fn test_documento_repetido_vira_violacao_de_unicidade() {
+    use infrastructure_postgres::clientes::clientes::{self as repo, DadosCliente};
+    use infrastructure_postgres::DbError;
+
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Documento Repetido").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let dados = DadosCliente {
+        nome_fantasia: "Primeiro".into(),
+        tipo: Some("pf".into()),
+        cpf: Some("52998224725".into()),
+        ..Default::default()
+    };
+    repo::criar_cliente(&mut tx, &ctx, &dados)
+        .await
+        .expect("Falha ao criar o primeiro cliente");
+    let repetido = repo::criar_cliente(
+        &mut tx,
+        &ctx,
+        &DadosCliente {
+            nome_fantasia: "Segundo".into(),
+            ..dados.clone()
+        },
+    )
+    .await;
+    assert!(
+        matches!(repetido, Err(DbError::UniqueViolation(_))),
+        "esperava UniqueViolation"
+    );
+
+    // A transação ficou abortada pela violação; nada mais roda nela.
+    tx.rollback().await.unwrap();
+}

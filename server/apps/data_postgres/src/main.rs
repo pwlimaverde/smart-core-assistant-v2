@@ -5731,83 +5731,26 @@ async fn handler_gravar_campos_extraidos(
         Ok(resumo) => {
             // V3 — CPF/CNPJ que a IA gravou e que já pertence a um cliente
             // cadastrado: a sugestão de vínculo fica na trilha. Só ids, nunca o
-            // documento. Falha de busca não desfaz a gravação; só não audita.
+            // documento.
             //
-            // Idempotência: o documento regravado igual já sai do resumo (ver
-            // o adaptador); aqui, o mesmo cliente não é sugerido duas vezes na
-            // rodada, nem quando o contato do atendimento já é dele.
-            let mut ja_sugeridos: std::collections::HashSet<i32> = std::collections::HashSet::new();
-            let mut contato_do_atendimento: Option<Option<i32>> = None;
-            for documento in &resumo.documentos_gravados {
-                let valido = if documento.len() == 11 {
-                    cpf_valido(documento)
-                } else {
-                    cnpj_valido(documento)
-                };
-                if !valido {
-                    continue;
-                }
-                let achados = match cliente
-                    .listar_clientes(&ctx, documento.clone(), true, 5)
-                    .await
-                {
-                    Ok(lista) => lista,
-                    Err(e) => {
-                        tracing::warn!(erro = %e, "busca de cliente pelo documento da IA falhou");
-                        continue;
-                    }
-                };
-                let digitos =
-                    |s: &str| -> String { s.chars().filter(char::is_ascii_digit).collect() };
-                if let Some(achado) = achados
-                    .iter()
-                    .find(|c| digitos(&c.cpf) == *documento || digitos(&c.cnpj) == *documento)
-                {
-                    if !ja_sugeridos.insert(achado.id) {
-                        continue;
-                    }
-                    // O contato do atendimento, lido uma vez só (e só quando há
-                    // cliente achado). Falha de leitura não bloqueia a sugestão:
-                    // sugerir de novo é ruído; deixar de sugerir é perder o sinal.
-                    if contato_do_atendimento.is_none() {
-                        contato_do_atendimento = Some(
-                            match store.contato_do_atendimento(&ctx, atendimento_id).await {
-                                Ok(c) => c.map(|c| c.contato_id),
-                                Err(e) => {
-                                    tracing::warn!(erro = %e, "contato do atendimento indisponível para a sugestão");
-                                    None
-                                }
-                            },
-                        );
-                    }
-                    if let Some(contato_id) = contato_do_atendimento.flatten() {
-                        let ja_vinculado = match cliente.contatos_do_cliente(&ctx, achado.id).await
-                        {
-                            Ok(contatos) => contatos.iter().any(|c| c.id == contato_id),
-                            Err(e) => {
-                                tracing::warn!(erro = %e, "contatos do cliente indisponíveis para a sugestão");
-                                false
-                            }
-                        };
-                        if ja_vinculado {
-                            continue;
-                        }
-                    }
-                    audit
-                        .publish(
-                            &env,
-                            "contato.vinculo_sugerido_ia",
-                            format!(
-                                "IA sugeriu o vínculo do atendimento #{atendimento_id} ao cliente #{}",
-                                achado.id
-                            ),
-                            serde_json::json!({
-                                "atendimento_id": atendimento_id,
-                                "cliente_id": achado.id,
-                            }),
-                        )
-                        .await;
-                }
+            // Quem acha o cliente é o adaptador, na mesma transação em que
+            // grava o campo (ver `clientes_sugeridos`): documento regravado
+            // igual não volta, o mesmo cliente não vem duas vezes na rodada, e
+            // cliente a que o contato já está ligado não é sugerido.
+            for cliente_id in &resumo.clientes_sugeridos {
+                audit
+                    .publish(
+                        &env,
+                        "contato.vinculo_sugerido_ia",
+                        format!(
+                            "IA sugeriu o vínculo do atendimento #{atendimento_id} ao cliente #{cliente_id}"
+                        ),
+                        serde_json::json!({
+                            "atendimento_id": atendimento_id,
+                            "cliente_id": cliente_id,
+                        }),
+                    )
+                    .await;
             }
 
             // Só audita o que MUDOU a ficha. Um tick em que a IA não extraiu
@@ -7382,6 +7325,13 @@ async fn handler_list_clientes(store: &dyn ports::ClienteStore, env: Envelope) -
     }
 }
 
+/// O que a tela mostra quando o CPF/CNPJ já é de outro cliente do tenant
+/// (índice único por tenant). Sem o documento na mensagem: é dado protegido.
+/// O cliente pode estar inativo — por isso não apareceu na busca de quem
+/// tentou criar — e a mensagem diz onde procurar.
+const MSG_DOCUMENTO_REPETIDO: &str = "já existe um cliente com este CPF/CNPJ — \
+     procure por ele na lista de clientes, incluindo os inativos";
+
 /// Auditado (`cliente.criado`) só com o id e o tipo: nome, documento e endereço
 /// são dado protegido.
 #[tracing::instrument(skip_all, fields(rpc = "CreateCliente", tenant_id = %env.tenant_id))]
@@ -7414,6 +7364,10 @@ async fn handler_create_cliente(
                 .await;
             ok_reply(&env, "CreateClienteReply", serde_json::json!(cliente))
         }
+        Err(infrastructure_postgres::DbError::UniqueViolation(_)) => erro(
+            error_core::AppError::Conflict(MSG_DOCUMENTO_REPETIDO.into()),
+            &env,
+        ),
         Err(e) => erro(e.into(), &env),
     }
 }
@@ -7547,6 +7501,10 @@ async fn handler_update_cliente(
         }
         Ok(None) => erro(
             error_core::AppError::Validation("cliente não encontrado".into()),
+            &env,
+        ),
+        Err(infrastructure_postgres::DbError::UniqueViolation(_)) => erro(
+            error_core::AppError::Conflict(MSG_DOCUMENTO_REPETIDO.into()),
             &env,
         ),
         Err(e) => erro(e.into(), &env),
@@ -7697,7 +7655,13 @@ async fn handler_vincular_contato_cliente(
                             "desligado do"
                         }
                     ),
-                    serde_json::json!({ "cliente_id": cliente_id, "contato_id": contato_id }),
+                    // `origem`: quem liga ou desliga é sempre o atendente — a IA
+                    // só sugere (`contato.vinculo_sugerido_ia`), nunca vincula (D2).
+                    serde_json::json!({
+                        "cliente_id": cliente_id,
+                        "contato_id": contato_id,
+                        "origem": "atendente",
+                    }),
                 )
                 .await;
             ok_reply(
