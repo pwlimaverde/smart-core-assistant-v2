@@ -63,6 +63,25 @@ fn aparece_inteiro(texto: &str, valor: &str) -> bool {
     false
 }
 
+/// V3 — a frase que a IA diz ter copiado precisa estar, inteira, na mensagem
+/// do cliente. Se o valor for texto, ele também precisa aparecer na frase.
+/// Valor numérico ou de data não é comparado letra a letra (a forma pode
+/// variar: "1.500" e "1500"); a frase literal já é a prova.
+pub fn frase_sustenta_valor(
+    texto_da_mensagem: &str,
+    frase: &str,
+    valor_texto: Option<&str>,
+) -> bool {
+    let frase = frase.trim();
+    if frase.is_empty() || !aparece_inteiro(texto_da_mensagem, frase) {
+        return false;
+    }
+    match valor_texto {
+        Some(valor) => aparece_inteiro(frase, valor.trim()),
+        None => true,
+    }
+}
+
 /// Devolve o valor pronto para gravar, ou `None` se ele não passa nas regras.
 pub fn valor_de_endereco(coluna: &str, valor: &str, texto_da_mensagem: &str) -> Option<String> {
     let valor = valor.trim();
@@ -103,6 +122,44 @@ mod tests {
             ),
             Some("Rua das Flores".to_string())
         );
+    }
+
+    #[test]
+    fn frase_vazia_nao_sustenta_valor() {
+        assert!(!frase_sustenta_valor("moro em Recife", "", Some("Recife")));
+        assert!(!frase_sustenta_valor("moro em Recife", "   ", None));
+    }
+
+    #[test]
+    fn frase_fora_da_mensagem_nao_sustenta_valor() {
+        assert!(!frase_sustenta_valor(
+            "quero um orçamento",
+            "moro em Recife",
+            Some("Recife")
+        ));
+    }
+
+    #[test]
+    fn valor_texto_precisa_estar_na_frase() {
+        assert!(frase_sustenta_valor(
+            "moro em Recife, Pernambuco",
+            "moro em Recife",
+            Some("Recife")
+        ));
+        assert!(!frase_sustenta_valor(
+            "moro em Recife",
+            "moro em Recife",
+            Some("Olinda")
+        ));
+    }
+
+    #[test]
+    fn valor_numerico_dispensa_comparacao_letra_a_letra() {
+        assert!(frase_sustenta_valor(
+            "meu orçamento é 1.500 reais",
+            "1.500 reais",
+            None
+        ));
     }
 
     #[test]

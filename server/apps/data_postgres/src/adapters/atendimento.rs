@@ -2107,6 +2107,22 @@ impl AtendimentoStore for PgAtendimentoStore {
                 );
             }
 
+            // V3 — a frase do cliente só vale contra o texto da mensagem que
+            // originou a extração. Sem essa mensagem, nada é verificável.
+            let texto_da_mensagem: Option<String> = match mensagem_origem_id {
+                Some(mensagem_id) => sqlx::query_as::<_, (String,)>(
+                    "SELECT conteudo FROM oraculo_mensagem \
+                     WHERE tenant_id = $1 AND id = $2 AND atendimento_id = $3",
+                )
+                .bind(tenant_id)
+                .bind(mensagem_id)
+                .bind(atendimento_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .map(|(texto,)| texto),
+                None => None,
+            };
+
             for extraido in campos {
                 // 1. O slug tem de existir no catálogo aplicável.
                 let Some(def) = definicoes
@@ -2121,6 +2137,21 @@ impl AtendimentoStore for PgAtendimentoStore {
                 //    que a IA devolva — a marca é uma decisão do tenant.
                 if !def.extrair_automaticamente {
                     resumo.extracao_desligada += 1;
+                    continue;
+                }
+
+                // 2b. Sem frase literal da mensagem do cliente, não grava (V3).
+                let valor_texto: Option<String> =
+                    serde_json::from_str::<String>(&extraido.valor_json).ok();
+                let frase_ok = texto_da_mensagem.as_deref().is_some_and(|texto| {
+                    infrastructure_postgres::clientes::endereco::frase_sustenta_valor(
+                        texto,
+                        &extraido.frase_origem,
+                        valor_texto.as_deref(),
+                    )
+                });
+                if !frase_ok {
+                    resumo.sem_frase_de_origem += 1;
                     continue;
                 }
 
@@ -2139,6 +2170,10 @@ impl AtendimentoStore for PgAtendimentoStore {
 
                 // 5. A quinta guarda mora no SQL: não passa por cima de gente
                 //    nem repreenche o que gente apagou.
+                let documento: Option<String> = valor_texto
+                    .as_deref()
+                    .map(|t| t.chars().filter(|c| c.is_ascii_digit()).collect::<String>())
+                    .filter(|d| d.len() == 11 || d.len() == 14);
                 let gravou = repo_valor
                     .upsert_da_ia(
                         &mut tx,
@@ -2152,6 +2187,9 @@ impl AtendimentoStore for PgAtendimentoStore {
                     .await?;
                 if gravou {
                     resumo.gravados += 1;
+                    if let Some(doc) = documento {
+                        resumo.documentos_gravados.push(doc);
+                    }
                 } else {
                     resumo.humano_no_caminho += 1;
                 }

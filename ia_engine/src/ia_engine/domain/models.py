@@ -57,6 +57,14 @@ class CampoExtraidoItem(BaseModel):
             "valor com todas as letras; baixo quando você deduziu."
         ),
     )
+    frase_origem: str = Field(
+        default="",
+        description=(
+            "O trecho EXATO da mensagem do CLIENTE de onde saiu o valor, copiado "
+            "letra por letra. Sem frase do cliente, deixe vazio: o valor não "
+            "será gravado."
+        ),
+    )
 
 
 class RespostaBot(BaseModel):

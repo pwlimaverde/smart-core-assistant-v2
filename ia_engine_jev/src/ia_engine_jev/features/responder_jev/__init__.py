@@ -525,7 +525,7 @@ class ResponderJevUsecase(
             uso=data.uso,
         )
         campos = tuple(
-            (slug, _valor_json(v), c)
+            (slug, _valor_json(v), c, v if isinstance(v, str) else str(v))
             for slug, v, c in campos_conferidos(
                 data.valores,
                 data.conferencia_valores,

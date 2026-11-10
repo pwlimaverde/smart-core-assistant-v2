@@ -441,6 +441,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                             slug=c.slug,
                             valor_json=json.dumps(c.valor, ensure_ascii=False),
                             confianca=c.confianca,
+                            frase_origem=c.frase_origem,
                         )
                         for c in final.campos_extraidos
                     ],
@@ -828,8 +829,8 @@ def _resposta_pb(d: DecisaoResposta) -> pb.ResponderResponse:
         fluxo_transferencia=d.fluxo_transferencia,
         confiabilidade=d.confiabilidade,
         campos_extraidos=[
-            pb.CampoExtraido(slug=s, valor_json=v, confianca=c)
-            for s, v, c in d.campos_extraidos
+            pb.CampoExtraido(slug=s, valor_json=v, confianca=c, frase_origem=f)
+            for s, v, c, f in d.campos_extraidos
         ],
         motivo_transferencia=d.motivo,
         sinais=[

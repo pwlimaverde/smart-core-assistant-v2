@@ -38,6 +38,11 @@ pub struct CampoExtraidoDto {
     pub slug: String,
     pub valor_json: String,
     pub confianca: f64,
+    /// Trecho da mensagem do cliente que originou o valor. Sem ele, ou com ele
+    /// fora da mensagem, o valor não é gravado (V3). `default` mantém
+    /// compatível um `ia_engine` que ainda não envia o campo.
+    #[serde(default)]
+    pub frase_origem: String,
 }
 
 /// O que aconteceu com cada campo que a IA mandou.
@@ -53,8 +58,15 @@ pub struct ResumoCamposExtraidos {
     pub extracao_desligada: usize,
     pub tipo_invalido: usize,
     pub abaixo_do_piso: usize,
+    /// Valor sem frase do cliente, ou com frase que não está na mensagem de
+    /// origem. Era o caso de a IA ter inventado ou deduzido o dado.
+    pub sem_frase_de_origem: usize,
     /// Humano escreveu ou apagou ali. Não é erro da IA: é a guarda operando.
     pub humano_no_caminho: usize,
+    /// CPF/CNPJ (só dígitos) que a IA gravou nesta rodada. Alimenta a sugestão
+    /// de vínculo com cliente já cadastrado (auditada como `contato.vinculo_sugerido_ia`).
+    #[serde(skip)]
+    pub documentos_gravados: Vec<String>,
 }
 
 /// Campos personalizados resolvidos de um atendimento: já coletados (com valor)
@@ -770,4 +782,25 @@ pub trait AtendimentoStore: Send + Sync {
         nota: i32,
         label: &str,
     ) -> Result<(), DbError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CampoExtraidoDto;
+
+    #[test]
+    fn campo_sem_frase_de_origem_vem_vazio_de_ia_antiga() {
+        // Um `ia_engine` que ainda não manda `frase_origem` continua
+        // compatível: o campo chega vazio e o servidor não grava (V3).
+        let json = r#"{"slug":"cliente.cidade","valor_json":"\"Recife\"","confianca":0.9}"#;
+        let campo: CampoExtraidoDto = serde_json::from_str(json).unwrap();
+        assert_eq!(campo.frase_origem, "");
+    }
+
+    #[test]
+    fn campo_com_frase_de_origem_preserva_o_trecho() {
+        let json = r#"{"slug":"cliente.cidade","valor_json":"\"Recife\"","confianca":0.9,"frase_origem":"moro em Recife"}"#;
+        let campo: CampoExtraidoDto = serde_json::from_str(json).unwrap();
+        assert_eq!(campo.frase_origem, "moro em Recife");
+    }
 }

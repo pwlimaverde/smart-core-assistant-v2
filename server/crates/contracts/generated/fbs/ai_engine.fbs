@@ -198,6 +198,7 @@ table CampoExtraido {
   slug:string;
   valor_json:string;
   confianca:double;
+  frase_origem:string;
 }
 
 table ResponderResponse {

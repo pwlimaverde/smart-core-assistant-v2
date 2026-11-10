@@ -5657,6 +5657,51 @@ async fn handler_gravar_campos_extraidos(
         .await
     {
         Ok(resumo) => {
+            // V3 — CPF/CNPJ que a IA gravou e que já pertence a um cliente
+            // cadastrado: a sugestão de vínculo fica na trilha. Só ids, nunca o
+            // documento. Falha de busca não desfaz a gravação; só não audita.
+            for documento in &resumo.documentos_gravados {
+                let valido = if documento.len() == 11 {
+                    cpf_valido(documento)
+                } else {
+                    cnpj_valido(documento)
+                };
+                if !valido {
+                    continue;
+                }
+                let achados = match cliente
+                    .listar_clientes(&ctx, documento.clone(), true, 5)
+                    .await
+                {
+                    Ok(lista) => lista,
+                    Err(e) => {
+                        tracing::warn!(erro = %e, "busca de cliente pelo documento da IA falhou");
+                        continue;
+                    }
+                };
+                let digitos =
+                    |s: &str| -> String { s.chars().filter(char::is_ascii_digit).collect() };
+                if let Some(achado) = achados
+                    .iter()
+                    .find(|c| digitos(&c.cpf) == *documento || digitos(&c.cnpj) == *documento)
+                {
+                    audit
+                        .publish(
+                            &env,
+                            "contato.vinculo_sugerido_ia",
+                            format!(
+                                "IA sugeriu o vínculo do atendimento #{atendimento_id} ao cliente #{}",
+                                achado.id
+                            ),
+                            serde_json::json!({
+                                "atendimento_id": atendimento_id,
+                                "cliente_id": achado.id,
+                            }),
+                        )
+                        .await;
+                }
+            }
+
             // Só audita o que MUDOU a ficha. Um tick em que a IA não extraiu
             // nada é o caso comum, e registrá-lo encheria a trilha de ruído
             // justamente onde ela serve para responder "quem pôs isso aqui?".
@@ -5691,6 +5736,7 @@ async fn handler_gravar_campos_extraidos(
                 extracao_desligada = resumo.extracao_desligada,
                 tipo_invalido = resumo.tipo_invalido,
                 abaixo_do_piso = resumo.abaixo_do_piso,
+                sem_frase_de_origem = resumo.sem_frase_de_origem,
                 humano_no_caminho = resumo.humano_no_caminho,
                 "ia.campos_extraidos"
             );

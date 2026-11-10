@@ -214,7 +214,7 @@ impl ClienteRepository for PostgresClienteRepository {
 // ---------------------------------------------------------------------------
 
 /// Os campos editáveis de um cliente. `None` = vazio.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Clone, Default, PartialEq)]
 pub struct DadosCliente {
     pub nome_fantasia: String,
     pub razao_social: Option<String>,
@@ -240,7 +240,7 @@ pub struct DadosCliente {
 
 /// Um cliente como a tela o mostra: textos vazios em vez de nulos, e quantos
 /// contatos estão ligados a ele.
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+#[derive(Clone, Default, PartialEq, serde::Serialize)]
 pub struct ClienteResumo {
     /// Campos que a IA preencheu a partir da conversa (ex.: `cep`).
     pub campos_pela_ia: Vec<String>,
@@ -264,6 +264,60 @@ pub struct ClienteResumo {
     pub uf: String,
     pub ativo: bool,
     pub contatos: i64,
+}
+
+/// CPF/CNPJ não aparecem em `Debug`: log e panic imprimem `Debug`, e documento
+/// é dado pessoal (V5 do plano de vínculo). O valor segue para o banco e a API
+/// pelos campos normais; só a formatação de depuração é mascarada.
+fn redigido(valor: &Option<String>) -> &'static str {
+    match valor {
+        Some(v) if !v.is_empty() => "[REDIGIDO]",
+        _ => "None",
+    }
+}
+
+fn redigido_texto(valor: &str) -> &'static str {
+    if valor.is_empty() {
+        "\"\""
+    } else {
+        "\"[REDIGIDO]\""
+    }
+}
+
+impl std::fmt::Debug for DadosCliente {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DadosCliente")
+            .field("nome_fantasia", &self.nome_fantasia)
+            .field("razao_social", &self.razao_social)
+            .field("tipo", &self.tipo)
+            .field("cnpj", &redigido(&self.cnpj))
+            .field("cpf", &redigido(&self.cpf))
+            .field("telefone", &self.telefone)
+            .field("site", &self.site)
+            .field("ramo_atividade", &self.ramo_atividade)
+            .field("observacoes", &self.observacoes)
+            .field("cargo_responsavel", &self.cargo_responsavel)
+            .field("cep", &self.cep)
+            .field("campos_pela_ia", &self.campos_pela_ia)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for ClienteResumo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClienteResumo")
+            .field("id", &self.id)
+            .field("nome_fantasia", &self.nome_fantasia)
+            .field("razao_social", &self.razao_social)
+            .field("tipo", &self.tipo)
+            .field("cnpj", &redigido_texto(&self.cnpj))
+            .field("cpf", &redigido_texto(&self.cpf))
+            .field("telefone", &self.telefone)
+            .field("ativo", &self.ativo)
+            .field("contatos", &self.contatos)
+            .field("campos_pela_ia", &self.campos_pela_ia)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Um contato ligado a um cliente.
@@ -296,7 +350,12 @@ const SQL_LISTAR_CLIENTES: &str = r#"SELECT c.id, c.nome_fantasia,
              AND ($3 = '' OR c.nome_fantasia ILIKE '%' || $3 || '%'
                   OR COALESCE(c.razao_social, '') ILIKE '%' || $3 || '%'
                   OR COALESCE(c.cnpj, '') LIKE '%' || $3 || '%'
-                  OR COALESCE(c.cpf, '') LIKE '%' || $3 || '%')
+                  OR COALESCE(c.cpf, '') LIKE '%' || $3 || '%'
+                  -- Telefone casa só por dígitos (a busca pode vir com máscara),
+                  -- e só com 4+ dígitos, para não casar tudo com um termo curto.
+                  OR (length(regexp_replace($3, '\D', '', 'g')) >= 4
+                      AND regexp_replace(COALESCE(c.telefone, ''), '\D', '', 'g')
+                          LIKE '%' || regexp_replace($3, '\D', '', 'g') || '%'))
            ORDER BY c.ativo DESC, c.nome_fantasia
            LIMIT $4"#;
 
@@ -344,8 +403,8 @@ fn cliente_da_linha(row: &sqlx::postgres::PgRow) -> Result<ClienteResumo, DbErro
     })
 }
 
-/// Clientes do tenant, ativos primeiro. `busca` casa nome fantasia, razão social
-/// e documento; vazia = sem filtro.
+/// Clientes do tenant, ativos primeiro. `busca` casa nome fantasia, razão social,
+/// documento e telefone (por dígitos); vazia = sem filtro.
 pub async fn listar_clientes(
     tx: &mut Transaction<'_, Postgres>,
     ctx: &RequestContext,
