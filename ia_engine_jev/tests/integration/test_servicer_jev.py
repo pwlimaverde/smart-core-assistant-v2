@@ -546,9 +546,10 @@ async def test_cpf_sem_mascara_acha_a_frase_mascarada(fake_embeddings_factory):
     ]
 
 
-async def test_data_sem_recorte_literal_nao_e_enviada(fake_embeddings_factory):
-    # Limitação conhecida do motor Jev: "2026-05-03" não está no texto ("dia 3
-    # de maio") e não se inventa frase — o campo não sai.
+async def test_data_iso_sai_com_o_trecho_do_cliente(fake_embeddings_factory):
+    # Mudança (antes: test_data_sem_recorte_literal_nao_e_enviada): a data em
+    # ISO sai com o trecho que o código lê como essa mesma data. Ano escrito
+    # na mensagem para o teste não depender do dia em que roda.
     async with _stub(
         FakeJev(_roteiro_campo("prazo")),
         _chat_json('{"campo_prazo": "2026-05-03"}'),
@@ -556,7 +557,26 @@ async def test_data_sem_recorte_literal_nao_e_enviada(fake_embeddings_factory):
     ) as stub:
         r = await stub.Responder(
             _responder(
-                mensagem="preciso para o dia 3 de maio",
+                mensagem="preciso para o dia 3 de maio de 2026",
+                campos_pendentes=[pb.CampoPendente(slug="prazo", nome="Prazo")],
+            )
+        )
+    assert [(c.slug, c.valor_json, c.frase_origem) for c in r.campos_extraidos] == [
+        ("prazo", '"2026-05-03"', "3 de maio de 2026")
+    ]
+
+
+async def test_data_sem_trecho_que_a_sustente_nao_e_enviada(fake_embeddings_factory):
+    # A LLM devolveu uma data que o código não lê em nenhum trecho da
+    # mensagem: não se inventa frase, e o campo não sai.
+    async with _stub(
+        FakeJev(_roteiro_campo("prazo")),
+        _chat_json('{"campo_prazo": "2026-05-03"}'),
+        fake_embeddings_factory,
+    ) as stub:
+        r = await stub.Responder(
+            _responder(
+                mensagem="preciso para o fim de maio de 2026",
                 campos_pendentes=[pb.CampoPendente(slug="prazo", nome="Prazo")],
             )
         )

@@ -168,6 +168,11 @@ def _normal_com_origem(texto: str) -> tuple[str, list[int]]:
 
 # Documento (CPF/CNPJ): só dígitos e a pontuação de máscara.
 _RE_DOCUMENTO = re.compile(r"[\d.\-/\s]+")
+# Tamanho dos blocos da máscara oficial: CPF 000.000.000-00 e
+# CNPJ 00.000.000/0000-00.
+_BLOCOS_DO_DOCUMENTO = {11: (3, 3, 3, 2), 14: (2, 3, 3, 4, 2)}
+# Data já normalizada pela LLM.
+_RE_DATA_ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
 # Número simples ("1500", "1500,5", "-3") e número com milhar ("1.500,50").
 _RE_NUMERO_SIMPLES = re.compile(r"(-?)(\d+)(?:[.,](\d+))?")
 _RE_NUMERO_MILHAR = re.compile(r"(-?)(\d{1,3}(?:[.\s]\d{3})+)(?:,(\d+))?")
@@ -198,7 +203,10 @@ def _padrao_numerico(valor: str) -> re.Pattern[str] | None:
     é número nem documento.
 
     - CPF/CNPJ (11 ou 14 dígitos): casa por dígitos, aceitando a máscara que o
-      cliente usou ("529.982.247-25" casa "52998224725" e vice-versa).
+      cliente usou ("529.982.247-25" casa "52998224725" e vice-versa). Espaço
+      só entre os blocos da máscara oficial ("529 982 247 25"): é a mesma
+      regra do servidor (`digitos_delimitados`), que recusa a frase fora desse
+      desenho — "11 98765-4321" é telefone, não CPF.
     - Número: casa ignorando separador de milhar ("1500" casa "1.500").
 
     Vizinho dígito, letra, ou ponto/vírgula seguido de dígito invalida o
@@ -206,8 +214,21 @@ def _padrao_numerico(valor: str) -> re.Pattern[str] | None:
     """
     digitos = "".join(c for c in valor if c.isdigit())
     if len(digitos) in (11, 14) and _RE_DOCUMENTO.fullmatch(valor):
-        corpo = r"[.\-/\s]?".join(digitos)
-        return re.compile(rf"(?<![\w.,/-]){corpo}(?![\w]|[.,/-]\d)")
+        # Forma 1: dígitos com a máscara opcional, sem espaço.
+        sem_espaco = r"[.\-/]?".join(digitos)
+        # Forma 2: os blocos da máscara oficial, com exatamente um espaço (ou
+        # caractere de máscara) entre eles, e sem outro número colado por
+        # espaço antes ou depois.
+        blocos: list[str] = []
+        inicio = 0
+        for tamanho in _BLOCOS_DO_DOCUMENTO[len(digitos)]:
+            blocos.append(digitos[inicio : inicio + tamanho])
+            inicio += tamanho
+        em_blocos = r"[ .\-/]".join(blocos)
+        return re.compile(
+            rf"(?<![\w.,/-])(?:{sem_espaco}|(?<!\d ){em_blocos}(?! \d))"
+            r"(?![\w]|[.,/-]\d)"
+        )
     formas: list[str] = []
     for regex in (_RE_NUMERO_MILHAR, _RE_NUMERO_SIMPLES):
         if m := regex.fullmatch(valor):
@@ -236,12 +257,11 @@ def trecho_no_texto(valor: str, mensagem: str) -> str:
     (com ou sem máscara) e número sem olhar o separador de milhar. O recorte
     devolvido é o da mensagem, com a máscara e a pontuação do cliente.
 
-    Limitação conhecida (regra estrita, de propósito): data, booleano e id de
-    lista normalizados pela LLM ("2026-05-03", "true", "couche_fosco") só
-    acham frase se estiverem escritos assim na mensagem. "dia 3 de maio" não
-    vira frase de "2026-05-03": sem recorte literal, o campo não sai — não se
-    inventa frase. O motor principal (ia_engine) não tem esse limite porque
-    lá a própria LLM escreve a frase.
+    Limitação conhecida (regra estrita, de propósito): booleano e id de
+    lista normalizados pela LLM ("true", "couche_fosco") só acham frase se
+    estiverem escritos assim na mensagem; sem recorte literal, o campo não
+    sai — não se inventa frase. Data em ISO tem caminho próprio, em
+    `frase_da_data`.
     """
     padrao = _padrao_numerico(valor.strip())
     if padrao is not None:
@@ -267,13 +287,35 @@ def trecho_no_texto(valor: str, mensagem: str) -> str:
     return ""
 
 
+def frase_da_data(iso: str, mensagem: str, hoje: date) -> str:
+    """O trecho da mensagem que o código lê como a data `iso` (AAAA-MM-DD).
+
+    A LLM devolve a data normalizada; o cliente escreveu "dia 3 de maio",
+    "03/05", "amanhã" ou "sexta". `por_data` faz a conta em código, e só o
+    trecho cuja data calculada é exatamente `iso` vira frase: se a LLM e o
+    código discordam, não há frase e o campo não sai. O servidor confere de
+    novo (`frase_sustenta_data`).
+    """
+    for trecho, data in por_data(mensagem, hoje).items():
+        if data != iso:
+            continue
+        # Relativas e dias da semana são chaves sem acento ("amanha"); o
+        # recorte devolvido é o que está na mensagem ("amanhã").
+        original = trecho if trecho in mensagem else trecho_no_texto(trecho, mensagem)
+        if original:
+            return original
+    return ""
+
+
 def _como_o_servidor_compara(texto: str) -> str:
     """Caixa e espaço repetido não contam; acento conta (o servidor não o
     normaliza). Espelha o `normalizar` de `endereco.rs`."""
     return " ".join(texto.split()).lower()
 
 
-def valor_e_frase(valor: str, mensagem: str) -> tuple[str, str] | None:
+def valor_e_frase(
+    valor: str, mensagem: str, hoje: date | None = None
+) -> tuple[str, str] | None:
     """(valor a enviar, frase de origem) de um campo do cartão, ou `None`
     se a mensagem não traz o valor — campo sem frase não é enviado.
 
@@ -293,8 +335,14 @@ def valor_e_frase(valor: str, mensagem: str) -> tuple[str, str] | None:
     é o recorte com a máscara do cliente. Em todo tipo o servidor exige a
     frase inteira na mensagem; além disso, pelo tipo do catálogo:
     - `cpf`/`cnpj`: os dígitos do valor precisam estar nos dígitos da frase
-      (a máscara não importa) — o par passa;
-    - `numero`, data, booleano, lista: só a frase é conferida — o par passa;
+      (a máscara não importa; espaço só entre os blocos oficiais) — o par
+      passa;
+    - `numero`: um número da frase tem de ser o valor — o par passa;
+    - data: a frase tem de trazer o dia (número, dia da semana, "amanhã"). A
+      data em ISO que a LLM devolveu sai com o trecho que `por_data` lê como
+      essa mesma data (`frase_da_data`);
+    - lista: a frase tem de trazer o rótulo, o id ou uma palavra própria da
+      opção; booleano: só a frase é conferida;
     - `texto`: o valor precisa estar dentro da frase, letra a letra (só caixa
       e espaço não contam). Telefone ou CEP em campo `texto` com máscara
       diferente da do valor ("11987654321" contra "11 98765-4321") é
@@ -304,6 +352,9 @@ def valor_e_frase(valor: str, mensagem: str) -> tuple[str, str] | None:
     """
     v = valor.strip()
     frase = trecho_no_texto(v, mensagem)
+    if not frase and _RE_DATA_ISO.fullmatch(v):
+        frase = frase_da_data(v, mensagem, hoje or date.today())
+        return (v, frase) if frase else None
     if not frase:
         return None
     if _padrao_numerico(v) is not None:

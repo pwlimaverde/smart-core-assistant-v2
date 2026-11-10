@@ -174,9 +174,51 @@ def test_trecho_numerico_casa_pela_forma():
     assert trecho_no_texto("52998224725", "cpf 529.982.247-250") == ""
 
 
+def test_documento_com_espaco_so_nos_blocos_da_mascara():
+    # Mesma regra do servidor (`digitos_delimitados`): um espaço entre os
+    # blocos oficiais vale; fora desse desenho são números diferentes.
+    assert trecho_no_texto("52998224725", "cpf 529 982 247 25 ok") == "529 982 247 25"
+    assert trecho_no_texto("52998224725", "529.982.247 25") == "529.982.247 25"
+    assert (
+        trecho_no_texto("11222333000181", "cnpj 11 222 333 0001 81.")
+        == "11 222 333 0001 81"
+    )
+    # Dois números que, colados, dariam os dígitos do CPF.
+    assert trecho_no_texto("52998224725", "pedido 52998 224725") == ""
+    assert trecho_no_texto("52998224725", "5 2 9 9 8 2 2 4 7 2 5") == ""
+    # Quebra de linha (outra mensagem da rajada) e dois espaços não ligam.
+    assert trecho_no_texto("52998224725", "529 982\n247 25") == ""
+    assert trecho_no_texto("52998224725", "529  982 247 25") == ""
+    # Pedaço de uma sequência maior.
+    assert trecho_no_texto("52998224725", "55 529 982 247 25") == ""
+    assert trecho_no_texto("52998224725", "529 982 247 25 77") == ""
+
+
+def test_data_iso_sai_com_o_trecho_que_o_codigo_le_como_a_mesma_data():
+    hoje = date(2026, 4, 20)  # segunda-feira
+    assert valor_e_frase("2026-05-03", "entrega dia 3 de maio", hoje) == (
+        "2026-05-03",
+        "3 de maio",
+    )
+    assert valor_e_frase("2026-05-03", "pode ser 03/05?", hoje) == (
+        "2026-05-03",
+        "03/05",
+    )
+    # A chave de `por_data` é sem acento; a frase é a da mensagem.
+    assert valor_e_frase("2026-04-21", "Amanhã cedo", hoje) == ("2026-04-21", "Amanhã")
+    assert valor_e_frase("2026-04-24", "na sexta-feira", hoje) == (
+        "2026-04-24",
+        "sexta",
+    )
+    # A LLM e o código discordam da data: sem frase, o campo não sai.
+    assert valor_e_frase("2026-05-04", "entrega dia 3 de maio", hoje) is None
+    assert valor_e_frase("2026-05-03", "quando der", hoje) is None
+
+
 def test_trecho_sem_recorte_literal_nao_inventa_frase():
-    # Limitação conhecida do motor Jev: valor normalizado pela LLM que o
-    # cliente não escreveu assim fica sem frase — e o campo não sai.
+    # `trecho_no_texto` só acha o que está escrito: valor normalizado pela
+    # LLM que o cliente não escreveu assim fica sem recorte. A data em ISO
+    # tem caminho próprio em `valor_e_frase` (ver o teste da data, acima).
     assert trecho_no_texto("2026-05-03", "entrega dia 3 de maio") == ""
     assert trecho_no_texto("true", "sim, tenho a arte") == ""
     assert trecho_no_texto("2026-05-03", "entrega 2026-05-03") == "2026-05-03"
@@ -194,19 +236,19 @@ def test_valor_e_frase_do_campo():
         "529.982.247-25",
     )
     # Sem recorte, o campo não é enviado.
-    assert valor_e_frase("2026-05-03", "dia 3 de maio") is None
+    assert valor_e_frase("true", "sim, tenho a arte") is None
     assert valor_e_frase("Recife", "moro em Olinda") is None
 
 
-def test_valor_e_frase_telefone_em_campo_texto_e_recusado_no_servidor():
-    # Limite documentado, não um acerto: telefone de 11 dígitos tem cara de
-    # documento, então o par mantém o valor da LLM e usa o recorte com a
-    # máscara do cliente. Se o campo do catálogo for do tipo `texto`, o
-    # servidor exige o valor letra a letra dentro da frase e recusa o par
-    # (falha fechada: o campo não é gravado).
-    assert valor_e_frase("11987654321", "tel 11 98765-4321") == (
+def test_valor_e_frase_telefone_com_espaco_nao_vira_frase_de_documento():
+    # Telefone de 11 dígitos tem cara de documento. Escrito com espaço fora
+    # dos blocos do CPF ("11 98765-4321"), não é frase de documento: o
+    # servidor recusaria o par, então o Jev já não o monta.
+    assert valor_e_frase("11987654321", "tel 11 98765-4321") is None
+    # Sem espaço, o recorte segue saindo com a máscara do cliente.
+    assert valor_e_frase("11987654321", "tel 11-98765-4321") == (
         "11987654321",
-        "11 98765-4321",
+        "11-98765-4321",
     )
 
 

@@ -55,6 +55,17 @@ def test_formatar_campos_pendentes_com_hint():
     assert "colete esses dados" in texto
 
 
+def test_prompt_pede_frase_que_sustente_o_valor():
+    # V3: a frase tem de trazer o valor (o dia da data, a opção da lista), não
+    # um trecho qualquer. O servidor descarta o resto; o prompt avisa a LLM.
+    texto = _formatar_campos(
+        (), (CampoPendente(slug="prazo", nome="Prazo", descricao="", hint=""),)
+    )
+    assert "tem de trazer o próprio valor" in texto
+    assert "Em data, o dia como o cliente disse" in texto
+    assert "em lista, o nome da opção que ele citou" in texto
+
+
 def test_formatar_campos_pendentes_sem_hint_nao_anexa_colchetes():
     pendentes = (
         CampoPendente(slug="nome", nome="", descricao="nome completo", hint=""),
