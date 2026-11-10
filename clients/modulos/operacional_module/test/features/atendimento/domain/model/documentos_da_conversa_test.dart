@@ -31,6 +31,30 @@ void main() {
       expect(achados, isEmpty);
     });
 
+    test('aceita os blocos da máscara separados por um espaço', () {
+      final achados = DocumentosDaConversa.extrair([
+        'meu cpf: 529 982 247 25, pode anotar',
+        'cnpj 11 222 333 0001 81.',
+        '529.982.247 25',
+      ]);
+      expect(achados, ['52998224725', '11222333000181']);
+    });
+
+    test('espaço fora do desenho dos blocos não forma documento', () {
+      final achados = DocumentosDaConversa.extrair([
+        // Dois números que, colados, dariam os dígitos do CPF.
+        'pedido 52998 224725',
+        '5 2 9 9 8 2 2 4 7 2 5',
+        // Dois espaços e quebra de linha não ligam os blocos.
+        '529  982 247 25',
+        '529 982\n247 25',
+        // Pedaço de uma sequência maior.
+        '55 529 982 247 25',
+        '529 982 247 25 77',
+      ]);
+      expect(achados, isEmpty);
+    });
+
     test('mesmosDocumentos compara a ordem', () {
       expect(DocumentosDaConversa.mesmosDocumentos(['a'], ['a']), isTrue);
       expect(DocumentosDaConversa.mesmosDocumentos(['a'], ['b']), isFalse);

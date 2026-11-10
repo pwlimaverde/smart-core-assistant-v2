@@ -207,6 +207,157 @@ void main() {
       expect(gateway.acoesDoCadastro, contains('vincular:9:4:true'));
     });
 
+    testWidgets('mostra o nome do perfil do WhatsApp quando difere do '
+        'cadastro', (tester) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = FichaAtendimento(
+          catalogo: const [],
+          aplicadas: const [],
+          notas: const [],
+        );
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      final controller = controllerSobre(gateway);
+      addTearDown(controller.close);
+
+      Future<void> mostrar(ContatoDaConversa contato) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: PainelFicha(controller: controller, contato: contato),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await mostrar(
+        const ContatoDaConversa(
+          contatoId: 4,
+          nome: 'Ana Souza',
+          telefone: '5588999912191',
+          fotoUrl: '',
+          nomePerfilWhatsapp: 'Aninha',
+        ),
+      );
+      await controller.abrir(7);
+      await tester.pumpAndSettle();
+      expect(find.text('No WhatsApp: Aninha'), findsOneWidget);
+
+      // Igual ao nome do cadastro: a linha não se repete.
+      await mostrar(
+        const ContatoDaConversa(
+          contatoId: 4,
+          nome: 'Ana Souza',
+          telefone: '5588999912191',
+          fotoUrl: '',
+          nomePerfilWhatsapp: 'Ana Souza',
+        ),
+      );
+      expect(find.textContaining('No WhatsApp:'), findsNothing);
+    });
+
+    testWidgets('"Criar" usa o nome do perfil do WhatsApp quando o contato '
+        'não tem nome', (tester) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = FichaAtendimento(
+          catalogo: const [],
+          aplicadas: const [],
+          notas: const [],
+        )
+        ..clientesDaBusca = const [];
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      final controller = controllerSobre(gateway);
+      addTearDown(controller.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PainelFicha(
+              controller: controller,
+              contato: const ContatoDaConversa(
+                contatoId: 4,
+                nome: '',
+                telefone: '5588999912191',
+                fotoUrl: '',
+                nomePerfilWhatsapp: 'Aninha',
+              ),
+              documentos: const ['52998224725'],
+            ),
+          ),
+        ),
+      );
+      await controller.abrir(7);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Criar'));
+      await tester.pumpAndSettle();
+      // O cliente não nasce com o telefone no lugar do nome.
+      expect(gateway.acoesDoCadastro, contains('salvarCliente:0:Aninha'));
+    });
+
+    testWidgets('busca antiga que responde depois não troca a lista de '
+        '"Vincular a cliente"', (tester) async {
+      final lenta = Completer<List<ClienteDaConversa>>();
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = FichaAtendimento(
+          catalogo: const [],
+          aplicadas: const [],
+          notas: const [],
+        )
+        ..clientesDaBusca = const [
+          ClienteDaConversa(id: 9, nomeFantasia: 'Padaria Sol'),
+        ]
+        ..buscasSeguradas['pa'] = lenta;
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      final controller = controllerSobre(gateway);
+      addTearDown(controller.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PainelFicha(
+              controller: controller,
+              contato: const ContatoDaConversa(
+                contatoId: 4,
+                nome: 'Ana',
+                telefone: '5588999912191',
+                fotoUrl: '',
+              ),
+            ),
+          ),
+        ),
+      );
+      await controller.abrir(7);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Vincular a cliente'));
+      await tester.pumpAndSettle();
+      final campoDeBusca = find.widgetWithText(
+        TextField,
+        'Nome, CPF/CNPJ ou telefone',
+      );
+      expect(campoDeBusca, findsOneWidget);
+
+      // "pa" fica presa; "pad" responde na hora.
+      await tester.enterText(campoDeBusca, 'pa');
+      await tester.pump();
+      await tester.enterText(campoDeBusca, 'pad');
+      await tester.pumpAndSettle();
+      expect(find.text('Padaria Sol'), findsOneWidget);
+
+      // A resposta de "pa" chega atrasada, com outro cliente: é descartada.
+      lenta.complete(const [
+        ClienteDaConversa(id: 3, nomeFantasia: 'Papelaria Lua'),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('Padaria Sol'), findsOneWidget);
+      expect(find.text('Papelaria Lua'), findsNothing);
+    });
+
     // Documento válido sem cliente cadastrado: a sugestão oferece "Criar".
     Future<void> montarComDocumentoNovo(
       WidgetTester tester,
