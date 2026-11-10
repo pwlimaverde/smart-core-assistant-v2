@@ -257,6 +257,7 @@ impl IaEngineClient for TonicIaEngineClient {
                     slug: c.slug,
                     valor_json: c.valor_json,
                     confianca: c.confianca,
+                    frase_origem: c.frase_origem,
                 })
                 .collect(),
             motivo_transferencia: resp.motivo_transferencia,

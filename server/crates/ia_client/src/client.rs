@@ -237,6 +237,8 @@ pub struct CampoExtraidoOutput {
     pub slug: String,
     pub valor_json: String,
     pub confianca: f64,
+    /// Trecho da mensagem do cliente que originou o valor (V3). Vazio = sem frase.
+    pub frase_origem: String,
 }
 
 #[derive(Debug, Clone, Default)]

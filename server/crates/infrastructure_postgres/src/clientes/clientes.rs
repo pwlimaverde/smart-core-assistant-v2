@@ -298,7 +298,6 @@ impl std::fmt::Debug for DadosCliente {
             .field("observacoes", &self.observacoes)
             .field("cargo_responsavel", &self.cargo_responsavel)
             .field("cep", &self.cep)
-            .field("campos_pela_ia", &self.campos_pela_ia)
             .finish_non_exhaustive()
     }
 }
