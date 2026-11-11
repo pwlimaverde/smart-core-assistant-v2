@@ -225,6 +225,13 @@ def _formatar_campos(
             "- Em campo de texto, escreva o valor como o cliente escreveu, "
             "com os acentos dele: o valor tem de aparecer dentro da "
             "`frase_origem`.\n"
+            "- A `frase_origem` tem de trazer o próprio valor, não um trecho "
+            "qualquer da mensagem. Em data, o dia como o cliente disse "
+            '("dia 3", "03/05", "sexta", "amanhã"); em lista, o nome da '
+            "opção que ele citou; em número, o número; em CPF/CNPJ, o "
+            "documento inteiro. O servidor confere e descarta o campo cuja "
+            "frase não sustenta o valor. Se o cliente não disse o dia "
+            '("fim do mês") nem citou a opção, omita o campo e pergunte.\n'
             "- `confianca` alta só quando ele disse o valor com todas as "
             "letras; baixa quando você interpretou.\n"
             "- Datas em AAAA-MM-DD; números sem unidade; em campos de "

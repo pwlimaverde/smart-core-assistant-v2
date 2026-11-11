@@ -1794,6 +1794,15 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
     widget.aoMudar?.call();
   }
 
+  /// Nome do cliente criado pela sugestão: o do cadastro do contato; sem ele,
+  /// o do perfil do WhatsApp; só no fim o telefone ou o número do contato —
+  /// cliente chamado "5588999912191" não ajuda ninguém a achá-lo depois.
+  static String _nomeDoClienteNovo(ContatoDaConversa c) => c.nome.isNotEmpty
+      ? c.nome
+      : c.nomePerfilWhatsapp.isNotEmpty
+      ? c.nomePerfilWhatsapp
+      : c.nomeParaExibir;
+
   /// Cria o cliente só com o documento válido e o nome do contato, e vincula.
   /// Os demais campos ficam para o atendente preencher em "Editar cliente".
   /// Se o cliente já foi criado numa tentativa anterior cujo vínculo falhou,
@@ -1812,7 +1821,7 @@ final class _SugestaoDeClienteState extends State<_SugestaoDeCliente> {
           tipo: pf ? 'pf' : 'pj',
           cpf: pf ? documento : '',
           cnpj: pf ? '' : documento,
-          nomeFantasia: widget.contato.nomeParaExibir,
+          nomeFantasia: _nomeDoClienteNovo(widget.contato),
           telefone: widget.contato.telefone,
         ),
       );
@@ -1953,6 +1962,11 @@ final class _SecaoContatoECliente extends StatelessWidget {
             ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           if (c.telefone.isNotEmpty) Text(c.telefone, style: estilo),
+          // V1 — o nome que a pessoa pôs no próprio WhatsApp, só leitura. Some
+          // quando é igual ao nome do cadastro, para não repetir a linha.
+          if (c.nomePerfilWhatsapp.isNotEmpty &&
+              c.nomePerfilWhatsapp != c.nomeParaExibir)
+            Text('No WhatsApp: ${c.nomePerfilWhatsapp}', style: estilo),
           if (c.email.isNotEmpty)
             Text(
               c.camposPelaIa.contains('email')
@@ -2339,6 +2353,10 @@ final class _SecaoContatoECliente extends StatelessWidget {
     final busca = TextEditingController();
     var resultados = <ClienteDaConversa>[];
     var buscando = false;
+    // Conta as buscas: cada tecla dispara uma, e a resposta de um termo
+    // antigo pode chegar depois da do termo atual. Só a mais recente mexe na
+    // lista — senão o atendente via (e vinculava) o resultado de outra busca.
+    var geracaoBusca = 0;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => DialogoComCampos(
@@ -2356,16 +2374,17 @@ final class _SecaoContatoECliente extends StatelessWidget {
                     controller: busca,
                     autofocus: true,
                     decoration: const InputDecoration(
-                      labelText: 'Nome, CNPJ ou CPF',
+                      labelText: 'Nome, CPF/CNPJ ou telefone',
                       prefixIcon: Icon(Icons.search),
                       isDense: true,
                     ),
                     onChanged: (termo) async {
+                      final geracao = ++geracaoBusca;
                       setDialog(() => buscando = true);
                       final (lista, erro) = await controller.buscarClientes(
                         termo.trim(),
                       );
-                      if (!ctx.mounted) return;
+                      if (!ctx.mounted || geracao != geracaoBusca) return;
                       setDialog(() {
                         buscando = false;
                         resultados = lista ?? <ClienteDaConversa>[];

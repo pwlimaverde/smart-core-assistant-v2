@@ -42,13 +42,31 @@ abstract final class DocumentosDaConversa {
     return dv(pesos1, 12) == d[12] && dv(pesos2, 13) == d[13];
   }
 
+  /// Onde pode haver um documento no texto. Duas formas, a mesma regra do
+  /// servidor (`digitos_delimitados`):
+  ///
+  /// 1. os blocos da máscara oficial — CPF 3-3-3-2, CNPJ 2-3-3-4-2 — com um
+  ///    espaço ou um caractere de máscara entre eles (`529 982 247 25`), sem
+  ///    outro número colado antes ou depois;
+  /// 2. dígitos e máscara sem espaço (`529.982.247-25`, `52998224725`).
+  ///
+  /// Espaço fora do desenho dos blocos separa números diferentes: telefone
+  /// (`11 99999-8888`) e dois números seguidos não viram documento.
+  static final RegExp _candidato = RegExp(
+    r'(?<![\d.\-/])(?<!\d )'
+    r'(?:\d{3}[ .\-/]\d{3}[ .\-/]\d{3}[ .\-/]\d{2}'
+    r'|\d{2}[ .\-/]\d{3}[ .\-/]\d{3}[ .\-/]\d{4}[ .\-/]\d{2})'
+    r'(?![.\-/]?\d)(?! \d)'
+    r'|\d[\d.\-/]*\d',
+  );
+
   /// Documentos válidos achados nos textos, sem repetição e na ordem em que
-  /// aparecem. Aceita pontuação (`529.982.247-25`) ou só dígitos.
+  /// aparecem. Aceita pontuação (`529.982.247-25`), só dígitos, ou os blocos
+  /// separados por um espaço (`529 982 247 25`).
   static List<String> extrair(Iterable<String> textos) {
-    final candidato = RegExp(r'\d[\d.\-/]*\d');
     final achados = <String>[];
     for (final texto in textos) {
-      for (final m in candidato.allMatches(texto)) {
+      for (final m in _candidato.allMatches(texto)) {
         final digitos = m.group(0)!.replaceAll(RegExp(r'\D'), '');
         final valido =
             (digitos.length == 11 && cpfValido(digitos)) ||

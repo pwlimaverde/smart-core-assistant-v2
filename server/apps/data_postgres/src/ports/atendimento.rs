@@ -74,16 +74,16 @@ pub struct ResumoCamposExtraidos {
     pub sem_frase_de_origem: usize,
     /// Humano escreveu ou apagou ali. Não é erro da IA: é a guarda operando.
     pub humano_no_caminho: usize,
-    /// CPF/CNPJ (só dígitos) que a IA gravou nesta rodada e que o campo ainda
-    /// não tinha. Alimenta a sugestão de vínculo com cliente já cadastrado
-    /// (auditada como `contato.vinculo_sugerido_ia`); o documento regravado
-    /// igual fica de fora, para a sugestão não se repetir a cada rajada.
+    /// Clientes já cadastrados com o CPF/CNPJ que a IA gravou nesta rodada,
+    /// e a que o contato do atendimento ainda não está ligado. Alimenta a
+    /// trilha da sugestão de vínculo (`contato.vinculo_sugerido_ia`). Só ids:
+    /// o documento não sai do adaptador. Documento regravado igual não entra,
+    /// para a sugestão não se repetir a cada rajada.
     #[serde(skip)]
-    pub documentos_gravados: Vec<String>,
+    pub clientes_sugeridos: Vec<i32>,
 }
 
-/// `Debug` manual: `documentos_gravados` é CPF/CNPJ puro e não pode sair em
-/// log nem em panic (V5). Mostra só quantos são.
+/// `Debug` manual, só com contagens: o resumo vai para log e panic (V5).
 impl std::fmt::Debug for ResumoCamposExtraidos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ResumoCamposExtraidos")
@@ -95,7 +95,7 @@ impl std::fmt::Debug for ResumoCamposExtraidos {
             .field("abaixo_do_piso", &self.abaixo_do_piso)
             .field("sem_frase_de_origem", &self.sem_frase_de_origem)
             .field("humano_no_caminho", &self.humano_no_caminho)
-            .field("documentos_gravados", &self.documentos_gravados.len())
+            .field("clientes_sugeridos", &self.clientes_sugeridos.len())
             .finish()
     }
 }

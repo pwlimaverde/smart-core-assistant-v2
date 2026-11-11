@@ -9,6 +9,50 @@
 # (verificável com `cargo tree`), e sempre com a prova ao lado. Vulnerabilidade
 # em código que roda se corrige atualizando, não ignorando.
 
+# ---------------------------------------------------------------------------
+# PENDENTE, SEM EXCEÇÃO DE PROPÓSITO — RUSTSEC-2026-0459 (libsqlite3-sys 0.37)
+#
+# O que é: o SQLite embutido antes do 3.54.0 pode devolver memória não
+# inicializada do cache de páginas quando abre um banco ao lado de um arquivo
+# `-wal` com tamanho de página diferente. Ataque local: alguém precisa plantar
+# o par de arquivos e o processo precisa abri-los. CVSS 6.8 (médio).
+#
+# Por onde chega: `local_engine` -> `sqlx` (feature `sqlite`) -> `sqlx-sqlite
+# 0.9.0` -> `libsqlite3-sys`. Prova de que É compilado (por isso não entra na
+# lista abaixo): `cargo tree -i libsqlite3-sys` mostra o caminho até o
+# `local_engine`, que é membro do workspace e vai no app Flutter pelo
+# `clients/packages/local_engine_ffi`. Nenhum serviço do servidor abre banco
+# SQLite (o código deles só fala Postgres); o build `--workspace` compila o
+# `sqlx` com a feature `sqlite` só por unificação de features do cargo.
+#
+# Por que não foi corrigido em 10/11/2026: a correção está no
+# `libsqlite3-sys >= 0.39.0`, e o `sqlx-sqlite 0.9.0` (último publicado) exige
+# `libsqlite3-sys < 0.38.0`. O sqlx já subiu o limite para `< 0.40.0` no
+# `main` (launchbadge/sqlx, PR #4502, 08/11/2026), mas ainda não publicou
+# versão com isso. As saídas avaliadas e descartadas:
+#   - `[patch.crates-io]` com o sqlx do git: troca também o `sqlx-core` e o
+#     driver Postgres de TODOS os serviços por um commit não publicado;
+#   - cópia local do `sqlx-sqlite` com o limite alterado: o `cargo chef cook`
+#     da imagem do servidor (docker/server/Dockerfile) troca o código de
+#     dependência por caminho por um esqueleto vazio, e o `sqlx` do registro
+#     não compila contra ele — quebraria o deploy;
+#   - trocar o `sqlx` do `local_engine` por outra biblioteca: reescrita do
+#     índice e da fila offline do app, sem ganho que a justifique.
+#
+# Risco aceito enquanto isso: o `local_engine` só abre o banco que ele mesmo
+# cria na pasta de dados do app. Para explorar, o atacante já precisa escrever
+# nessa pasta com o usuário do Windows — e aí já lê o banco inteiro sem o bug.
+#
+# Caminho da correção, quando sair o sqlx com o PR #4502 (0.9.1 ou seguinte):
+#   1. em `server/`: `cargo update -p sqlx-sqlite -p libsqlite3-sys`
+#      (conferir no lock `libsqlite3-sys >= 0.39.1`);
+#   2. o mesmo em `clients/packages/local_engine_ffi/rust/`, que tem lock
+#      próprio e é o que vai no instalador;
+#   3. CI da branch (testes do `local_engine`) e um ensaio do instalador em
+#      branch `ci/release-windows-*` antes de qualquer tag `win-v*`;
+#   4. apagar este bloco.
+# ---------------------------------------------------------------------------
+
 [advisories]
 ignore = [
     # rkyv 0.7.46 — leitura fora dos limites em arquivos com Rc/Arc.

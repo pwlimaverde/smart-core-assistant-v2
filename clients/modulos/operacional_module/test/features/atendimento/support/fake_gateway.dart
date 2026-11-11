@@ -286,11 +286,17 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     if (erroVincular != null) throw erroVincular!;
   }
 
+  /// Buscas seguradas por termo: a resposta só sai quando o teste completa
+  /// (testa resposta antiga chegando depois da atual).
+  final Map<String, Completer<List<ClienteDaConversa>>> buscasSeguradas = {};
+
   @override
   Future<List<ClienteDaConversa>> buscarClientes({
     required String busca,
   }) async {
     acoesDoCadastro.add('buscarClientes:$busca');
+    final segurada = buscasSeguradas[busca];
+    if (segurada != null) return segurada.future;
     return clientesDaBusca;
   }
 
