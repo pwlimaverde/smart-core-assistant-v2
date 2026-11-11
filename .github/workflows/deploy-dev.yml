@@ -106,7 +106,12 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
+          # Versão fixa de propósito: com '3.x' o runner pega o stable do dia, e a
+          # troca 3.47.9 -> 3.50.0 (11/11/2026) reprovou o `flutter analyze` em 12
+          # pacotes sem commit nenhum (o 3.50 marca `package:flutter/material.dart`
+          # como obsoleto). Subir a versão é mudança de código: troca aqui, no
+          # deploy-dev, no deploy-prod e no release-windows, com a CI da branch.
+          flutter-version: '3.47.9'
           channel: stable
           cache: true
 
@@ -150,7 +155,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
+          flutter-version: '3.47.9'
           channel: stable
           cache: true
 
@@ -207,7 +212,7 @@ jobs:
         continue-on-error: true
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
+          flutter-version: '3.47.9'
           channel: stable
           cache: true
 
@@ -215,7 +220,7 @@ jobs:
         if: steps.flutter.outcome == 'failure'
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
+          flutter-version: '3.47.9'
           channel: stable
           cache: true
 
