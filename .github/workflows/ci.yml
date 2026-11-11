@@ -66,8 +66,23 @@ jobs:
       # (mesmas fontes/versão do server-setup) ou o clippy/test falham ao compilar.
       - name: Instala protoc e flatc (geração de contratos)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq protobuf-compiler postgresql-client
+          # Até 5 tentativas com espera: o DNS do runner às vezes não resolve
+          # o espelho de pacotes ("Temporary failure resolving"), e o job
+          # morria aqui sem compilar nada. `Acquire::Retries` cobre a queda no
+          # meio do download; o laço cobre o `update` que voltou com índice
+          # velho.
+          for tentativa in 1 2 3 4 5; do
+            sudo apt-get update -qq || true
+            if sudo apt-get install -y -qq -o Acquire::Retries=3 \
+                 protobuf-compiler postgresql-client; then
+              break
+            fi
+            if [ "$tentativa" = 5 ]; then
+              echo "apt-get install falhou em 5 tentativas" >&2
+              exit 1
+            fi
+            sleep $((tentativa * 20))
+          done
           wget -q -O /tmp/flatc.zip https://github.com/google/flatbuffers/releases/download/v25.12.19-2026-02-06-03fffb2/Linux.flatc.binary.g%2B%2B-13.zip
           unzip -q -o /tmp/flatc.zip -d /tmp/flatc_extracted
           sudo mv /tmp/flatc_extracted/flatc /usr/local/bin/flatc
