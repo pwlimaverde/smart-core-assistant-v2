@@ -221,16 +221,14 @@ void main() {
       final controller = controllerSobre(gateway);
       addTearDown(controller.close);
 
-      Future<void> mostrar(ContatoDaConversa contato) async {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: PainelFicha(controller: controller, contato: contato),
-            ),
+      // Sem `pumpAndSettle` aqui: antes de `abrir` a ficha ainda carrega.
+      Future<void> mostrar(ContatoDaConversa contato) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PainelFicha(controller: controller, contato: contato),
           ),
-        );
-        await tester.pumpAndSettle();
-      }
+        ),
+      );
 
       await mostrar(
         const ContatoDaConversa(
@@ -255,6 +253,7 @@ void main() {
           nomePerfilWhatsapp: 'Ana Souza',
         ),
       );
+      await tester.pumpAndSettle();
       expect(find.textContaining('No WhatsApp:'), findsNothing);
     });
 
