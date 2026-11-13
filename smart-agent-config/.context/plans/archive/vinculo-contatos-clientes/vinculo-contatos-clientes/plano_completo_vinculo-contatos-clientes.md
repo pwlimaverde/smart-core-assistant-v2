@@ -256,3 +256,74 @@ Cada item do plano foi conferido contra o código da `dev` (merge `930cde8e`), s
 - **`RUSTSEC-2026-0459` (`libsqlite3-sys` 0.37, SQLite do `local_engine`):** não corrigido e não ignorado. A correção exige `libsqlite3-sys >= 0.39.0`; o `sqlx-sqlite 0.9.0` exige `< 0.38.0`, e o sqlx só subiu o limite no `main` (PR #4502, 08/11/2026), sem versão publicada. Os atalhos (sqlx do git, cópia local do `sqlx-sqlite`) trocam o driver Postgres de todos os serviços ou quebram o `cargo chef` da imagem do servidor. O motivo, o risco aceito e o passo a passo da correção estão em `server/.cargo/audit.toml`.
 
 **Sem verificação nesta revisão:** o ensaio manual na dev (V5: editar, vincular, "Não atender", conversar com a IA e conferir a sugestão no app) e o `grep` de CPF/CNPJ nos logs da dev depois do ensaio. Dependem de uma pessoa no app e de acesso ao VPS, que esta revisão não usa.
+
+## Fechamento das pendências (13/11/2026)
+
+Partida: `dev` em `bb01089a` (CI `43107056175` e deploy `43107056126` verdes). Branch `feature/vinculo-fechamento-final`. A conferência da revisão final deixou seis pendências; o estado de cada uma:
+
+**1. Teste direto do encadeamento gravação → sugestão de vínculo — feito.** O trecho de `gravar_campos_extraidos` que grava o valor e procura o cliente virou a função `gravar_valor_da_ia_e_sugerir_vinculo` (`server/crates/infrastructure_postgres/src/clientes/clientes.rs`), chamada pelo adaptador no mesmo ponto e na mesma transação; o comportamento não mudou. A extração foi necessária porque o adaptador mora no binário do `data_postgres`, cujos testes são unitários por regra (sem banco), e o encadeamento só se prova com banco. O teste de integração `test_valor_da_ia_e_sugestao_de_vinculo_na_mesma_transacao` (`server/crates/infrastructure_postgres/tests/clientes/mod.rs`) confirma transações de verdade e cobre:
+
+- busca falha → o erro chega a quem chama e o valor **não** fica gravado;
+- busca ok → o valor entra e o cliente do documento é sugerido;
+- documento regravado igual (o chamador não manda documento) → grava, não busca, não sugere;
+- gente no caminho (valor manual) → não grava e nem busca.
+
+A falha da busca é provocada com um contexto que tem `atendimentos:write` e não tem `clientes:read`: é a falha que a função de busca devolve de verdade, sem injeção de defeito. Limite do teste: ele não passa pelo laço de `gravar_campos_extraidos` (guardas de slug, frase e piso, que já têm testes próprios em `campos_extraidos.rs`); o que liga as duas partes no adaptador é um `?`.
+
+**2. Teste direto de `MSG_DOCUMENTO_REPETIDO` — feito.** A conversão de `UniqueViolation` em conflito saiu dos dois handlers para a função pura `erro_ao_gravar_cliente` (`server/apps/data_postgres/src/main.rs`). Três testes unitários: a função (unicidade vira `Conflict` com a mensagem fixa, sem o texto do banco; outra falha segue a conversão padrão) e os dois handlers, `CreateCliente` e `UpdateCliente`, com o store simulado devolvendo `UniqueViolation` — resposta de erro `CONFLICT`, com a mensagem, sem o documento e sem linha de auditoria.
+
+**3. Teste direto de `frase_da_data` — feito.** `test_frase_da_data_devolve_o_trecho_que_da_a_mesma_data`, em `ia_engine_jev/tests/unit/test_jev_decisoes.py`, chama a função pelo nome: data por extenso, numérica, relativa com e sem acento, dia da semana, duas datas na mensagem, dependência de `hoje` e os casos sem frase.
+
+**4. Advisories sem registro — registrados, sem exceção.** `server/.cargo/audit.toml` ganhou o bloco "AVISOS PERMITIDOS, SEM EXCEÇÃO DE PROPÓSITO", com motivo, dono e data de revisão (11/12/2026). O campo `ignore` não mudou (segue só com `RUSTSEC-2026-0235`) e o `Cargo.lock` não foi tocado. São os cinco avisos que o `cargo audit` lista como "allowed warnings" no CI `43107056175`:
+
+| Aviso | Crate | Tipo | Correção |
+| --- | --- | --- | --- |
+| `RUSTSEC-2026-0386` | `tokio` 1.52.3 | `unsound` (`AsyncFd::new` viola I/O safety) | `tokio >= 1.53.3` |
+| `RUSTSEC-2026-0486` | `rustix` 1.1.4 (via `tempfile`) | `unsound` (funções de xattr) | `rustix >= 1.1.6` |
+| sem ID | `chacha20` 0.10.0 (via `rand` 0.10.1) | `yanked` | `cargo update -p chacha20` |
+| sem ID | `spin` 0.9.8 (via `flume` e `multer`) | `yanked` | `cargo update -p spin@0.9.8` |
+| sem ID | `spin` 0.10.0 (via `crc-fast`) | `yanked` | `cargo update -p spin@0.10.0` |
+
+Os avisos "sem ID" são versões retiradas do crates.io pelo autor (`yanked`), não advisories. Nenhum código do workspace chama `AsyncFd` nem as funções de xattr do `rustix`. **Continua pendente, fora deste plano:** a correção de verdade é atualizar as dependências. Subir o `tokio` troca o runtime de todos os serviços e do `local_engine`; pede plano próprio, com CI, ensaio na dev e do instalador.
+
+**5. `RUSTSEC-2026-0459` (`libsqlite3-sys` 0.37) — mantido como está, sem exceção.** Reconferido em 13/11/2026 no crates.io: o `sqlx-sqlite 0.9.0` continua sendo o último publicado e continua exigindo `libsqlite3-sys < 0.38.0`; a correção está no `libsqlite3-sys >= 0.39.0`. Não há correção segura e verificável pela CI hoje. O texto de `server/.cargo/audit.toml` descreve o estado real e o caminho (quatro passos, quando o sqlx publicar a versão com o PR #4502); recebeu a data da reconferência, o dono e a próxima revisão (11/12/2026). O job "Dependências — advisories RustSec" segue vermelho por este item, de propósito; ele é informativo (`continue-on-error`) e não bloqueia CI nem deploy.
+
+**6. V5 manual — pendência do dono do produto.** Não dá para fazer daqui: exige uma pessoa no app instalado e acesso ao VPS da dev. Passos:
+
+*a) Ensaio no app (tenant de teste da dev, app na versão da `dev`).* Anotar a hora de início. Usar um contato de teste e os documentos de teste `529.982.247-25` (CPF) e `11.222.333/0001-81` (CNPJ).
+
+1. Na ficha de um atendimento, editar o contato (nome, e-mail, cargo) e salvar.
+2. Criar um cliente PF com o CPF de teste. Tentar criar outro com o mesmo CPF: a tela tem de mostrar "já existe um cliente com este CPF/CNPJ — procure por ele na lista de clientes, incluindo os inativos".
+3. Vincular o contato ao cliente e desvincular.
+4. Com o contato desvinculado, mandar pelo WhatsApp de teste uma mensagem com o CPF ("meu cpf é 529.982.247-25") num atendimento que tenha campo de cartão do tipo CPF com extração ligada. A ficha tem de mostrar "Pela conversa, parece ser … Vincular". Mandar o CPF de novo: a sugestão não se repete na trilha.
+5. Vincular o contato de novo e mandar uma mensagem com CEP e e-mail: os campos vazios do cadastro são preenchidos e aparecem marcados como vindos da IA.
+6. Na ficha do contato, marcar "Não atender este número", confirmar, mandar mensagem e conferir que o bot não responde. Desmarcar ao final.
+
+*b) `audit_log`.* No VPS, com o usuário que opera o Docker. O `psql` usa as variáveis do próprio contêiner; nenhuma senha aparece:
+
+```bash
+docker compose -p smart-core-v2-dev exec -T postgres \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT timestamp, event, message, context
+FROM audit_log
+WHERE timestamp > now() - interval '2 hours'
+  AND (event LIKE 'cliente.%' OR event LIKE 'contato%'
+       OR event LIKE 'whatsapp.numero_ignorado.%')
+ORDER BY timestamp;
+SQL
+```
+
+Tem de haver ao menos uma linha de cada: `contato_editado` (com `campos`), `cliente.criado`, `contato.vinculado_cliente` e `contato.desvinculado_cliente` (com `origem: "atendente"`), `contato.vinculo_sugerido_ia` (uma só, com `atendimento_id` e `cliente_id`), `cliente.dado_alterado_ia` e `contato.dado_alterado_ia` (com `campos` e `message_id`), `whatsapp.numero_ignorado.criado` e `.removido` (telefone só com os quatro últimos dígitos). Em nenhuma linha pode aparecer CPF, CNPJ, e-mail, CEP ou telefone completo — nem em `message`, nem em `context`.
+
+*c) `grep` nos logs da dev.* Trocar `TELEFONE` pelo número completo do contato de teste, só dígitos:
+
+```bash
+docker compose -p smart-core-v2-dev logs --no-color --since 2h 2>&1 \
+  | grep -cE '52998224725|529\.982\.247-25|11222333000181|11\.222\.333/0001-81|TELEFONE'
+```
+
+O resultado tem de ser `0`. Se não for, repetir sem o `-c`, anotar o serviço e a linha, e abrir correção antes de fechar a V5.
+
+*d) Fechamento.* Com a, b e c conferidos, registrar a data nesta seção e dar a V5 por aceita ("checklist do plano canônico conferido pelo dono do produto").
+
+**O que continua aberto depois deste fechamento:** a V5 manual (item 6), a atualização de `tokio`, `rustix`, `chacha20` e `spin` (item 4) e o `RUSTSEC-2026-0459` (item 5, à espera do sqlx).
