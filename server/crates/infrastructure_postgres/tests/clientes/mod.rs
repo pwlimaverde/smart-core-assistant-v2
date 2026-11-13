@@ -376,3 +376,223 @@ async fn test_documento_repetido_vira_violacao_de_unicidade() {
     // A transação ficou abortada pela violação; nada mais roda nela.
     tx.rollback().await.unwrap();
 }
+
+/// O que o teste do encadeamento colhe antes de limpar o banco.
+struct ColhidoDoEncadeamento {
+    cliente_id: i32,
+    com_busca_falha: Result<(bool, Option<i32>), infrastructure_postgres::DbError>,
+    depois_da_falha: Vec<serde_json::Value>,
+    com_busca_ok: Result<(bool, Option<i32>), infrastructure_postgres::DbError>,
+    depois_do_ok: Vec<serde_json::Value>,
+    sem_documento: Result<(bool, Option<i32>), infrastructure_postgres::DbError>,
+    marcou_manual: bool,
+    com_gente_no_caminho: Result<(bool, Option<i32>), infrastructure_postgres::DbError>,
+}
+
+/// V3 — o encadeamento que o `gravar_campos_extraidos` do `data_postgres`
+/// usa para o campo de CPF/CNPJ: grava o valor e procura o cliente a sugerir,
+/// na mesma transação.
+///
+/// Diferente dos testes acima, este confirma as transações de verdade (como
+/// o E2E): o que se prova é justamente o que fica no banco depois de cada
+/// chamada. A falha da busca é provocada do único jeito que não exige
+/// injeção de defeito: um contexto que pode gravar o valor
+/// (`atendimentos:write`) e não pode ler clientes (`clientes:read`).
+#[tokio::test]
+async fn test_valor_da_ia_e_sugestao_de_vinculo_na_mesma_transacao() {
+    use infrastructure_postgres::atendimentos::atendimentos::{
+        AtendimentoRepository, PostgresAtendimentoRepository,
+    };
+    use infrastructure_postgres::atendimentos::campos::{
+        CampoPersonalizadoRepository, PostgresCampoPersonalizadoRepository,
+        PostgresValorCampoRepository, ValorCampoRepository,
+    };
+    use infrastructure_postgres::clientes::clientes::{
+        self as repo, DadosCliente, ValorExtraidoPelaIa,
+    };
+    use infrastructure_postgres::connection::run_in_tenant_transaction;
+    use infrastructure_postgres::{DbError, RequestContext};
+    use sqlx::PgPool;
+
+    const CPF: &str = "52998224725";
+
+    /// Uma chamada do encadeamento na sua própria transação, confirmada só
+    /// se der certo — é o que o adaptador do `data_postgres` faz.
+    async fn gravar(
+        pool: &PgPool,
+        ctx: &RequestContext,
+        extraido: ValorExtraidoPelaIa,
+        documento: Option<&'static str>,
+    ) -> Result<(bool, Option<i32>), DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(pool, ctx.tenant_id, |mut tx| async move {
+            let desfecho =
+                repo::gravar_valor_da_ia_e_sugerir_vinculo(&mut tx, &ctx, extraido, documento)
+                    .await?;
+            Ok((desfecho, tx))
+        })
+        .await
+    }
+
+    /// O que está gravado no atendimento, lido em transação independente.
+    async fn valores_gravados(
+        pool: &PgPool,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Vec<serde_json::Value> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(pool, ctx.tenant_id, |mut tx| async move {
+            let linhas = PostgresValorCampoRepository
+                .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
+                .await?;
+            let valores: Vec<serde_json::Value> = linhas.into_iter().map(|l| l.valor).collect();
+            Ok((valores, tx))
+        })
+        .await
+        .expect("Falha ao ler os valores gravados")
+    }
+
+    let pool = obter_pool_teste().await;
+    let mut tx0 = pool.begin().await.unwrap();
+    let tenant = criar_tenant_para_teste(&mut tx0, "Tenant Encadeamento Sugestão").await;
+    tx0.commit().await.unwrap();
+    let tenant_id = tenant.id;
+    let ctx = criar_contexto_teste(tenant_id);
+    // Grava valor de campo, mas não lê clientes: a busca da sugestão falha.
+    let ctx_sem_clientes = RequestContext {
+        tenant_id,
+        user_id: 1,
+        user_scopes: vec!["atendimentos:read".into(), "atendimentos:write".into()],
+        flow_permissions: Vec::new(),
+    };
+
+    let preparo: Result<(i32, i32, i64), DbError> = {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            let cliente_id = repo::criar_cliente(
+                &mut tx,
+                &ctx,
+                &DadosCliente {
+                    nome_fantasia: "Padaria Sol".into(),
+                    tipo: Some("pf".into()),
+                    cpf: Some(CPF.into()),
+                    ..Default::default()
+                },
+            )
+            .await?;
+            let contato = PostgresContatoRepository
+                .salvar(&mut tx, &ctx, "5511944443333", Some("Cliente Encadeamento"))
+                .await?;
+            let atendimento = PostgresAtendimentoRepository
+                .criar(&mut tx, &ctx, contato.id, None, None, None)
+                .await?;
+            let campo = PostgresCampoPersonalizadoRepository
+                .criar(
+                    &mut tx,
+                    &ctx,
+                    "cpf_do_cliente",
+                    "CPF",
+                    "GLOBAL",
+                    "cpf",
+                    None,
+                )
+                .await?;
+            Ok(((cliente_id, atendimento.id, campo.id), tx))
+        })
+        .await
+    };
+
+    // Tudo o que o teste observa é colhido antes da limpeza; as asserções
+    // ficam para o fim, para o tenant não sobrar no banco quando uma falha.
+    let mut colhido = None;
+    if let Ok((cliente_id, atendimento_id, campo_id)) = preparo {
+        let extraido = || ValorExtraidoPelaIa {
+            atendimento_id,
+            campo_id,
+            valor: serde_json::json!(CPF),
+            confianca: 0.9,
+            mensagem_origem_id: None,
+        };
+
+        // 1. Busca falha: erro para quem chama, transação não confirmada.
+        let com_busca_falha = gravar(&pool, &ctx_sem_clientes, extraido(), Some(CPF)).await;
+        let depois_da_falha = valores_gravados(&pool, &ctx, atendimento_id).await;
+
+        // 2. Busca ok: o valor entra e a sugestão sai.
+        let com_busca_ok = gravar(&pool, &ctx, extraido(), Some(CPF)).await;
+        let depois_do_ok = valores_gravados(&pool, &ctx, atendimento_id).await;
+
+        // 3. Documento regravado igual: o chamador não manda documento, e
+        //    não há busca nem sugestão repetida — com este contexto a busca
+        //    daria erro, e não dá.
+        let sem_documento = gravar(&pool, &ctx_sem_clientes, extraido(), None).await;
+
+        // 4. Gente no caminho: o valor não é regravado e nem se procura
+        //    cliente (de novo, a busca daria erro com este contexto).
+        let marcou_manual = run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            sqlx::query(
+                "UPDATE atu_valor_campo SET origem = 'MANUAL' \
+                 WHERE tenant_id = $1 AND atendimento_id = $2",
+            )
+            .bind(tenant_id)
+            .bind(atendimento_id)
+            .execute(&mut *tx)
+            .await?;
+            Ok(((), tx))
+        })
+        .await
+        .is_ok();
+        let com_gente_no_caminho = gravar(&pool, &ctx_sem_clientes, extraido(), Some(CPF)).await;
+
+        colhido = Some(ColhidoDoEncadeamento {
+            cliente_id,
+            com_busca_falha,
+            depois_da_falha,
+            com_busca_ok,
+            depois_do_ok,
+            sem_documento,
+            marcou_manual,
+            com_gente_no_caminho,
+        });
+    }
+
+    // Limpeza: o tenant leva junto cliente, contato, atendimento e campo.
+    let limpou = run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&mut *tx)
+            .await?;
+        Ok(((), tx))
+    })
+    .await
+    .is_ok();
+
+    let c = colhido.expect("Falha ao preparar cliente, contato, atendimento e campo");
+    assert!(limpou, "Falha ao apagar o tenant de teste");
+
+    assert!(
+        matches!(c.com_busca_falha, Err(DbError::PermissionDenied)),
+        "a falha da busca tem de chegar a quem chama"
+    );
+    assert!(
+        c.depois_da_falha.is_empty(),
+        "com a busca falhando, o valor não pode ficar gravado"
+    );
+
+    assert!(
+        matches!(c.com_busca_ok, Ok((true, Some(id))) if id == c.cliente_id),
+        "com a busca funcionando, o valor entra e o cliente do documento é sugerido"
+    );
+    assert_eq!(c.depois_do_ok, vec![serde_json::json!(CPF)]);
+
+    assert!(
+        matches!(c.sem_documento, Ok((true, None))),
+        "sem documento não há busca: grava e não sugere"
+    );
+
+    assert!(c.marcou_manual, "Falha ao marcar o valor como manual");
+    assert!(
+        matches!(c.com_gente_no_caminho, Ok((false, None))),
+        "valor que a IA não gravou não gera busca nem sugestão"
+    );
+}
