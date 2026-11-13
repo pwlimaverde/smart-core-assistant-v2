@@ -14,6 +14,7 @@ from ia_engine_jev.candidatos import (
     trecho_no_texto,
     valor_e_frase,
 )
+from ia_engine_jev.candidatos.extratores import frase_da_data
 from ia_engine_jev.config.models import RegraTransferencia
 from ia_engine_jev.conversao import (
     dados_da_coleta,
@@ -213,6 +214,28 @@ def test_data_iso_sai_com_o_trecho_que_o_codigo_le_como_a_mesma_data():
     # A LLM e o código discordam da data: sem frase, o campo não sai.
     assert valor_e_frase("2026-05-04", "entrega dia 3 de maio", hoje) is None
     assert valor_e_frase("2026-05-03", "quando der", hoje) is None
+
+
+def test_frase_da_data_devolve_o_trecho_que_da_a_mesma_data():
+    hoje = date(2026, 4, 20)  # segunda-feira
+    # Data por extenso e numérica: o recorte é o da mensagem.
+    assert frase_da_data("2026-05-03", "entrega dia 3 de maio", hoje) == "3 de maio"
+    assert frase_da_data("2026-05-03", "pode ser 03/05?", hoje) == "03/05"
+    # Relativa e dia da semana: a chave de `por_data` é sem acento e em
+    # minúscula; a frase sai como o cliente escreveu.
+    assert frase_da_data("2026-04-21", "Amanhã cedo", hoje) == "Amanhã"
+    assert frase_da_data("2026-04-21", "AMANHÃ", hoje) == "AMANHÃ"
+    assert frase_da_data("2026-04-21", "amanha cedo", hoje) == "amanha"
+    assert frase_da_data("2026-04-24", "na sexta-feira", hoje) == "sexta"
+    # Duas datas na mensagem: sai o trecho da data pedida, não o primeiro.
+    assert frase_da_data("2026-05-10", "pode ser 03/05 ou 10/05", hoje) == "10/05"
+    # A conta depende de `hoje`: a mesma palavra em outro dia é outra data.
+    assert frase_da_data("2026-04-21", "amanhã", date(2026, 4, 21)) == ""
+    # A LLM e o código discordam, ou a mensagem não traz data: sem frase.
+    assert frase_da_data("2026-05-04", "entrega dia 3 de maio", hoje) == ""
+    assert frase_da_data("2026-05-03", "quando der", hoje) == ""
+    assert frase_da_data("2026-05-03", "", hoje) == ""
+    assert frase_da_data("", "entrega dia 3 de maio", hoje) == ""
 
 
 def test_trecho_sem_recorte_literal_nao_inventa_frase():
