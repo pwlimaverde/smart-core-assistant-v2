@@ -7356,6 +7356,21 @@ async fn handler_list_clientes(store: &dyn ports::ClienteStore, env: Envelope) -
 const MSG_DOCUMENTO_REPETIDO: &str = "já existe um cliente com este CPF/CNPJ — \
      procure por ele na lista de clientes, incluindo os inativos";
 
+/// O erro que a tela recebe quando gravar o cliente (criar ou alterar) falha.
+///
+/// Violação de unicidade aqui é o índice único de CPF/CNPJ por tenant: vira
+/// conflito com a mensagem fixa acima. O texto do banco fica de fora — ele
+/// traz o nome do índice e pode trazer o valor repetido, que é dado
+/// protegido. Qualquer outra falha segue a conversão padrão do `DbError`.
+fn erro_ao_gravar_cliente(e: infrastructure_postgres::DbError) -> error_core::AppError {
+    match e {
+        infrastructure_postgres::DbError::UniqueViolation(_) => {
+            error_core::AppError::Conflict(MSG_DOCUMENTO_REPETIDO.into())
+        }
+        outro => outro.into(),
+    }
+}
+
 /// Auditado (`cliente.criado`) só com o id e o tipo: nome, documento e endereço
 /// são dado protegido.
 #[tracing::instrument(skip_all, fields(rpc = "CreateCliente", tenant_id = %env.tenant_id))]
@@ -7388,11 +7403,7 @@ async fn handler_create_cliente(
                 .await;
             ok_reply(&env, "CreateClienteReply", serde_json::json!(cliente))
         }
-        Err(infrastructure_postgres::DbError::UniqueViolation(_)) => erro(
-            error_core::AppError::Conflict(MSG_DOCUMENTO_REPETIDO.into()),
-            &env,
-        ),
-        Err(e) => erro(e.into(), &env),
+        Err(e) => erro(erro_ao_gravar_cliente(e), &env),
     }
 }
 
@@ -7527,11 +7538,7 @@ async fn handler_update_cliente(
             error_core::AppError::Validation("cliente não encontrado".into()),
             &env,
         ),
-        Err(infrastructure_postgres::DbError::UniqueViolation(_)) => erro(
-            error_core::AppError::Conflict(MSG_DOCUMENTO_REPETIDO.into()),
-            &env,
-        ),
-        Err(e) => erro(e.into(), &env),
+        Err(e) => erro(erro_ao_gravar_cliente(e), &env),
     }
 }
 
@@ -14439,6 +14446,103 @@ mod tests_atendimento_cliente_unit {
         let resp = handler_registrar_extracao_treinamento(&store, &audit, vazio).await;
         assert_eq!(resp.kind, MessageKind::Error as i32);
         let _ = ResultadoExtracao::Texto(String::new());
+    }
+
+    /// V4 — o que o banco diz numa violação de unicidade (nome do índice e,
+    /// em alguns casos, o valor repetido) não chega à tela: sai o conflito
+    /// com a mensagem fixa. As outras falhas seguem a conversão padrão.
+    #[test]
+    fn erro_ao_gravar_cliente_troca_unicidade_por_conflito_legivel() {
+        use infrastructure_postgres::DbError;
+
+        let do_banco = "duplicate key value violates unique constraint                         \"oraculo_cliente_tenant_cpf\" (52998224725)";
+        let convertido = erro_ao_gravar_cliente(DbError::UniqueViolation(do_banco.into()));
+        assert!(
+            matches!(&convertido, error_core::AppError::Conflict(m) if m == MSG_DOCUMENTO_REPETIDO)
+        );
+        assert_eq!(convertido.code().to_string(), "CONFLICT");
+        assert!(!convertido.to_string().contains("52998224725"));
+        assert!(!convertido
+            .to_string()
+            .contains("oraculo_cliente_tenant_cpf"));
+
+        // Só a unicidade é trocada: permissão negada continua sendo permissão.
+        let negado = erro_ao_gravar_cliente(DbError::PermissionDenied);
+        assert!(matches!(negado, error_core::AppError::Auth(_)));
+    }
+
+    /// V4 — `CreateCliente` com CPF que já é de outro cliente: a resposta é
+    /// um erro de conflito com a mensagem que diz onde procurar, sem o
+    /// documento e sem linha de auditoria (nada foi criado).
+    #[tokio::test]
+    async fn create_cliente_com_documento_repetido_devolve_conflito() {
+        let mut store = MockClienteStore::new();
+        store.expect_criar_cliente().times(1).returning(|_, _| {
+            Err(infrastructure_postgres::DbError::UniqueViolation(
+                "oraculo_cliente_tenant_cpf (52998224725)".into(),
+            ))
+        });
+        // Sem expectativa: publicar auditoria aqui derruba o teste.
+        let audit = crate::ports::MockAuditPort::new();
+        let env = envelope_com_payload(
+            "CreateCliente",
+            serde_json::json!({
+                "nome_fantasia": "Padaria Sol",
+                "tipo": "pf",
+                "cpf": "529.982.247-25",
+            }),
+        );
+
+        let resp = handler_create_cliente(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        let err = resp.error.expect("deveria ter envelope de erro");
+        assert_eq!(err.code, "CONFLICT");
+        assert!(err.message.contains(MSG_DOCUMENTO_REPETIDO));
+        assert!(!err.message.contains("52998224725"));
+    }
+
+    /// V4 — o mesmo em `UpdateCliente`: trocar o CPF para um que já existe.
+    #[tokio::test]
+    async fn update_cliente_com_documento_repetido_devolve_conflito() {
+        use infrastructure_postgres::clientes::clientes::ClienteResumo;
+
+        let mut store = MockClienteStore::new();
+        store.expect_buscar_cliente().times(1).returning(|_, id| {
+            Ok(Some(ClienteResumo {
+                id,
+                nome_fantasia: "Padaria Sol".into(),
+                tipo: "pf".into(),
+                cpf: "11144477735".into(),
+                ..Default::default()
+            }))
+        });
+        store
+            .expect_atualizar_cliente()
+            .times(1)
+            .returning(|_, _, _| {
+                Err(infrastructure_postgres::DbError::UniqueViolation(
+                    "oraculo_cliente_tenant_cpf (52998224725)".into(),
+                ))
+            });
+        let audit = crate::ports::MockAuditPort::new();
+        let env = envelope_com_payload(
+            "UpdateCliente",
+            serde_json::json!({
+                "id": 7,
+                "nome_fantasia": "Padaria Sol",
+                "tipo": "pf",
+                "cpf": "529.982.247-25",
+            }),
+        );
+
+        let resp = handler_update_cliente(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        let err = resp.error.expect("deveria ter envelope de erro");
+        assert_eq!(err.code, "CONFLICT");
+        assert!(err.message.contains(MSG_DOCUMENTO_REPETIDO));
+        assert!(!err.message.contains("52998224725"));
     }
 
     /// B10 (N11 E5): documento vira dígitos com tamanho certo; UF, duas letras.
