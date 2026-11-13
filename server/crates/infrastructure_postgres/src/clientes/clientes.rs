@@ -735,6 +735,61 @@ pub async fn cliente_do_documento_sem_vinculo(
     Ok(id.map(|(i,)| i))
 }
 
+/// Um valor de campo que a IA extraiu, pronto para gravar no atendimento.
+#[derive(Debug, Clone)]
+pub struct ValorExtraidoPelaIa {
+    pub atendimento_id: i32,
+    pub campo_id: i64,
+    pub valor: serde_json::Value,
+    pub confianca: f64,
+    pub mensagem_origem_id: Option<i32>,
+}
+
+/// V3 — grava o valor que a IA extraiu e, quando ele é um CPF/CNPJ, procura
+/// o cliente a sugerir. As duas coisas na transação de quem chama, nesta
+/// ordem, e com o erro da busca devolvido a quem chama.
+///
+/// É este encadeamento que impede o documento de ficar gravado sem a
+/// sugestão: se a busca falhar, quem chama recebe `Err`, não confirma a
+/// transação, e o valor também não entra — a próxima extração refaz as duas
+/// coisas. Com a busca fora daqui, uma falha deixava o documento gravado e a
+/// sugestão sem trilha para sempre (o valor "já estava" na vez seguinte).
+///
+/// `documento` só vem preenchido para campo do tipo cpf/cnpj cujo valor ainda
+/// não estava gravado; quem decide isso é o chamador. Devolve
+/// `(gravou, cliente a sugerir)`. `gravou == false` é a guarda do
+/// `ValorCampoRepository::upsert_da_ia` operando (gente no caminho): nesse
+/// caso nem se procura cliente.
+pub async fn gravar_valor_da_ia_e_sugerir_vinculo(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    extraido: ValorExtraidoPelaIa,
+    documento: Option<&str>,
+) -> Result<(bool, Option<i32>), DbError> {
+    use crate::atendimentos::campos::{PostgresValorCampoRepository, ValorCampoRepository};
+
+    let atendimento_id = extraido.atendimento_id;
+    let gravou = PostgresValorCampoRepository
+        .upsert_da_ia(
+            tx,
+            ctx,
+            atendimento_id,
+            extraido.campo_id,
+            extraido.valor,
+            extraido.confianca,
+            extraido.mensagem_origem_id,
+        )
+        .await?;
+    if !gravou {
+        return Ok((false, None));
+    }
+    let sugerido = match documento {
+        Some(doc) => cliente_do_documento_sem_vinculo(tx, ctx, atendimento_id, doc).await?,
+        None => None,
+    };
+    Ok((true, sugerido))
+}
+
 /// V3 — grava os campos de endereço que a IA extraiu das mensagens de origem
 /// (a rajada inteira que a IA leu). Só preenche campo vazio, e só com valor
 /// que aparece no texto do cliente. Devolve as colunas gravadas.

@@ -2248,36 +2248,29 @@ impl AtendimentoStore for PgAtendimentoStore {
                         documento = None;
                     }
                 }
-                let gravou = repo_valor
-                    .upsert_da_ia(
-                        &mut tx,
-                        &ctx,
+                // Gravação e sugestão de vínculo na MESMA transação, com o
+                // erro da busca subindo pelo `?`: se a busca falhar, esta
+                // transação não é confirmada e o valor também não entra (ver
+                // `gravar_valor_da_ia_e_sugerir_vinculo`, que tem o teste de
+                // integração do encadeamento).
+                let (gravou, sugerido) = repo_cliente::gravar_valor_da_ia_e_sugerir_vinculo(
+                    &mut tx,
+                    &ctx,
+                    repo_cliente::ValorExtraidoPelaIa {
                         atendimento_id,
-                        def.id,
+                        campo_id: def.id,
                         valor,
-                        extraido.confianca,
-                        origem_do_valor,
-                    )
-                    .await?;
+                        confianca: extraido.confianca,
+                        mensagem_origem_id: origem_do_valor,
+                    },
+                    documento.as_deref(),
+                )
+                .await?;
                 if gravou {
                     resumo.gravados += 1;
-                    // Sugestão de vínculo na MESMA transação da gravação: se
-                    // a busca falhar, o valor também não entra, e a próxima
-                    // extração refaz as duas coisas. Com a busca fora daqui,
-                    // uma falha deixava o documento gravado e a sugestão sem
-                    // trilha para sempre (o valor "já estava" na vez seguinte).
-                    if let Some(doc) = documento {
-                        let sugerido = repo_cliente::cliente_do_documento_sem_vinculo(
-                            &mut tx,
-                            &ctx,
-                            atendimento_id,
-                            &doc,
-                        )
-                        .await?;
-                        if let Some(cliente_id) = sugerido {
-                            if !resumo.clientes_sugeridos.contains(&cliente_id) {
-                                resumo.clientes_sugeridos.push(cliente_id);
-                            }
+                    if let Some(cliente_id) = sugerido {
+                        if !resumo.clientes_sugeridos.contains(&cliente_id) {
+                            resumo.clientes_sugeridos.push(cliente_id);
                         }
                     }
                 } else {
