@@ -124,6 +124,35 @@
 # Ao corrigir: apagar o item daqui. Se sobrar só o cabeçalho, apagar o bloco.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# CORRIGIDO em 13/11/2026 — RUSTSEC-2026-0538 (quinn-udp 0.5.15 -> 0.5.16)
+#
+# O que era: em alvos que leem um datagrama por `recvmsg` (Apple sem
+# `fast-apple-datapath`, OpenBSD, NetBSD, Solaris, illumos), o laço de
+# recepção podia girar sem parar depois de um datagrama truncado — negação de
+# serviço remota. Linux, Android, FreeBSD e Windows não são afetados.
+#
+# Aparecia como vulnerabilidade no job de advisories (CI 43522852110 da `dev`,
+# 13/11/2026), ao lado do RUSTSEC-2026-0459, e não tinha registro aqui.
+#
+# Por onde chega: `reqwest 0.12.28` -> `quinn 0.11.11` -> `quinn-udp`, atrás
+# da feature `http3` do `reqwest`, que este workspace não liga. Prova de que
+# NÃO é compilado: `cargo tree --target all -i quinn-udp` responde "nothing to
+# print". Mesmo assim foi corrigido, e não ignorado: a correção cabia no lock.
+#
+# O que mudou: só a entrada do `quinn-udp` no `server/Cargo.lock` (versão e
+# checksum), 0.5.15 -> 0.5.16, a menor versão corrigida; o `quinn 0.11.11`
+# aceita. Nenhuma outra dependência mudou. O `cargo update -p quinn-udp
+# --precise 0.5.16` puro também rebaixava `socket2` e `windows-sys` de outras
+# crates (`hyper-util`, `rustix`, `tempfile`, `errno`); essas linhas foram
+# mantidas como estavam, e o `cargo` aceita o lock com `--locked`.
+# O lock de `clients/packages/local_engine_ffi/rust/` não tem `quinn-udp`.
+#
+# Conferência: `cargo audit` em `server/` não lista mais o 0538.
+# Dono: dono do produto (mantenedor do repositório). Este bloco é só registro;
+# pode ser apagado na próxima revisão (11/12/2026).
+# ---------------------------------------------------------------------------
+
 [advisories]
 ignore = [
     # rkyv 0.7.46 — leitura fora dos limites em arquivos com Rc/Arc.
