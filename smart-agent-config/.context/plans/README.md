@@ -17,6 +17,7 @@ This directory contains plans for coordinating work across documentation and pla
 12. [Windows Releases v0.1 Beta](./windows-releases-v01-beta.md)
 13. [Visual Cliente Windows](./visual-cliente-windows.md)
 14. [Vinculo Contatos Clientes](./vinculo-contatos-clientes.md)
+15. [Producao Go Live](./producao-go-live.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.
