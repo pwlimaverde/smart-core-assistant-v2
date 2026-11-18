@@ -103,6 +103,7 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 | CQRS (leve) | Média | `runtime_api` | Comandos/consultas req/reply (FlatBuffers padrão, gRPC fallback); realtime via Server Streaming (contrato unificado — decisão D7) |
 | Repository | Alta | `crates/infrastructure_postgres` | Adaptadores isolados do domínio (consumidos só por `data_postgres`) |
 | Outbox + relay | Alta | `data_postgres` (migration 0011) | Escrita transacional + `LISTEN/NOTIFY` → publica no bus |
+| Circuit breaker como contrapressão | Alta | `crates/transport/src/disjuntor.rs` (worker → `data_postgres`) | O `MuxClient` alimenta o disjuntor; aberto, o `Consumer` do bus **para de ler** e o reprocessador da PEL é adiado — o cliente não rejeita chamadas (ver decisão abaixo) |
 | Domain-Driven Design | Planejado | `crates/domain_*` (não criados) | Bounded contexts; regras puras sem I/O — extraídas da `application` quando justificar |
 | Strategy | Planejado | `clients/packages/api_client` DataSource | `LocalEngineFFI` vs `RemoteOnly` trocáveis sem mudar lógica |
 | Dual-Target Crate | Planejado | `crates/local_engine` (F8) | Compilável como lib-servidor e cdylib/FFI |
@@ -134,6 +135,7 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 | `contracts::ErrorEnvelope` | DTO de erro | `crates/contracts` |
 | `transport::bus::{Consumer, publicar_evento}` | Barramento Redis Streams | `crates/transport` |
 | `transport::Server` | Servidor RPC (rotas por `method`) | `crates/transport` |
+| `transport::{Disjuntor, ConfigDisjuntor}` + `MuxClient::com_disjuntor` / `Consumer::com_disjuntor` | Disjuntor de dependência (fechado/meio-aberto/aberto) | `crates/transport` (`src/disjuntor.rs`) |
 | `error_core::AppError` / `to_error_envelope` | Erro agregado + ponte | `crates/error_core` |
 | `observability::init_telemetry` | Bootstrap de tracing | `crates/observability` |
 | `infrastructure_postgres::run_in_tenant_transaction` | RLS scope | `crates/infrastructure_postgres` |
@@ -166,6 +168,7 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 | IA (`ia_engine`) | Serviço Python separado via **gRPC** (não FFI/PyO3) | Ecossistema maduro; isola a parte imatura; isolamento de processo + escala por réplicas (vence o GIL) |
 | Flutter ↔ Rust | Contrato unificado D7 (FlatBuffers padrão + gRPC fallback + Server Streaming) + FFI local | Servidor é fonte da verdade; transporte comutável por configuração; FFI dá performance/offline no Windows |
 | Ordem de entrega | Windows primeiro | Foco; port Web limpo via abstração `DataSource` |
+| Disjuntor em consumidor de stream | Segurar a **leitura** do bus, não rejeitar a chamada | Rejeitar (fail-fast) devolveria o evento à PEL e queimaria as 5 entregas até a DLQ com a dependência fora; segurando a leitura o evento fica no stream e aparece como lag, que tem alerta. Incidente 2026-11-16: `doc_dev/PLANO-CORREÇÃO-TIMEOUT-RPC.md` |
 | Construção da UI | Incremental, colada a cada feature (decisão D8) | A tela nasce junto da feature que valida (ex.: auth → login/cadastro); 2 apps Flutter + design system `core_ui` (tema dark) |
 
 ## Top Directories Snapshot

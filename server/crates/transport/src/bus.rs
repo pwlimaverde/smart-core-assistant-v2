@@ -490,6 +490,7 @@ pub struct Consumer {
     grupo: String,
     consumidor: String,
     client: Client,
+    disjuntor: Option<std::sync::Arc<crate::disjuntor::Disjuntor>>,
 }
 
 impl Consumer {
@@ -505,6 +506,28 @@ impl Consumer {
             grupo: grupo.into(),
             consumidor: consumidor.into(),
             client,
+            disjuntor: None,
+        }
+    }
+
+    /// Faz o loop de consumo esperar enquanto o disjuntor estiver aberto, em vez de
+    /// ler eventos que falhariam e queimariam entregas a caminho da DLQ. O evento
+    /// fica no stream e aparece como lag do grupo.
+    pub fn com_disjuntor(mut self, disjuntor: std::sync::Arc<crate::disjuntor::Disjuntor>) -> Self {
+        self.disjuntor = Some(disjuntor);
+        self
+    }
+
+    async fn aguardar_disjuntor(&self) {
+        if let Some(d) = &self.disjuntor {
+            if !d.permite() {
+                tracing::warn!(
+                    stream = %self.stream, grupo = %self.grupo, dependencia = %d.dependencia(),
+                    "consumo pausado: disjuntor aberto"
+                );
+                d.aguardar_liberacao().await;
+                tracing::info!(stream = %self.stream, grupo = %self.grupo, "consumo retomado");
+            }
         }
     }
 
@@ -565,6 +588,7 @@ impl Consumer {
 
         // 2. Loop de consumo ativo
         loop {
+            self.aguardar_disjuntor().await;
             // O resultado passa por um binding DE PROPÓSITO: escrito como
             // `match consumir_stream(&mut con, ..).await { .. }`, o temporário que
             // carrega o empréstimo mutável de `con` vive até o fim do `match`, e o
@@ -670,6 +694,7 @@ impl Consumer {
 
         // 2. Loop de consumo ativo
         loop {
+            self.aguardar_disjuntor().await;
             // O resultado passa por um binding DE PROPÓSITO: escrito como
             // `match consumir_stream(&mut con, ..).await { .. }`, o temporário que
             // carrega o empréstimo mutável de `con` vive até o fim do `match`, e o

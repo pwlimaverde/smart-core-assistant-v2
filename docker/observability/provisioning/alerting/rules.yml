@@ -62,7 +62,9 @@ groups:
             datasourceUid: prometheus
             relativeTimeRange: { from: 300, to: 0 }
             model:
-              expr: "smartcore_bus_pending"
+              # Por grupo: até 2026-11-18 a métrica media só o grupo de auditoria
+              # e a PEL do worker_group (mensagens de cliente) não era vigiada.
+              expr: "max by (stream, grupo) (smartcore_bus_pending)"
               instant: true
               refId: A
           - refId: B
@@ -509,3 +511,260 @@ groups:
                 - evaluator:
                     type: gt
                     params: [50000000]
+
+      # ---------------------------------------------------------------------
+      # Incidente 2026-11-16 — saúde do barramento e do caminho worker -> data_postgres.
+      # Limiares derivados do comportamento projetado: o reprocessador reclama da
+      # PEL eventos parados há 120s (tick de 60s) e manda à DLQ depois de 5
+      # entregas. Dashboard: "Smart Core v2 - Saúde do Barramento".
+      # ---------------------------------------------------------------------
+      # O worker lê até 10 eventos por volta (BLOCK 1s) e drena rajadas em segundos.
+      # Lag acima de 100 por 5 minutos só acontece com o consumo parado.
+      - uid: bus-lag-alto
+        title: Eventos do bus não estão sendo entregues ao consumidor
+        condition: C
+        for: 5m
+        # A série só existe depois do deploy que a introduz, e a ausência de um
+        # serviço inteiro já é coberta por `servico-fora-do-ar`.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          resumo: >-
+            Mais de 100 eventos no stream ainda não entregues ao grupo por 5 minutos. O consumidor parou de ler: worker morto, travado ou pausado pelo disjuntor. Veja o painel Disjuntor e os logs do worker.
+          runbook: doc_dev/PLANO-CORREÇÃO-TIMEOUT-RPC.md
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: "max by (stream, grupo) (smartcore_bus_lag)"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [100]
+
+      # Idade contada do XADD do evento mais antigo da PEL. Com tráfego baixo fica em
+      # zero, ao contrário de medir o tempo desde a última mensagem processada, que
+      # dispararia toda madrugada sem haver problema.
+      - uid: bus-pendente-antigo
+        title: Mensagem parada na PEL há mais de 15 minutos
+        condition: C
+        for: 5m
+        # A série só existe depois do deploy que a introduz, e a ausência de um
+        # serviço inteiro já é coberta por `servico-fora-do-ar`.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          resumo: >-
+            Há evento entregue e sem XACK há mais de 15 minutos. Pelo desenho ele já deveria ter sido reprocessado ou movido para a DLQ: o reprocessador da PEL não está rodando ou o disjuntor está aberto há muito tempo.
+          runbook: doc_dev/PLANO-CORREÇÃO-TIMEOUT-RPC.md
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: "max by (stream, grupo) (smartcore_bus_pendente_mais_antigo_segundos)"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [900]
+
+      # Sem `for`: abrir já exige 5 falhas em 60s. `max_over_time` pega também uma
+      # abertura que fechou entre duas avaliações (o grupo avalia a cada 60s).
+      - uid: disjuntor-aberto
+        title: Disjuntor do worker aberto (data_postgres sem responder)
+        condition: C
+        for: 0m
+        # A série só existe depois do deploy que a introduz, e a ausência de um
+        # serviço inteiro já é coberta por `servico-fora-do-ar`.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          resumo: >-
+            O worker teve 5+ falhas de transporte (timeout/conexão) com o data_postgres em 60s e suspendeu o consumo do bus. As mensagens ficam no stream (sem perda) até a dependência voltar. Verifique o data_postgres e o Postgres.
+          runbook: doc_dev/PLANO-CORREÇÃO-TIMEOUT-RPC.md
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 180, to: 0 }
+            model:
+              expr: "max by (dependencia) (max_over_time(smartcore_disjuntor_estado[3m]))"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+
+      # Um travamento isolado do host gera 1-2 timeouts (foi o caso de 2026-11-16
+      # 05:00:45) e não deve acordar ninguém; dez em dez minutos é degradação sustentada.
+      - uid: rpc-cliente-timeout
+        title: Timeouts de RPC vistos pelo cliente
+        condition: C
+        for: 0m
+        # A série só existe depois do deploy que a introduz, e a ausência de um
+        # serviço inteiro já é coberta por `servico-fora-do-ar`.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: alta
+        annotations:
+          resumo: >-
+            Mais de 10 chamadas RPC expiraram ou perderam a conexão do lado do cliente em 10 minutos. O servidor NÃO registra essas falhas (a resposta chega depois do prazo e conta como sucesso lá).
+          runbook: doc_dev/PLANO-CORREÇÃO-TIMEOUT-RPC.md
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              expr: "sum by (service_name, method, motivo) (increase(smartcore_rpc_cliente_falha_total[10m]))"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [10]
+
+      # Entrada na DLQ é desistência silenciosa do sistema: sempre merece olhar humano.
+      - uid: dlq-recebendo-eventos
+        title: Eventos indo para a dead-letter (DLQ)
+        condition: C
+        for: 0m
+        # A série só existe depois do deploy que a introduz, e a ausência de um
+        # serviço inteiro já é coberta por `servico-fora-do-ar`.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: alta
+        annotations:
+          resumo: >-
+            Eventos foram movidos para security:dlq nos últimos 15 minutos: falharam 5 vezes e não serão mais processados automaticamente. Cada um pode ser uma mensagem de cliente sem resposta. Inspecione com XRANGE security:dlq - + COUNT 20.
+          runbook: doc_dev/PLANO-CORREÇÃO-TIMEOUT-RPC.md
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 900, to: 0 }
+            model:
+              expr: "max(delta(smartcore_bus_dlq_tamanho[15m]))"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+
+      # Denominador `smartcore_pg_pool_max` publicado desde 2026-11-18.
+      - uid: pg-pool-utilizacao-alta
+        title: Pool PostgreSQL do data_postgres acima de 80%
+        condition: C
+        for: 5m
+        # A série só existe depois do deploy que a introduz, e a ausência de um
+        # serviço inteiro já é coberta por `servico-fora-do-ar`.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: alta
+        annotations:
+          resumo: >-
+            O pool do data_postgres está com mais de 80% das conexões em uso há 5 minutos. Acima disso o acquire espera e as RPCs começam a expirar. Avalie SMARTCORE_PG_POOL_MAX e queries lentas.
+          runbook: doc_dev/PLANO-CORREÇÃO-TIMEOUT-RPC.md
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: "max(smartcore_pg_pool_in_use / smartcore_pg_pool_max)"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.8]

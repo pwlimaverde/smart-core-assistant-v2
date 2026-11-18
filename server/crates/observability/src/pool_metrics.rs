@@ -50,12 +50,22 @@ pub fn monitorar_pool(pool: PgPool, intervalo: Duration) {
         })
         .init();
 
+    // 4. Teto configurado do pool — denominador da utilização (in_use / max).
+    let max_conexoes = pool_shared.options().get_max_connections() as u64;
+    let _g_max = meter
+        .u64_observable_gauge("smartcore_pg_pool_max")
+        .with_description("Teto de conexoes configurado no pool PG (SMARTCORE_PG_POOL_MAX)")
+        .with_callback(move |obs| {
+            obs.observe(max_conexoes, &[KeyValue::new("pool", "postgres")]);
+        })
+        .init();
+
     // Para evitar que os ObservableGauge sejam dropados (e parem de coletar),
     // nós os movemos para uma task em background que apenas dorme no intervalo.
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(intervalo);
         // Retemos os handles na task para mantê-los vivos durante o ciclo do processo
-        let _keep_alive = (_g_size, _g_idle, _g_use);
+        let _keep_alive = (_g_size, _g_idle, _g_use, _g_max);
         loop {
             tick.tick().await;
             tracing::debug!(

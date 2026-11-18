@@ -96,6 +96,7 @@ fn contexto_do_envelope(env: &Envelope) -> RequestContext {
     }
 }
 
+mod lag_filas;
 mod outbox_relay;
 use outbox_relay::OutboxRelay;
 
@@ -411,86 +412,13 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
-    // 5c. Task periódica de amostragem de lag das filas (M4)
-    let pool_lag = pool.clone();
-    let bus_conn_lag = bus_conn.clone();
-
-    use std::sync::atomic::AtomicU64;
-    let atomic_bus_pending = std::sync::Arc::new(AtomicU64::new(0));
-    let atomic_outbox_backlog = std::sync::Arc::new(AtomicU64::new(0));
-
-    let meter_lag = observability::opentelemetry::global::meter("data_postgres");
-
-    let bus_pending_gauge = atomic_bus_pending.clone();
-    let _g_bus_pending = meter_lag
-        .u64_observable_gauge("smartcore_bus_pending")
-        .with_description("Mensagens pendentes na PEL do Redis bus")
-        .with_callback(move |obs| {
-            obs.observe(
-                bus_pending_gauge.load(std::sync::atomic::Ordering::Relaxed),
-                &[],
-            );
-        })
-        .init();
-
-    let outbox_backlog_gauge = atomic_outbox_backlog.clone();
-    let _g_outbox_backlog = meter_lag
-        .u64_observable_gauge("smartcore_outbox_backlog")
-        .with_description("Mensagens acumuladas na tabela de outbox do PostgreSQL")
-        .with_callback(move |obs| {
-            obs.observe(
-                outbox_backlog_gauge.load(std::sync::atomic::Ordering::Relaxed),
-                &[],
-            );
-        })
-        .init();
-
-    tokio::spawn(async move {
-        let mut con = bus_conn_lag;
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(30));
-        let _keep_alive = (_g_bus_pending, _g_outbox_backlog);
-        loop {
-            tick.tick().await;
-
-            // 1. Coleta o lag da PEL do Redis
-            let count: u64 = match con
-                .xpending::<_, _, redis::streams::StreamPendingReply>(
-                    transport::bus::STREAM_SEGURANCA,
-                    "data_postgres_audit_group",
-                )
-                .await
-            {
-                Ok(reply) => reply.count() as u64,
-                Err(e) => {
-                    tracing::warn!("Falha ao ler XPENDING do Redis Bus: {:?}", e);
-                    0
-                }
-            };
-            atomic_bus_pending.store(count, std::sync::atomic::Ordering::Relaxed);
-
-            // 2. Coleta o backlog de outbox do Postgres
-            let query_res: Result<(i64,), sqlx::Error> =
-                sqlx::query_as("SELECT count(*) FROM outbox WHERE published_at IS NULL")
-                    .fetch_one(&pool_lag)
-                    .await;
-
-            let backlog = match query_res {
-                Ok((val,)) => val as u64,
-                Err(e) => {
-                    tracing::warn!("Falha ao contar backlog da outbox no Postgres: {:?}", e);
-                    0
-                }
-            };
-            atomic_outbox_backlog.store(backlog, std::sync::atomic::Ordering::Relaxed);
-
-            tracing::debug!(
-                target: "metrics::lag",
-                bus_pending = count,
-                outbox_backlog = backlog,
-                "amostra periodica de lag das filas coletada"
-            );
-        }
-    });
+    // 5c. Amostragem de lag das filas (M4 + incidente 2026-11-16): PEL, lag e idade
+    // do pendente mais antigo de cada grupo vigiado, tamanho da DLQ e backlog da outbox.
+    lag_filas::iniciar(
+        bus_conn.clone(),
+        pool.clone(),
+        std::time::Duration::from_secs(30),
+    );
 
     // 6. Inicia o Servidor RPC síncrono nos 3 protocolos
     let state_clone = state.clone();

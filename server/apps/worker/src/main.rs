@@ -138,6 +138,24 @@ fn mascarar_telefone(phone: &str) -> String {
     format!("{}{}", "*".repeat(digitos.len() - 4), visiveis)
 }
 
+/// Prazo padrão das RPCs do worker. `SMARTCORE_WORKER_RPC_TIMEOUT_MS` (default 5000).
+///
+/// Subir este valor alonga o pior caso de um handler (várias RPCs em sequência), e o
+/// pior caso precisa continuar abaixo de `transport::bus::MIN_IDLE_REPROCESSAMENTO_MS`
+/// (120s) — senão o reprocessador da PEL reclama um evento ainda em voo e o bot
+/// responde duas vezes.
+fn prazo_rpc_padrao() -> Duration {
+    static PRAZO: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+    *PRAZO.get_or_init(|| {
+        let ms = std::env::var("SMARTCORE_WORKER_RPC_TIMEOUT_MS")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .filter(|v| (500..=30_000).contains(v))
+            .unwrap_or(5_000);
+        Duration::from_millis(ms)
+    })
+}
+
 /// Chama uma RPC síncrona (`method`) em `client`, propagando `traceparent`/`causation_id`
 /// e os escopos de sistema do worker. Retorna o payload desserializado da resposta ou
 /// um erro (inclui o corpo de erro do serviço remoto na mensagem).
@@ -156,7 +174,7 @@ pub(crate) async fn chamar_rpc(
         payload,
         causation_id,
         traceparent,
-        Duration::from_secs(5),
+        prazo_rpc_padrao(),
     )
     .await
 }
@@ -1465,8 +1483,22 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Conexões com Redis (cache e barramento) estabelecidas.");
 
     // Conecta ao microserviço data_postgres (cliente gRPC persistente)
-    let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await?);
-    tracing::info!("Cliente RPC data_postgres estabelecido.");
+    // Disjuntor do data_postgres (incidente 2026-11-16): o cliente alimenta o
+    // disjuntor e o consumidor do bus para de ler enquanto ele estiver aberto, em vez
+    // de queimar as 5 entregas de cada evento a caminho da DLQ.
+    let disjuntor_pg = Arc::new(transport::Disjuntor::novo(
+        "data_postgres",
+        transport::ConfigDisjuntor::from_env("SMARTCORE_WORKER_DISJUNTOR"),
+    ));
+    let pg_client = Arc::new(
+        transport::conectar_cliente("data_postgres")
+            .await?
+            .com_disjuntor(disjuntor_pg.clone()),
+    );
+    tracing::info!(
+        prazo_rpc_ms = prazo_rpc_padrao().as_millis() as u64,
+        "Cliente RPC data_postgres estabelecido."
+    );
 
     // Conecta ao microserviço data_whatsapp (cliente gRPC persistente)
     let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await?);
@@ -1527,7 +1559,8 @@ async fn main() -> anyhow::Result<()> {
         "worker_group",
         consumidor.clone(),
         bus_client.clone(),
-    );
+    )
+    .com_disjuntor(disjuntor_pg.clone());
 
     tracing::info!("Consumidor do worker ativado e escutando eventos.");
 
@@ -1553,6 +1586,7 @@ async fn main() -> anyhow::Result<()> {
         let state_retry = state.clone();
         let bus_client_retry = bus_client.clone();
         let consumidor_retry = consumidor.clone();
+        let disjuntor_retry = disjuntor_pg.clone();
         let intervalo = std::env::var("SMARTCORE_WORKER_PEL_RETRY_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -1561,6 +1595,13 @@ async fn main() -> anyhow::Result<()> {
             let mut tick = tokio::time::interval(Duration::from_secs(intervalo));
             loop {
                 tick.tick().await;
+                // Com o data_postgres fora, reentregar só soma entregas até a DLQ.
+                if !disjuntor_retry.permite() {
+                    tracing::warn!(
+                        "reprocessamento da PEL adiado: disjuntor do data_postgres aberto"
+                    );
+                    continue;
+                }
                 let state_tick = state_retry.clone();
                 let handler = move |evt| {
                     let state = state_tick.clone();

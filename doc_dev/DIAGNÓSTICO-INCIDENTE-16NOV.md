@@ -1,5 +1,17 @@
 # Incidente: Timeout RPC Data_Postgres (16-18 Novembro)
 
+> **ERRATA (2026-11-18): este diagnóstico foi revisado e as conclusões centrais
+> não se sustentam.** Prometheus, Loki e Redis mostram outro quadro: um único
+> travamento de ~6s às 05:00:45, que fez dois RPCs expirarem. O evento afetado foi
+> reprocessado sozinho às 05:03:18. O pool nunca passou de 2/5 conexões, o
+> `UpdateMessageStatus` tem p99 de 24 ms no servidor, e as "10.003 mensagens" são
+> o `MAXLEN ~10000` normal do stream, que guarda também eventos já confirmados.
+> Também não houve "22 dias": o intervalo foi de 16/11 a 18/11. O que faltava de
+> verdade era vigiar a PEL do `worker_group`. Análise corrigida, mudanças e
+> runbook: [`PLANO-CORREÇÃO-TIMEOUT-RPC.md`](./PLANO-CORREÇÃO-TIMEOUT-RPC.md).
+> **Não repita** a seção 3 (`XTRIM` + `XGROUP DESTROY`) como primeira resposta:
+> ela apaga histórico e faz o grupo pular eventos ainda não lidos.
+
 **Data**: 16 Novembro 2026, 05:00:45 UTC  
 **Duração**: 22 dias  
 **Impacto**: 10.003+ mensagens não processadas  

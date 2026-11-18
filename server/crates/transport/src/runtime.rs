@@ -185,6 +185,7 @@ pub struct MuxClient {
     endpoint: Endpoint,
     codec: Box<dyn Codec>,
     conexao: Mutex<Option<Arc<Conexao>>>,
+    disjuntor: Option<Arc<crate::disjuntor::Disjuntor>>,
 }
 
 impl MuxClient {
@@ -194,6 +195,7 @@ impl MuxClient {
             endpoint,
             codec,
             conexao: Mutex::new(None),
+            disjuntor: None,
         };
         let conexao = cliente.reconectar_com_backoff().await.map_err(|_| {
             anyhow::anyhow!(
@@ -204,6 +206,19 @@ impl MuxClient {
         iniciar_keepalive(conexao.clone());
         *cliente.conexao.lock().await = Some(conexao);
         Ok(cliente)
+    }
+
+    /// Liga um disjuntor ao cliente: toda falha de transporte (prazo, conexão) e
+    /// todo sucesso alimentam o disjuntor. O cliente NÃO rejeita chamadas com o
+    /// disjuntor aberto — quem decide segurar o trabalho é o consumidor do bus
+    /// (ver `bus::Consumer::com_disjuntor`).
+    pub fn com_disjuntor(mut self, disjuntor: Arc<crate::disjuntor::Disjuntor>) -> Self {
+        self.disjuntor = Some(disjuntor);
+        self
+    }
+
+    pub fn disjuntor(&self) -> Option<&Arc<crate::disjuntor::Disjuntor>> {
+        self.disjuntor.as_ref()
     }
 
     /// Disca o endpoint uma vez e monta a conexão multiplexada.
@@ -279,7 +294,37 @@ impl MuxClient {
 
     /// Executa uma chamada request/reply síncrona com timeout. Reconecta e repete uma vez
     /// quando a conexão cai durante o envio/espera; o timeout do chamador NÃO dispara reconexão.
-    pub async fn call(
+    ///
+    /// Falhas de transporte são contadas em `smartcore_rpc_cliente_falha_total`. O
+    /// `smartcore_rpc_total` do servidor não as enxerga: no incidente de 2026-11-16 a
+    /// resposta chegou depois do prazo e o servidor registrou a chamada como sucesso.
+    pub async fn call(&self, env: Envelope, prazo: Duration) -> Result<Envelope, TransportError> {
+        let method = env.method.clone();
+        let resultado = self.call_interno(env, prazo).await;
+        match &resultado {
+            Ok(_) => {
+                if let Some(d) = &self.disjuntor {
+                    d.registrar_sucesso();
+                }
+            }
+            Err(e) => {
+                let motivo = match e {
+                    TransportError::Timeout => Some("timeout"),
+                    TransportError::Closed | TransportError::Io(_) => Some("conexao"),
+                    _ => None,
+                };
+                if let Some(motivo) = motivo {
+                    contar_falha_cliente(&method, motivo);
+                    if let Some(d) = &self.disjuntor {
+                        d.registrar_falha();
+                    }
+                }
+            }
+        }
+        resultado
+    }
+
+    async fn call_interno(
         &self,
         mut env: Envelope,
         prazo: Duration,
@@ -318,6 +363,20 @@ impl MuxClient {
         }
         Err(TransportError::Closed)
     }
+}
+
+fn contar_falha_cliente(method: &str, motivo: &'static str) {
+    opentelemetry::global::meter("transport")
+        .u64_counter("smartcore_rpc_cliente_falha_total")
+        .with_description("Chamadas RPC que falharam no cliente (prazo expirado ou conexao caida)")
+        .init()
+        .add(
+            1,
+            &[
+                opentelemetry::KeyValue::new("method", method.to_string()),
+                opentelemetry::KeyValue::new("motivo", motivo),
+            ],
+        );
 }
 
 /// Jitter pseudo-aleatório de até ~1/3 do atraso base, sem dependência externa de RNG.
@@ -994,5 +1053,70 @@ mod tests {
             ErrorKind::InvalidInput,
             "sem código de OS"
         )));
+    }
+
+    fn envelope_lento() -> Envelope {
+        Envelope {
+            tenant_id: "tenant-teste".to_string(),
+            schema_version: 1,
+            message_id: "m-1".to_string(),
+            causation_id: String::new(),
+            traceparent: String::new(),
+            occurred_at: 0,
+            kind: contracts::MessageKind::Request as i32,
+            method: "Lento".to_string(),
+            payload: vec![],
+            error: None,
+            auth_user_id: 0,
+            auth_scopes: vec![],
+            auth_is_superuser: false,
+            flow_permissions: vec![],
+            user_agent: String::new(),
+        }
+    }
+
+    /// Reproduz o incidente de 2026-11-16 em escala: o servidor responde, mas depois
+    /// do prazo do cliente. Cinco prazos expirados abrem o disjuntor; o cliente segue
+    /// aceitando chamadas (quem segura o trabalho é o consumidor do bus).
+    #[tokio::test]
+    async fn cinco_prazos_expirados_abrem_o_disjuntor_do_cliente() {
+        let porta = 29405;
+        let endpoint = Endpoint::parse(&format!("tcp://127.0.0.1:{porta}")).unwrap();
+        let server = Server::new(endpoint, "flatbuffers").route("Lento", |env| {
+            Box::pin(async move {
+                sleep(Duration::from_millis(300)).await;
+                env
+            })
+        });
+        tokio::spawn(async move {
+            let _ = server.run().await;
+        });
+        sleep(Duration::from_millis(150)).await;
+
+        let disjuntor = Arc::new(crate::disjuntor::Disjuntor::novo(
+            "teste_lento",
+            crate::disjuntor::ConfigDisjuntor::default(),
+        ));
+        let endpoint = Endpoint::parse(&format!("tcp://127.0.0.1:{porta}")).unwrap();
+        let cliente = MuxClient::conectar(endpoint, Box::new(crate::codec::FlatbuffersCodec))
+            .await
+            .unwrap()
+            .com_disjuntor(disjuntor.clone());
+
+        for n in 1..=5 {
+            assert!(disjuntor.permite(), "aberto cedo demais, na falha {n}");
+            let r = cliente
+                .call(envelope_lento(), Duration::from_millis(50))
+                .await;
+            assert!(
+                matches!(r, Err(TransportError::Timeout)),
+                "esperava timeout: {r:?}"
+            );
+        }
+        assert_eq!(disjuntor.estado(), crate::disjuntor::Estado::Aberto);
+
+        let r = cliente.call(envelope_lento(), Duration::from_secs(2)).await;
+        assert!(r.is_ok(), "o cliente não deve rejeitar chamadas: {r:?}");
+        assert_eq!(disjuntor.estado(), crate::disjuntor::Estado::Aberto);
     }
 }
