@@ -1,0 +1,174 @@
+# Prometheus Alert Rules — Smart Core Observability
+
+groups:
+  - name: smartcore_critical
+    interval: 30s
+    rules:
+      # ==========================================
+      # REDIS STREAMS — CONSUMER LAG
+      # ==========================================
+
+      - alert: RedisStreamConsumerLagHigh
+        expr: smartcore_consumer_lag > 1000
+        for: 2m
+        annotations:
+          severity: "CRITICAL"
+          summary: "Redis consumer lag acima de 1000 mensagens"
+          description: "Stream: {{ $labels.stream }}, Lag: {{ $value }} msgs. Possível timeout RPC ou crash do worker."
+          dashboard: "http://grafana:3000/d/redis-streams-health"
+
+      - alert: RedisStreamPELHigh
+        expr: smartcore_pel_size > 100
+        for: 1m
+        annotations:
+          severity: "CRITICAL"
+          summary: "PEL (Pending Entry List) acima de 100 mensagens"
+          description: "Stream: {{ $labels.stream }}, PEL: {{ $value }}. Indica loop de timeout/reprocessamento."
+          action: "Verificar logs do worker para RPC timeouts"
+
+      - alert: RedisStreamNoActivity
+        expr: smartcore_last_processed_age_secs > 300
+        for: 5m
+        annotations:
+          severity: "CRITICAL"
+          summary: "Nenhuma mensagem processada há 5+ minutos"
+          description: "Última msg: {{ $value }}s atrás. Worker pode estar travado."
+          action: "Verificar worker: docker logs smart-core-v2-dev-worker-1"
+
+      # ==========================================
+      # RPC TIMEOUTS
+      # ==========================================
+
+      - alert: RpcTimeoutRateHigh
+        expr: rate(smartcore_rpc_timeout_total[5m]) > 0.05
+        for: 2m
+        annotations:
+          severity: "CRITICAL"
+          summary: "RPC timeout rate > 5% (1 a cada 20 chamadas)"
+          description: "Service: {{ $labels.service }}, Rate: {{ $value | humanizePercentage }}. Possível degradação de data_postgres."
+          action: "Verificar pool de conexões Postgres"
+
+      - alert: RpcLatencyHigh
+        expr: histogram_quantile(0.99, smartcore_rpc_latency_ms) > 5000
+        for: 3m
+        annotations:
+          severity: "WARNING"
+          summary: "RPC p99 latency > 5s"
+          description: "Service: {{ $labels.service }}, p99: {{ $value }}ms"
+          action: "Executar ANALYZE em Postgres, revisar queries lentas"
+
+      # ==========================================
+      # DATABASE CONNECTION POOL
+      # ==========================================
+
+      - alert: PostgresPoolExhausted
+        expr: smartcore_pool_connections_in_use / smartcore_pool_connections_max > 0.9
+        for: 2m
+        annotations:
+          severity: "CRITICAL"
+          summary: "Pool de conexões Postgres > 90% utilização"
+          description: "Usando {{ $value | humanizePercentage }} do pool. Novo connections falharão."
+          action: "Aumentar max_connections ou investigar queries longas"
+
+      - alert: PostgresConnAcquireTimeout
+        expr: rate(smartcore_pool_acquire_timeout_total[5m]) > 0.01
+        for: 2m
+        annotations:
+          severity: "WARNING"
+          summary: "Pool acquire timeout detectado"
+          description: "Rate: {{ $value | humanizePercentage }}"
+          action: "Aumentar acquire_timeout, revisar conexões idle"
+
+      # ==========================================
+      # WORKER & GATEWAY HEALTH
+      # ==========================================
+
+      - alert: WorkerNotProcessing
+        expr: increase(smartcore_messages_processed_total[5m]) == 0
+        for: 5m
+        annotations:
+          severity: "CRITICAL"
+          summary: "Worker não processou nenhuma mensagem em 5min"
+          description: "Última msg processada há {{ $value }}s"
+          action: "Verificar worker logs, Redis Streams status"
+
+      - alert: GatewayGrpcError
+        expr: rate(smartcore_gateway_grpc_errors_total[5m]) > 0.1
+        for: 2m
+        annotations:
+          severity: "WARNING"
+          summary: "Gateway gRPC error rate > 10%"
+          description: "Rate: {{ $value | humanizePercentage }}"
+          action: "Verificar se adapters conseguem conectar"
+
+      # ==========================================
+      # DATA ADAPTERS (Evolution, Telegram, etc)
+      # ==========================================
+
+      - alert: AdapterNotConnected
+        expr: smartcore_adapter_connected == 0
+        for: 1m
+        annotations:
+          severity: "CRITICAL"
+          summary: "Adapter desconectado do Gateway"
+          description: "Adapter: {{ $labels.adapter }}. Sem mensagens sendo recebidas."
+          action: "Verificar conectividade adapter→gateway (gRPC:50053)"
+
+      - alert: AdapterHighErrorRate
+        expr: rate(smartcore_adapter_errors_total[5m]) > 0.1
+        for: 2m
+        annotations:
+          severity: "WARNING"
+          summary: "Adapter error rate > 10%"
+          description: "Adapter: {{ $labels.adapter }}, Rate: {{ $value | humanizePercentage }}"
+          action: "Verificar logs do adapter, validação de payloads"
+
+      # ==========================================
+      # INFRASTRUCTURE
+      # ==========================================
+
+      - alert: ContainerDown
+        expr: up{job="docker"} == 0
+        for: 1m
+        annotations:
+          severity: "CRITICAL"
+          summary: "Container {{ $labels.container }} está down"
+          description: "Último alerta: {{ $value }}"
+          action: "docker logs {{ $labels.container }}"
+
+      - alert: DiskSpaceRunningOut
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        annotations:
+          severity: "WARNING"
+          summary: "Disco < 10% disponível"
+          description: "Espaço livre: {{ $value | humanize }}B"
+          action: "Executar limpeza: docker system prune, docker volume prune"
+
+      - alert: MemoryUsageHigh
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+        for: 5m
+        annotations:
+          severity: "WARNING"
+          summary: "Memory > 85%"
+          description: "Uso: {{ $value | humanizePercentage }}"
+          action: "Revisar containers: docker stats"
+
+# ==========================================
+# RECORDING RULES (pré-calcular para dashboard)
+# ==========================================
+
+  - name: smartcore_recording
+    interval: 1m
+    rules:
+      - record: job:smartcore_consumer_lag:avg5m
+        expr: avg_over_time(smartcore_consumer_lag[5m])
+
+      - record: job:smartcore_rpc_timeout_rate:5m
+        expr: rate(smartcore_rpc_timeout_total[5m])
+
+      - record: job:smartcore_messages_rate:5m
+        expr: rate(smartcore_messages_processed_total[5m])
+
+      - record: job:smartcore_pool_utilization:avg5m
+        expr: avg_over_time(smartcore_pool_connections_in_use / smartcore_pool_connections_max[5m])
