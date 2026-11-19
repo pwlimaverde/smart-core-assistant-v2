@@ -97,12 +97,16 @@ _montar({
   _Ds<Session, RefreshParameters>? refreshDs,
   _Ds<Unit, LogoutParameters>? logoutDs,
   _FakeStorage? storage,
+  _FakeStorage? temporario,
 }) {
   final login = loginDs ?? _Ds<Session, LoginParameters>(dado: _session);
   final refresh = refreshDs ?? _Ds<Session, RefreshParameters>(dado: _session);
   final logout = logoutDs ?? _Ds<Unit, LogoutParameters>(dado: () => unit);
   final sessionService = _FakeSessionService();
-  final tokenStore = TokenLocalDatasource(storage: storage ?? _FakeStorage());
+  final tokenStore = TokenLocalDatasource(
+    storage: storage ?? _FakeStorage(),
+    temporario: temporario,
+  );
 
   return (
     service: AuthServiceImpl(
@@ -128,6 +132,7 @@ _montar({
 
 void main() {
   renovacaoAutomatica();
+  manterConectado();
   group('login', () {
     test(
       'aplica a sessão: access em memória, só o refresh persistido',
@@ -517,3 +522,115 @@ void renovacaoAutomatica() {
     });
   });
 }
+
+/// Chave do refresh nos dois armazenamentos (a mesma de produção).
+const _chaveRefresh = 'smartcore_admin_auth_refresh_token';
+
+/// "Manter conectado": decide se o refresh sobrevive ao fechamento do
+/// navegador/app (persistente) ou some com ele (temporário).
+void manterConectado() {
+  group('manter conectado', () {
+    test('marcado (padrão): refresh no persistente, nada no temporário', () async {
+      final persistente = _FakeStorage();
+      final temporario = _FakeStorage();
+      final m = _montar(storage: persistente, temporario: temporario);
+
+      await m.service.login(email: 'e@e.com', password: 'p');
+
+      expect(persistente.read(_chaveRefresh), 'refresh-novo');
+      expect(temporario.read(_chaveRefresh), isNull);
+    });
+
+    test('desmarcado: refresh só no temporário', () async {
+      final persistente = _FakeStorage();
+      final temporario = _FakeStorage();
+      final m = _montar(storage: persistente, temporario: temporario);
+
+      await m.service.login(
+        email: 'e@e.com',
+        password: 'p',
+        manterConectado: false,
+      );
+
+      expect(persistente.read(_chaveRefresh), isNull);
+      expect(temporario.read(_chaveRefresh), 'refresh-novo');
+      expect(await m.tokenStore.readRefresh(), 'refresh-novo');
+    });
+
+    test('a rotação do refresh preserva a escolha do login', () async {
+      final persistente = _FakeStorage();
+      final temporario = _FakeStorage();
+      var n = 0;
+      final m = _montar(
+        storage: persistente,
+        temporario: temporario,
+        refreshDs: _Ds<Session, RefreshParameters>(
+          dado: () => Session(
+            accessToken: 'access-${++n}',
+            refreshToken: 'refresh-rotacionado-$n',
+            expiresAt: DateTime.now().add(const Duration(minutes: 15)),
+            tenantId: 'tenant-1',
+            scopes: const [],
+            isSuperuser: false,
+          ),
+        ),
+      );
+      await m.service.login(
+        email: 'e@e.com',
+        password: 'p',
+        manterConectado: false,
+      );
+
+      await m.service.refresh();
+
+      expect(persistente.read(_chaveRefresh), isNull);
+      expect(temporario.read(_chaveRefresh), 'refresh-rotacionado-1');
+    });
+
+    test('novo login troca o destino e não deixa cópia no anterior', () async {
+      final persistente = _FakeStorage();
+      final temporario = _FakeStorage();
+      final m = _montar(storage: persistente, temporario: temporario);
+
+      await m.service.login(
+        email: 'e@e.com',
+        password: 'p',
+        manterConectado: false,
+      );
+      await m.service.login(email: 'e@e.com', password: 'p');
+
+      expect(persistente.read(_chaveRefresh), 'refresh-novo');
+      expect(temporario.read(_chaveRefresh), isNull);
+    });
+
+    test('logout limpa os dois armazenamentos', () async {
+      final persistente = _FakeStorage();
+      final temporario = _FakeStorage();
+      final m = _montar(storage: persistente, temporario: temporario);
+      await m.service.login(
+        email: 'e@e.com',
+        password: 'p',
+        manterConectado: false,
+      );
+
+      await m.service.logout();
+
+      expect(persistente.read(_chaveRefresh), isNull);
+      expect(temporario.read(_chaveRefresh), isNull);
+      expect(m.service.temSessao, isFalse);
+    });
+
+    test('boot faz auto-login com o refresh persistido', () async {
+      final persistente = _FakeStorage();
+      await persistente.write(_chaveRefresh, 'refresh-de-ontem');
+      final m = _montar(storage: persistente);
+
+      await m.service.checkCurrentUser();
+
+      expect(m.refreshDs.chamadas, 1);
+      expect(m.service.temSessao, isTrue);
+      expect(persistente.read(_chaveRefresh), 'refresh-novo');
+    });
+  });
+}
+

@@ -53,7 +53,13 @@ Future<void> bootstrap(AppConfig config, {String updateFeedUrl = ''}) async {
       // acabou de instalá-lo não tem conta. Sem um caminho visível na tela de
       // login, o cadastro seria inalcançável — num app de desktop não há URL
       // para digitar.
-      LoginModule(rotaDeCadastro: '/cadastro'),
+      //
+      // `prefixoDeArmazenamento`: o painel do superusuário mora na mesma origem
+      // na Web; com o mesmo prefixo, um app derrubava a sessão do outro.
+      LoginModule(
+        rotaDeCadastro: '/cadastro',
+        prefixoDeArmazenamento: 'smartcore_tenant_auth',
+      ),
       // Depois do LoginModule: o passo final do wizard entra na conta pelo
       // `AuthService` que aquele módulo registra.
       OnboardingModule(),

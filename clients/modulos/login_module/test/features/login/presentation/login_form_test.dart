@@ -13,13 +13,20 @@ import 'package:login_module/src/features/login/domain/services/auth_service.dar
 import 'package:login_module/src/features/login/presentation/controllers/login_controller.dart';
 import 'package:login_module/src/features/login/presentation/widgets/login_form.dart';
 
-/// AuthService que nunca é chamado: estes testes são sobre a tela, não o login.
+/// AuthService que sempre recusa: estes testes são sobre a tela, não o login.
+/// Guarda só a escolha de "manter conectado" que a tela mandou.
 class _AuthOcioso implements AuthService {
+  bool? manterConectadoRecebido;
+
   @override
   Future<ReturnSuccessOrError<Session, LoginError>> login({
     required String email,
     required String password,
-  }) async => const Failure(CredenciaisInvalidas());
+    bool manterConectado = true,
+  }) async {
+    manterConectadoRecebido = manterConectado;
+    return const Failure(CredenciaisInvalidas());
+  }
   @override
   Future<ReturnSuccessOrError<Session, RefreshError>> refresh() async =>
       const Failure(SemSessaoPersistida());
@@ -41,8 +48,12 @@ class _AuthOcioso implements AuthService {
 
 void main() {
   late LoginController controller;
+  late _AuthOcioso auth;
 
-  setUp(() => controller = LoginController(auth: _AuthOcioso()));
+  setUp(() {
+    auth = _AuthOcioso();
+    controller = LoginController(auth: auth);
+  });
   tearDown(() => controller.close());
 
   /// Monta a tela dentro de um GoRouter — `context.go` exige um.
@@ -112,5 +123,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('recuperar'), findsOneWidget);
+  });
+
+  testWidgets('"Manter conectado" vem marcado e vai junto no login', (
+    tester,
+  ) async {
+    await montar(tester);
+
+    expect(find.text('Manter conectado'), findsOneWidget);
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+
+    await tester.tap(find.text('Entrar'));
+    await tester.pump();
+
+    expect(auth.manterConectadoRecebido, isTrue);
+  });
+
+  testWidgets('desmarcar "Manter conectado" faz o login não persistir', (
+    tester,
+  ) async {
+    await montar(tester);
+
+    // A linha inteira é clicável, não só o quadrado.
+    await tester.tap(find.text('Manter conectado'));
+    await tester.pump();
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+
+    await tester.tap(find.text('Entrar'));
+    await tester.pump();
+
+    expect(auth.manterConectadoRecebido, isFalse);
   });
 }

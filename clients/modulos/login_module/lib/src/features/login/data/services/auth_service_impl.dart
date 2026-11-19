@@ -13,6 +13,7 @@ import '../../domain/services/auth_service.dart';
 import '../../domain/usecases/login_usecase.dart';
 import '../../domain/usecases/logout_usecase.dart';
 import '../../domain/usecases/refresh_token_usecase.dart';
+import '../../../../platform/trava_entre_abas.dart';
 import '../datasources/token_local_datasource.dart';
 
 /// Implementação rica de [AuthService] que também satisfaz o gancho de boot
@@ -33,6 +34,10 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
   final TokenLocalDatasource _tokenStore;
   final core.SessionService _session;
 
+  /// Nome da trava entre abas do refresh. Um por app: admin e tenant dividem a
+  /// origem, mas não o token.
+  final String _nomeDaTrava;
+
   Session? _current;
   Future<ReturnSuccessOrError<Session, RefreshError>>? _refreshInFlight;
   final ValueNotifier<int> _authChanges = ValueNotifier<int>(0);
@@ -47,7 +52,8 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
     required this._logoutUsecase,
     required this._tokenStore,
     required this._session,
-  });
+    String nomeDaTrava = 'smartcore_auth_refresh',
+  }) : _nomeDaTrava = nomeDaTrava;
 
   @override
   bool get isAuthenticated => _current != null && !_current!.isExpired;
@@ -95,11 +101,14 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
   Future<ReturnSuccessOrError<Session, LoginError>> login({
     required String email,
     required String password,
+    bool manterConectado = true,
   }) async {
     final result = await _loginUsecase(
       LoginParameters(email: email, password: password),
     );
-    if (result case Success(:final value)) await _aplicarSessao(value);
+    if (result case Success(:final value)) {
+      await _aplicarSessao(value, manterConectado: manterConectado);
+    }
     return result;
   }
 
@@ -114,7 +123,15 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
     );
   }
 
-  Future<ReturnSuccessOrError<Session, RefreshError>> _doRefresh() async {
+  /// A trava entre abas fica **por fora** da leitura do token: ler, chamar o
+  /// servidor e gravar o novo precisa ser atômico entre abas, senão duas abas
+  /// leem o mesmo token e a segunda é tratada como reuso (ver
+  /// `comTravaEntreAbas`).
+  Future<ReturnSuccessOrError<Session, RefreshError>> _doRefresh() =>
+      comTravaEntreAbas(_nomeDaTrava, _doRefreshNaTrava);
+
+  Future<ReturnSuccessOrError<Session, RefreshError>>
+  _doRefreshNaTrava() async {
     final stored = await _tokenStore.readRefresh();
     if (stored == null || stored.isEmpty) {
       // Estado normal do primeiro boot: não houve I/O, não há o que limpar.
@@ -159,10 +176,15 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
     return result;
   }
 
-  Future<void> _aplicarSessao(Session s) async {
+  /// [manterConectado] só vem no login; na rotação (`null`) o refresh novo vai
+  /// para onde o anterior estava.
+  Future<void> _aplicarSessao(Session s, {bool? manterConectado}) async {
     _current = s;
     _session.setSession(token: s.accessToken, tenantId: s.tenantId);
-    await _tokenStore.writeRefresh(s.refreshToken);
+    await _tokenStore.writeRefresh(
+      s.refreshToken,
+      manterConectado: manterConectado,
+    );
     _agendarRenovacao();
     _notificar();
   }

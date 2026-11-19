@@ -30,6 +30,9 @@ dependencies:
   # v10+ migrou o backend web para package:web (compatível com --wasm); v9 ainda
   # usa dart:html e quebra o build WASM.
   flutter_secure_storage: ^10.0.0
+  # Web Locks API (`navigator.locks`) para serializar o refresh entre abas.
+  # Mesma versão que admin_module/tenant_module já usam no workspace.
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_test:

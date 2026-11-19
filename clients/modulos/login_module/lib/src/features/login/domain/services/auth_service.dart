@@ -23,10 +23,16 @@ import '../model/session.dart';
 /// diferentes, e o compilador cobra o certo em cada caso.
 abstract interface class AuthService {
   /// Autentica com e-mail/senha; em sucesso, aplica a sessão (access em memória,
-  /// refresh persistido).
+  /// refresh guardado).
+  ///
+  /// [manterConectado] decide onde o refresh fica: `true` sobrevive ao
+  /// fechamento do navegador/app (auto-login na próxima abertura); `false`
+  /// some quando ele fecha. O padrão `true` preserva quem já chamava sem o
+  /// parâmetro (o wizard de cadastro).
   Future<ReturnSuccessOrError<Session, LoginError>> login({
     required String email,
     required String password,
+    bool manterConectado = true,
   });
 
   /// Rotaciona a sessão usando o refresh persistido (single-flight).

@@ -28,6 +28,10 @@ class _LoginFormState extends State<LoginForm> {
   final _email = TextEditingController();
   final _password = TextEditingController();
 
+  /// Marcado por padrão: é o que quase todo mundo quer no próprio computador.
+  /// Desmarcado, a sessão some quando o navegador/app fecha.
+  bool _manterConectado = true;
+
   @override
   void dispose() {
     _email.dispose();
@@ -35,8 +39,11 @@ class _LoginFormState extends State<LoginForm> {
     super.dispose();
   }
 
-  void _submit() =>
-      widget.controller.signIn(_email.text.trim(), _password.text);
+  void _submit() => widget.controller.signIn(
+    _email.text.trim(),
+    _password.text,
+    manterConectado: _manterConectado,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +96,13 @@ class _LoginFormState extends State<LoginForm> {
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) => loading ? null : _submit(),
                     ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _ManterConectado(
+                      valor: _manterConectado,
+                      aoMudar: loading
+                          ? null
+                          : (v) => setState(() => _manterConectado = v),
+                    ),
                     if (erro != null) ...[
                       const SizedBox(height: AppSpacing.md),
                       _ErrorBanner(message: erro),
@@ -137,6 +151,42 @@ class _LoginFormState extends State<LoginForm> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Caixa "Manter conectado". A linha inteira é clicável, não só o quadrado:
+/// num formulário de login o alvo pequeno é o que mais se erra.
+class _ManterConectado extends StatelessWidget {
+  final bool valor;
+
+  /// `null` desabilita (durante o envio).
+  final ValueChanged<bool>? aoMudar;
+
+  const _ManterConectado({required this.valor, required this.aoMudar});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final mudar = aoMudar;
+    return InkWell(
+      borderRadius: AppRadius.md,
+      onTap: mudar == null ? null : () => mudar(!valor),
+      child: Row(
+        children: [
+          Checkbox(
+            value: valor,
+            activeColor: colors.accent,
+            onChanged: mudar == null ? null : (v) => mudar(v ?? false),
+          ),
+          Expanded(
+            child: Text(
+              'Manter conectado',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

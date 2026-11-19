@@ -1,11 +1,13 @@
 import 'package:api_client/api_client.dart';
 import 'package:app_config/app_config.dart';
 import 'package:core_module/core_module.dart' as core;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:get_it_module/get_it_module.dart';
 
 import 'platform/api_client_factory.dart';
 import 'features/login/data/datasources/login_grpc_datasource.dart';
 import 'features/login/data/datasources/logout_grpc_datasource.dart';
+import 'features/login/data/datasources/memoria_local_storage_service.dart';
 import 'features/login/data/datasources/refresh_grpc_datasource.dart';
 import 'features/login/data/datasources/secure_local_storage_service.dart';
 import 'features/login/data/datasources/token_local_datasource.dart';
@@ -39,7 +41,18 @@ final class LoginModule extends AppModule {
   /// nada — lá não existe autocadastro.
   final String? rotaDeCadastro;
 
-  LoginModule({this.rotaDeCadastro});
+  /// Prefixo das chaves do login no armazenamento do navegador.
+  ///
+  /// Os dois apps são servidos da mesma origem (`/v2/admin` e `/v2/tenant`) e
+  /// dividem o `localStorage`. Com um prefixo só, entrar num app sobrescrevia
+  /// a sessão do outro, e sair de um deslogava os dois. O padrão é o prefixo
+  /// histórico, para o painel do superusuário não perder as sessões abertas.
+  final String prefixoDeArmazenamento;
+
+  LoginModule({
+    this.rotaDeCadastro,
+    this.prefixoDeArmazenamento = 'smartcore_admin_auth',
+  });
 
   @override
   void globalBinds(Injector i) {
@@ -65,10 +78,21 @@ final class LoginModule extends AppModule {
 
     // Storage real (secure storage) — substitui o LocalStorageServiceNoOp.
     i.lazySingleton<core.LocalStorageService>(
-      () => SecureLocalStorageService(),
+      () => SecureLocalStorageService(prefixoWeb: prefixoDeArmazenamento),
     );
     i.lazySingleton<TokenLocalDatasource>(
-      () => TokenLocalDatasource(storage: inject<core.LocalStorageService>()),
+      () => TokenLocalDatasource(
+        storage: inject<core.LocalStorageService>(),
+        // "Não manter conectado": `sessionStorage` na Web (apagado ao fechar o
+        // navegador); memória no desktop, que não tem equivalente — e onde o
+        // plugin ignoraria a opção e gravaria em disco.
+        temporario: kIsWeb
+            ? SecureLocalStorageService(
+                prefixoWeb: prefixoDeArmazenamento,
+                sessao: true,
+              )
+            : MemoriaLocalStorageService(),
+      ),
     );
 
     // Usecases da feature: cada um recebe o repositório, que recebe o
@@ -121,6 +145,7 @@ final class LoginModule extends AppModule {
         logoutUsecase: inject<LogoutUsecase>(),
         tokenStore: inject<TokenLocalDatasource>(),
         session: inject<core.SessionService>(),
+        nomeDaTrava: '${prefixoDeArmazenamento}_refresh',
       ),
     );
     i.lazySingleton<AuthService>(() => inject<AuthServiceImpl>());

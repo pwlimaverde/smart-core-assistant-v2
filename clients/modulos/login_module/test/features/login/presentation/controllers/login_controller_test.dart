@@ -13,6 +13,7 @@ class _FakeAuth implements AuthService {
   final ReturnSuccessOrError<Session, LoginError> resultadoLogin;
   String? emailRecebido;
   String? senhaRecebida;
+  bool? manterConectadoRecebido;
 
   _FakeAuth(this.resultadoLogin);
 
@@ -20,9 +21,11 @@ class _FakeAuth implements AuthService {
   Future<ReturnSuccessOrError<Session, LoginError>> login({
     required String email,
     required String password,
+    bool manterConectado = true,
   }) async {
     emailRecebido = email;
     senhaRecebida = password;
+    manterConectadoRecebido = manterConectado;
     return resultadoLogin;
   }
 
@@ -123,6 +126,18 @@ void main() {
 
     expect(auth.emailRecebido, ' e@e.com ');
     expect(auth.senhaRecebida, 'senha com espaço');
+    await controller.close();
+  });
+
+  test('repassa a escolha de "manter conectado" (padrão: manter)', () async {
+    final auth = _FakeAuth(Success(_session()));
+    final controller = LoginController(auth: auth);
+
+    await controller.signIn('e@e.com', 'senha');
+    expect(auth.manterConectadoRecebido, isTrue);
+
+    await controller.signIn('e@e.com', 'senha', manterConectado: false);
+    expect(auth.manterConectadoRecebido, isFalse);
     await controller.close();
   });
 }

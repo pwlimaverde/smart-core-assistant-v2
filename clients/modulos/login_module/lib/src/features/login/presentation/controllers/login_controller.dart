@@ -10,6 +10,17 @@ final class LoginController extends BaseController<Session> {
   LoginController({required this._auth});
 
   /// Dispara o login; o [BaseController.execute] mapeia loading→success/error.
-  Future<void> signIn(String email, String password) =>
-      execute(() => _auth.login(email: email, password: password));
+  ///
+  /// [manterConectado] vem da caixa "Manter conectado" da tela.
+  Future<void> signIn(
+    String email,
+    String password, {
+    bool manterConectado = true,
+  }) => execute(
+    () => _auth.login(
+      email: email,
+      password: password,
+      manterConectado: manterConectado,
+    ),
+  );
 }
