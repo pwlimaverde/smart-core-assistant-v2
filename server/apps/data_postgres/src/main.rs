@@ -12,7 +12,6 @@ use contracts::{Envelope, MessageKind};
 use data_postgres::processar_eventos_auditoria_lote;
 use infrastructure_postgres::RequestContext;
 use redis::aio::ConnectionManager;
-use redis::AsyncCommands;
 use sqlx::PgPool;
 use transport::Server;
 use uuid::Uuid;

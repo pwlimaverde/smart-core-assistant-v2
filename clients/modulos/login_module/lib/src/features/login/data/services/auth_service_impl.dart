@@ -52,8 +52,8 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
     required this._logoutUsecase,
     required this._tokenStore,
     required this._session,
-    String nomeDaTrava = 'smartcore_auth_refresh',
-  }) : _nomeDaTrava = nomeDaTrava;
+    this._nomeDaTrava = 'smartcore_auth_refresh',
+  });
 
   @override
   bool get isAuthenticated => _current != null && !_current!.isExpired;
