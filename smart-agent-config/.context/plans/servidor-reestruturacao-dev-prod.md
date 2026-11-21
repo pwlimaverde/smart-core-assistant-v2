@@ -4,8 +4,8 @@ name: "Reestruturação dev/prod — dois ambientes, deploy por merge e por tag"
 planSlug: servidor-reestruturacao-dev-prod
 description: "Elimina o ambiente local e fixa dois ambientes na VPS: dev (merge na branch dev → deploy-dev.yml) e prod (tag vX.Y.Z criada por pessoa num commit da main → deploy-prod.yml com aprovação). Compose base único + overlay por ambiente, bundle de release por ambiente em /opt/smartcore/<env>/releases/<id> (tira dev e prod da workspace compartilhada do runner), segredos como secret de GitHub Environment, imagens por versão exata e rollback por troca de bundle. Infra compartilhada (borda, observabilidade, Evolution, releases) só muda pelo fluxo de prod."
 summary: "Corrige sete defeitos de processo levantados no servidor em 2026-11-21 — o mais grave: deploy-prod.yml usa environment 'production', que não existe, então a primeira tag iria para produção sem revisor. Fatia de pipeline e topologia do producao-go-live, que continua dono do isolamento de rede (C1–C3), backup externo e das decisões D1/D3/D7/D10."
-status: filled
-progress: 0
+status: in_progress
+progress: 80
 generated: "2026-11-21"
 scaffoldVersion: "2.0.0"
 agents:
@@ -29,34 +29,32 @@ phases:
     name: "Review — decisões R-D1..R-D6 e fronteira com o go-live"
     prevc: "R"
     agent: "security-auditor"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — R1 governança, R2 compose, R3 bundle/segredos, R4 fim do local, R5 workflows"
     prevc: "E"
     agent: "devops-specialist"
-    status: "pending"
+    status: "completed"
     required_sensors: [tests-passing]
     required_artifacts: [handoff-summary]
   - id: "phase-v"
     name: "Validation — R6 RC, primeira tag, ensaio de rollback e hotfix"
     prevc: "V"
     agent: "devops-specialist"
-    status: "pending"
+    status: "in_progress"
   - id: "phase-c"
     name: "Confirmation — R7 documentação e limpeza do legado"
     prevc: "C"
     agent: "documentation-writer"
-    status: "pending"
-lastUpdated: "2026-11-21T13:42:12.174Z"
+    status: "in_progress"
+lastUpdated: "2026-11-21T15:30:00.000Z"
 ---
 
 # Reestruturação dev/prod — dois ambientes, deploy por merge e por tag
 
-> Levantamento feito no próprio servidor, somente leitura. Nada foi alterado
-> no servidor, no GitHub ou nos workflows.
-> **Ação imediata recomendada (uma linha):** `deploy-prod.yml` →
-> `environment: prod`. Hoje está `production`, que não existe; a primeira tag
-> criaria o ambiente sem revisor.
+> **Execução 2026-11-21:** R1–R5 e R7 aplicadas; dev rodando por bundle
+> (`v0.2.0-beta.N`). R6 (primeira release de prod) bloqueada por pré-requisitos
+> do dono — ver "Execution History".
 
 ## Artefatos detalhados
 - **Plano completo** (verdade técnica): [plano_completo_servidor-reestruturacao-dev-prod.md](./servidor-reestruturacao-dev-prod/plano_completo_servidor-reestruturacao-dev-prod.md)
@@ -110,4 +108,14 @@ expand/contract. Bloqueante externo: **D1 do go-live (memória da VPS)**.
 
 ## Execution History
 
-> Last updated: 2026-11-21T13:42:12.174Z | Progress: 0%
+> Last updated: 2026-11-21 | Progress: 80% (R6 pendente do dono)
+
+| Fase | Estado | Evidência |
+|---|---|---|
+| R1 | ✅ | `environment: prod` + revisor (dono) + políticas `v*`/`main`; `gate-origem`; `pr-to-main.yml` removido; rulesets: `main` (só PR; bypass = deploy key do runner), `dev` (sem force/exclusão), tags `vX.Y.Z` (só dono), tags beta (imutáveis); main reconciliada na dev (`-s ours`, árvore inalterada) |
+| R2 | ✅ | `docker/stack/{docker-compose.base.yml,dev.override.yml,prod.override.yml,dev.vars,prod.vars}`; equivalência provada (20 serviços, mesmos env/volumes/redes/sondas); prod com portas e redes próprias |
+| R3 | ✅ | `infra/deploy/{lib,bundle,deploy,smoke,rollback,promove-imagens,deploy-infra}.sh`; `ENV_FILE_B64` no env `dev`; layout `/opt/smartcore/<env>/{env,releases,backups-deploy,deploys.log}`; legado systemd em `/opt/smartcore/_legado/` |
+| R4 | ✅ | `test_support` sem túnel; `.ps1` locais em `infra/_legado/`; sensores → `node infra/ci-verde.mjs`; docs sem ambiente local; banco/redis sem porta no host |
+| R5 | ✅ | `deploy-dev` (beta.N, promoção, bundle, tag), `deploy-prod` (gate, promoção do digest da beta, main ff), `rollback-prod`, `deploy-infra`; concurrency `deploy-vps`; job `infra` na CI |
+| R6 | ⏳ | dev validada (`v0.2.0-beta.1` em 64 s; infra compartilhada intocada). **Prod bloqueada**: falta `prod.env` (secret `ENV_FILE_B64` do env `prod`), decisão D1 (memória), go-live C2 (webhook por ambiente) e aprovação humana da tag |
+| R7 | ✅ (parcial) | `doc_dev/runbooks/RUNBOOK_DEPLOY.md`; architecture/development-workflow/testing-strategy/tooling/security; `docker/{dev,prod}/compose.yml` removidos. `CLAUDE.md` (projeto e global) e `AGENTS.md` **não** editados — pendem do dono |

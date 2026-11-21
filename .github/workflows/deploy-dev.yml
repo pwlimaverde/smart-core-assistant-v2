@@ -263,7 +263,7 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-  # Imagem Python do ia_engine. O compose (docker/dev/compose.yml) referencia
+  # Imagem Python do ia_engine. O compose (docker/stack/) referencia
   # ghcr.io/.../smartcore-ia-engine:dev via `docker compose pull`; sem este job a
   # imagem nunca é publicada e o "Compose pull & up" falha com "not found".
   # Contexto = raiz do repo (o Dockerfile gera os stubs do .proto do contracts).

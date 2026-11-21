@@ -16,8 +16,9 @@ jobs:
     runs-on: ubuntu-latest
 
     # Infra de teste: Postgres (com pgvector) e Redis sobem como service containers
-    # mapeados nas MESMAS portas que os testes esperam (5434 e 6380). Assim o
-    # test_support detecta a porta aberta e NÃO tenta abrir o túnel SSH.
+    # nas portas que os testes esperam (5434 e 6379/6380). Não há ambiente local
+    # nem túnel: é AQUI que os testes de integração rodam (o test_support só
+    # confere que a porta está aberta e falha com mensagem clara se não estiver).
     services:
       postgres:
         image: ghcr.io/pwlimaverde/pgvector:pg16
@@ -178,8 +179,7 @@ jobs:
           cargo install cargo-llvm-cov --locked || true
 
       # Suíte COMBINADA (unit + integração) contra os MESMOS service containers
-      # efêmeros provisionados acima — os testes de integração detectam a porta
-      # aberta (5434/6380) e não tentam abrir túnel SSH (ver comentário no topo do
+      # efêmeros provisionados acima (portas 5434/6380; ver comentário no topo do
       # job). Este passo é GATE: até aqui a integração só rodava sob
       # `continue-on-error`, então RLS, transações por tenant, PEL do barramento e
       # o fluxo ponta-a-ponta do banco podiam quebrar sem deixar o CI vermelho — e

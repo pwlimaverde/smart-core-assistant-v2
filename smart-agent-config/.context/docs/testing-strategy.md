@@ -46,72 +46,49 @@ A stack Rust segue um padrão único, válido para toda crate (`crates/`) e app 
 - **Transação por teste com rollback** (regra de ouro) ou `#[sqlx::test]` com fixtures.
 - **Fail-closed/RLS**: testar explicitamente a **negação** — query sem tenant retorna zero
   linhas; tenant B não enxerga dados de tenant A (`run_in_tenant_transaction` + `RequestContext`).
-- **Infra dos testes**: `test_support::ensure_tunnel()` sobe o túnel SSH sozinho;
-  `SQLX_OFFLINE=true` com `.sqlx/` versionado; Redis usa o **banco lógico 15** com `FLUSHDB`
-  e `RUST_TEST_THREADS=1`. Ver memória `testes-db-tunel-e-reset`.
-- **Topologia do túnel** (local → Hostinger): `5434`→Postgres, `6379`→Redis **cache**
-  (remoto 6380, allkeys-lru), `6380`→Redis **bus** (remoto 6381, noeviction). A porta
-  host 6379 do servidor pertence a outro projeto — não usar.
+- **Infra dos testes**: Postgres (pgvector) e Redis sobem como **service containers da CI**
+  (`ci.yml`): `5434`→Postgres, `6379`→Redis **cache** (allkeys-lru), `6380`→Redis **bus**
+  (noeviction). `test_support::ensure_tunnel()` (nome histórico) só **confere** que a porta
+  está aberta e falha com mensagem clara se não estiver — não abre túnel.
+  `SQLX_OFFLINE=true` com `.sqlx/` versionado (regenerado pelo `sqlx-prepare.yml`); Redis usa
+  o **banco lógico 15** com `FLUSHDB` e `RUST_TEST_THREADS=1`.
+- **Não há túnel nem ambiente local** (plano `servidor-reestruturacao-dev-prod`, Fase R4): o
+  banco da dev não publica porta no host. Testar contra o banco da VPS deixou de ser possível
+  de propósito.
 
 ## Ambientes de teste
 
-O projeto possui **três ambientes distintos**:
-
 | Ambiente | Onde roda | Suite executada | Gatilho |
 |----------|-----------|-----------------|---------|
-| **Local (Windows)** | máquina do dev | completa: unit + integração | manual, pré-push |
-| **CI (GitHub Actions)** | ubuntu-latest | gate: `--lib --bins`; cobertura combinada (`--workspace`, unit+integração) informativa via `cargo llvm-cov` | push/PR automático |
-| **Hostinger dev/prod** | VPS remota | deploy automático pós-CI verde | CI verde em `dev`/`main` |
+| **CI (GitHub Actions)** | ubuntu-latest | Rust: fmt → clippy → suíte combinada unit+integração (gate) com Postgres/Redis de serviço; Python; Flutter; **Infra** (compose config dev/prod, shellcheck, actionlint, caddy validate) | todo push/PR |
+| **dev (VPS)** | `/opt/smartcore/dev` | smoke test do deploy (`infra/deploy/smoke.sh`): sondas de todos os serviços, web, config no Redis | push na `dev` → `vX.Y.Z-beta.N` |
+| **prod (VPS)** | `/opt/smartcore/prod` | mesmo smoke test, com retorno automático ao bundle anterior | tag `vX.Y.Z` + aprovação |
+
+A máquina do desenvolvedor pode rodar **testes unitários** (sem banco/cache/rede) com
+`cargo test`; tudo que depende de Postgres/Redis roda na CI.
 
 ## Workflow ao escrever um novo teste
 
-A regra depende do **tipo** de teste:
+**Teste unitário** (inline em `src/`, sem banco/cache/rede) → pode rodar isolado via `cargo`:
 
-**Teste unitário** (inline em `src/`, sem banco/cache/rede) → roda **isolado via `cargo`**:
-
-```powershell
+```bash
 # a partir de server/
 cargo test nome_parcial_do_teste
 cargo test -p data_postgres login          # filtrar por crate
 cargo test nome_parcial -- --nocapture     # ver saída
 ```
 
-Unitários não tocam recursos externos — não precisam de túnel nem de `.env`.
+**Teste de integração** (pasta `tests/`, depende de Postgres/Redis) → roda **na CI**:
+commit + push na branch e acompanhar o job `Rust — lint e testes`. O portão dos agentes
+(sensor `ci-verde` do harness) é `node infra/ci-verde.mjs --esperar`, que sai 0 só com a
+CI verde no commit atual.
 
-**Teste de integração** (pasta `tests/`, depende de Postgres/Redis) → roda **a partir do
-script** `infra/test-local.ps1`, **nunca** via `cargo test` direto. É o script que orquestra
-as conexões (túnel SSH para os bancos da Hostinger, variáveis de ambiente, ordem dos gates):
-
-```powershell
-.\infra\test-local.ps1                # esteira completa: fmt → clippy → cargo test --workspace → sqlx prepare --check
-.\infra\test-local.ps1 -ResetTunnel   # idem, derrubando túneis ssh antigos antes (após mudança de portas)
-.\infra\test-local.ps1 -Fast          # modo rápido sem banco: fmt → clippy → --lib --bins (igual ao CI)
-```
-
-`-Fast` é o que o CI executa; **não substitui** a esteira completa. **Sempre rode sem flags
-antes do push** para exercitar a integração.
-
-## Esteira local pré-push (`infra/test-local.ps1`)
-
-O gate do CI (`ci.yml`) roda `--lib --bins` com serviços efêmeros do runner. A **suíte
-completa** (unit + integração contra o banco real da Hostinger) roda **localmente, antes
-do push**, com a mesma sequência de gates do CI:
+Os scripts `infra/test-local.ps1`, `test-quick.ps1` e `test-flutter.ps1` foram arquivados
+em `infra/_legado/` (dependiam do túnel). A CI roda a mesma sequência de gates:
 
 ```
-fmt → clippy → cargo test --workspace → cargo sqlx prepare --check
+fmt → clippy → cargo test --workspace (unit + integração) → cargo sqlx prepare --check
 ```
-
-Desde a etapa **C1** do plano de cobertura (`.context/plans/cobertura-testes-100.md`), o
-CI também roda `cargo llvm-cov --workspace` (unit+integração combinada, contra os mesmos
-service containers efêmeros) como passo **informativo** (`continue-on-error`) — é a
-primeira vez que a suíte de integração roda no CI (antes só localmente), então ainda não
-bloqueia o pipeline. Vira gate (ratchet) na etapa C5, depois de provar estável. `ia_engine`
-também ganhou job próprio no CI (`uv sync` + `uv run pytest --cov`) — antes os 44 testes
-Python nunca rodavam no pipeline.
-
-Pré-requisitos: `infra/.env.deploy` (credenciais SSH) e `server/.env`
-(`DATABASE_URL`/`DATABASE_ADMIN_URL`/`REDIS_URL`/`REDIS_BUS_URL` apontando para
-`5434`/`6379`/`6380` locais).
 
 ## Mocking — só nas fronteiras externas
 
@@ -181,11 +158,11 @@ Um levantamento pós-plano revelou áreas nunca visadas pelas etapas C1–C5; fe
 ### Exclusões revisadas (justificadas, não meta cega)
 - **Python**: `[tool.coverage.run] omit` em `ia_engine/pyproject.toml` — stubs gRPC gerados (`contracts/*`), `__main__.py`, e bootstrap (`server.py`, `settings.py`, `telemetry.py`). O único trecho residual (`features/transcribe/domain/services.py`, corpo `...` de um `Protocol`) é estruturalmente não-invocável.
 - **Rust**: `--ignore-filename-regex '.*/target/.*/out/.*'` no CI, excluindo código FlatBuffers/protobuf gerado pelo `build.rs`. **Correção do Planning original**: a hipótese de excluir todo `main.rs` de `apps/*` como "entrypoint fino" é falsa aqui — a C4 elevou `apps/data_redis/src/main.rs` de 44% para 83% com testes de lógica real; `main.rs` **não** é excluído. Áreas genuinamente integração-only (handlers RPC de `grpc_web`/`data_postgres` adapters, chamadas tonic reais, callbacks de gauge OTLP, `control_plane/cli` interativo) são cobertas por `tests/` de integração, não por unit.
-- **Flutter**: o `flutter test --coverage` não tem `omit` nativo, então a exclusão é aplicada **na agregação do lcov** (CI `ci.yml` e `infra/test-flutter.ps1`, mesma regra): não contam para o denominador `data/datasources/*` (fronteira externa gRPC/remoto/FFI — cobertos por integração/E2E) nem `presentation/pages|routes/*` (layout/navegação de UI pura). Widgets **contam** (o `design_system` os testa de verdade). Sem isso, um módulo UI-pesado como o `admin_module` (datasource gRPC de 331 linhas + páginas) afundaria o agregado sem refletir a cobertura significativa real.
+- **Flutter**: o `flutter test --coverage` não tem `omit` nativo, então a exclusão é aplicada **na agregação do lcov** (CI `ci.yml`): não contam para o denominador `data/datasources/*` (fronteira externa gRPC/remoto/FFI — cobertos por integração/E2E) nem `presentation/pages|routes/*` (layout/navegação de UI pura). Widgets **contam** (o `design_system` os testa de verdade). Sem isso, um módulo UI-pesado como o `admin_module` (datasource gRPC de 331 linhas + páginas) afundaria o agregado sem refletir a cobertura significativa real.
 
 ### Achados registrados para follow-up (fora do escopo desta iniciativa de testes)
 - `local_engine::offline_queue::OfflineQueue::next_version()` faz `SELECT MAX(version)+1` numa query separada do `INSERT` de `enqueue()`, sem transação/lock — corrida sob concorrência comprovada por teste dedicado (`achado_next_version_nao_e_atomico_sob_concorrencia`, em `server/crates/local_engine/src/offline_queue/mod.rs`). Fix arquitetural não foi feito aqui (fora de escopo de uma tarefa de testes).
-- Falha pré-existente e ambiental em `apps/worker/src/scheduler.rs::test_processar_midia_expirada_marca_e_publica` quando `REDIS_URL` aponta para `localhost:6379` (porta de outro projeto local); passa no CI (container próprio). Ver memória `deploy-evolution-remove-orphans`.
+- `apps/worker/src/scheduler.rs::test_processar_midia_expirada_marca_e_publica` depende do Redis de serviço da CI (`localhost:6379`); fora da CI, com outro Redis na porta, falha por ambiente.
 
 ## Related Resources
 

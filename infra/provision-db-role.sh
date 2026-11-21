@@ -20,8 +20,9 @@
 # para smartcore_app_rt (DATABASE_ADMIN_URL continua em smartcore_app, sem
 # mudança) e reinicie os serviços (data_postgres primeiro).
 #
-# Uso (a partir da raiz do repo ou de infra/), executado NO SERVIDOR ou via túnel
-# apontando para o Postgres do ambiente alvo:
+# Uso (a partir da raiz do repo), executado NO SERVIDOR contra o Postgres do
+# ambiente alvo (não há túnel nem porta de banco publicada no host — rode o
+# psql dentro da rede do compose, ex.: `docker compose ... run --rm`):
 #   DATABASE_ADMIN_URL="postgresql://smartcore_app:<senha-atual>@host:5432/smartcore_v2" \
 #   APP_RT_PASSWORD="<senha-forte-nova>" \
 #   bash infra/provision-db-role.sh
@@ -77,4 +78,4 @@ echo "  1. Atualize DATABASE_URL no .env do ambiente:"
 echo "     DATABASE_URL=postgresql://smartcore_app_rt:<APP_RT_PASSWORD>@<host>:5432/<db>"
 echo "     (DATABASE_ADMIN_URL continua em smartcore_app, sem mudança)"
 echo "  2. Reinicie os serviços (data_postgres primeiro; ele roda as migrations no boot)."
-echo "  3. Revalide a suíte de isolamento: .\\infra\\test-local.ps1"
+echo "  3. Revalide a suíte de isolamento na CI (job Rust — lint e testes)."

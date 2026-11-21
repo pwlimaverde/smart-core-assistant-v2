@@ -159,6 +159,34 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 - **Cloudflare R2 (S3-compatible)**: storage transitório de mídia (TTL curto; cache permanente no cliente). Acesso HTTPS direto, sem MinIO/túnel.
 - **OpenAI / Groq / Ollama**: provedores de LLM abstraídos pelo LangChain no `ia_engine`.
 
+## Ambientes e pipeline de entrega
+
+Dois ambientes, **ambos na VPS** `srv1321059` (Hostinger KVM2, 2 vCPU / 7,8 GB); não há
+ambiente local (plano `servidor-reestruturacao-dev-prod`).
+
+```
+feature/* ─PR─▶ dev ─push─▶ deploy-dev.yml ─▶ smart-core-v2-dev   (vX.Y.Z-beta.N, /opt/smartcore/dev)
+                 tag vX.Y.Z (dono) ─▶ deploy-prod.yml ─(aprovação)─▶ smart-core-v2-prod (/opt/smartcore/prod)
+                                                       └─▶ main avança (ponteiro da última release)
+ infra compartilhada (borda Caddy 80/443, LGTM, Evolution) ◀─ deploy-infra.yml (aprovação prod)
+```
+
+- **Uma base de compose** (`docker/stack/docker-compose.base.yml`) + overlay curto por
+  ambiente (`dev.override.yml`: MinIO; `prod.override.yml`) + `<env>.vars` (portas, redes,
+  retenção). Diferença entre ambientes fora desses arquivos é defeito.
+- **Bundle por versão**: `/opt/smartcore/<env>/releases/<id>/` com compose, scripts de
+  backup, init-scripts e `images.env` (tag exata de cada imagem); `current` aponta para o
+  que está no ar. Rollback = reimplantar o bundle anterior (`rollback-prod.yml`).
+- **Mesmo binário na dev e na prod**: a prod não reconstrói o backend; a tag `X.Y.Z` é
+  outro nome do digest testado como `X.Y.Z-beta.N`. Só a web é reconstruída (endereços).
+- **Isolamento entre ambientes**: projetos, volumes e redes internas por ambiente; portas
+  próprias no host (dev 50051/8081/8083/8095/8099, prod 50052/8082/8084/8096/8100); rede de
+  telemetria por ambiente (`smart_core_v2_observability` na dev, `smart_core_v2_telemetria_prod`
+  na prod) — só o `otel-collector` está nas duas.
+- **Infra compartilhada** serve os dois ambientes e só muda com aprovação de prod.
+
+Passo a passo: [RUNBOOK_DEPLOY.md](../../doc_dev/runbooks/RUNBOOK_DEPLOY.md).
+
 ## Key Decisions & Trade-offs
 
 | Decisão | Escolha | Racional |
@@ -179,7 +207,7 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 - [clients/flutter_windows/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/clients/flutter_windows) — app Flutter Windows desktop (fase 1)
 - [clients/flutter_web/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/clients/flutter_web) — app Flutter Web (fase 2, projeto Flutter separado, sem FFI)
 - [ia_engine/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/ia_engine) — motor de IA em Python (LangChain, RAG, transcrição)
-- [docker/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/docker) — infra local de desenvolvimento
+- [docker/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/docker) — `stack/` (base + overlays dev/prod dos ambientes), `edge/`, `observability/`, `evolution/` (infra compartilhada), `backup/`, `init-scripts/`
 - [smart-agent-config/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config) — planejamento e orquestração de agentes (esta pasta)
 - [old/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/old) — v1 Django (referência de domínio, git-ignored)
 

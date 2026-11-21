@@ -32,7 +32,7 @@
 smartcoreassistant.com.br {
 	encode gzip zstd
 
-	# Bundle estatico do client admin (mesma imagem/porta do docker/prod/compose.yml).
+	# Bundle estatico do client admin (porta da prod em docker/stack/prod.vars).
 	handle_path /v2/admin/* {
 		reverse_proxy host.docker.internal:{$WEB_HOST_PORT:8082}
 		header {
@@ -60,7 +60,7 @@ smartcoreassistant.com.br {
 	}
 
 	# gRPC-Web (fachada runtime_api PROD) -> publicado no host em RUNTIME_WEB_PORT
-	# (docker/prod/compose.yml: dev usa 50051, prod usa 50052).
+	# (docker/stack/{dev,prod}.vars: dev usa 50051, prod usa 50052).
 	@grpcweb_prod header Content-Type application/grpc-web*
 	handle @grpcweb_prod {
 		reverse_proxy host.docker.internal:{$RUNTIME_WEB_PORT:50052}

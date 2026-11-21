@@ -17,7 +17,7 @@ scaffoldVersion: "2.0.0"
 | Rust | Cargo workspace | `cargo build` / `cargo test` |
 | Flutter | Flutter SDK + Dart | `flutter build windows` / `flutter run` |
 | Python (IA) | uv | `uv run pytest` / `uv run python` |
-| Infra local | Docker Compose | `docker compose -f docker/compose/data.yml up -d` |
+| Ambientes | Docker Compose na VPS | `docker/stack/` (base + overlay) implantado por `infra/deploy/deploy.sh` — ver `doc_dev/runbooks/RUNBOOK_DEPLOY.md` |
 | Contratos | `protoc` (gRPC) + `flatc` (FlatBuffers) | gerados no build (`tonic-build` no Rust; `grpcio` no Python) |
 | FFI | flutter_rust_bridge | `flutter_rust_bridge_codegen` |
 
@@ -26,7 +26,7 @@ scaffoldVersion: "2.0.0"
 - `rustup` para gerenciar versões (`rust-toolchain.toml` na raiz quando criado).
 - `cargo clippy -- -D warnings` e `cargo fmt --check` obrigatórios antes de commit.
 - `sqlx` modo offline (`.sqlx/` versionado); `cargo sqlx prepare` após cada migration.
-- Testes: `cargo test` sobe o túnel SSH do banco sozinho (`test_support::ensure_tunnel()`); `cargo nextest run` recomendado.
+- Testes: unitários com `cargo test` em qualquer máquina; integração (Postgres/Redis) só na CI — não há túnel nem ambiente local. Portão: `node infra/ci-verde.mjs --esperar`.
 
 ## Flutter
 
@@ -40,32 +40,27 @@ scaffoldVersion: "2.0.0"
 - Stubs gRPC (`*_pb2.py`) não são versionados; gerados no build/CI.
 - Linting: `ruff` + `pyright` (strict). Testes: `uv run pytest`.
 
-## Local Infrastructure
+## Ambientes (sem infraestrutura local)
 
-```bash
-docker compose -f docker/compose/data.yml up -d
-```
+Não há infraestrutura local: `docker/compose/data.yml` e o túnel SSH deixaram de existir.
+Os dois ambientes rodam na VPS `srv1321059`, a partir de bundles por versão:
 
-> **Windows (dev):** UDS não funciona — configure os endpoints dos serviços com
-> `SMARTCORE_<SVC>_ENDPOINT=tcp://...` (ex.: `SMARTCORE_DATA_POSTGRES_ENDPOINT`).
-> Storage não usa infra local: Cloudflare R2 é acessado por HTTPS direto.
+| Ambiente | Onde | Como chega |
+|---|---|---|
+| dev | `/opt/smartcore/dev/releases/current` | push na `dev` → `deploy-dev.yml` → `vX.Y.Z-beta.N` |
+| prod | `/opt/smartcore/prod/releases/current` | tag `vX.Y.Z` → `deploy-prod.yml` (aprovação) |
+
+Scripts: `infra/deploy/{bundle,deploy,smoke,rollback,promove-imagens,deploy-infra}.sh`
+(um só script de deploy para os dois ambientes). Passo a passo:
+`doc_dev/runbooks/RUNBOOK_DEPLOY.md`. Logs e métricas: Grafana (`grafana.smartcoreassistant.com.br`).
 
 ## Environment Variables
 
-Copie `.env.example` para `.env` na raiz do monorepo:
-
-```
-DATABASE_URL=postgres://...
-REDIS_URL=redis://...
-S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
-S3_REGION=auto
-S3_ACCESS_KEY_ID=...
-S3_SECRET_ACCESS_KEY=...
-S3_BUCKET=...
-EVOLUTION_API_URL=http://...
-EVOLUTION_API_KEY=...
-OPENAI_API_KEY=...
-```
+O arquivo de ambiente de cada ambiente é o secret `ENV_FILE_B64` do GitHub
+Environment (`dev` / `prod`), materializado pelo deploy em
+`/opt/smartcore/<env>/env/<env>.env`. `.env.example` (raiz) é a referência das
+chaves; as obrigatórias estão em `infra/deploy/required-keys.{dev,prod}`.
+Nunca commitar `.env`, `infra/.env.deploy` nem o conteúdo decodificado do secret.
 
 ## Roteador de modelo e seletor de skill (Claude Code)
 

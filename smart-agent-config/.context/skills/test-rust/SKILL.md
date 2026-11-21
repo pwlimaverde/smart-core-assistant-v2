@@ -250,7 +250,7 @@ padrão. Rode-os sob demanda com `cargo test -- --ignored`.
   2. **Serializar** com o crate `serial_test` (`#[serial]`) quando o recurso é
      genuinamente único e não isolável.
   3. Último recurso: `cargo test -- --test-threads=1` (perde paralelismo da suíte toda).
-- Inicialização única e idempotente (ex.: subir um túnel, instalar um subscriber de
+- Inicialização única e idempotente (ex.: conferir a infra de teste, instalar um subscriber de
   `tracing`) deve usar `std::sync::Once` / `OnceLock` para rodar uma vez por processo.
 
 ---
@@ -449,40 +449,24 @@ fn renders_invoice_summary() {
 
 ## 11. Ferramentas e Execução
 
-### 11.1. Scripts canônicos do projeto (sempre use estes)
+### 11.1. Onde os testes rodam (sem ambiente local)
 
-**Nunca rodar `cargo test` ou `cargo test --workspace` diretamente em produção**. Os scripts encapsulam todas as variáveis de ambiente (`SQLX_OFFLINE`, `RUST_TEST_THREADS`, `ENCRYPTION_KEY`, `DATABASE_URL` via túnel SSH). Rodar diretamente pode silenciar falhas de integração.
+Não há ambiente local nem túnel SSH para o banco da VPS (plano
+`servidor-reestruturacao-dev-prod`, Fase R4). Os scripts `test-quick.ps1` e
+`test-local.ps1` foram arquivados em `infra/_legado/`.
 
-#### `test-quick.ps1` — feedback diário (segundos, sem banco)
+| Tipo | Onde | Como |
+|---|---|---|
+| Unitário (inline em `src/`, sem banco/cache/rede) | qualquer máquina | `SQLX_OFFLINE=true cargo test -p <pacote> --lib --bins` |
+| Integração (`tests/`, Postgres/Redis) | **CI** (`ci.yml`, job `Rust — lint e testes`), com Postgres pgvector e Redis de serviço | commit + push na branch |
+| Gate dos agentes | sensor `ci-verde` do harness | `node infra/ci-verde.mjs --esperar` (sai 0 só com a CI verde no HEAD) |
 
-Detecta quais pacotes mudaram (via `git diff`) e testa **apenas esses**, sem banco, sem túnel.
-
-```powershell
-.\infra\test-quick.ps1                           # mudanças não commitadas (staged + unstaged)
-.\infra\test-quick.ps1 -Vs HEAD~1                # só o último commit
-.\infra\test-quick.ps1 -Vs origin/dev            # tudo no branch vs remote dev
-.\infra\test-quick.ps1 -Pkg data_whatsapp        # pacote explícito (ignora auto-detecção)
-.\infra\test-quick.ps1 -Pkg "webhook_ingress,data_whatsapp"  # múltiplos pacotes
-.\infra\test-quick.ps1 -Jobs 2                   # limita threads de compilação (poupa RAM/CPU)
-```
-
-- Roda: fmt check (workspace) → clippy → `--lib --bins` nos pacotes detectados.
-- **`SQLX_OFFLINE=true` sempre** — compila offline usando o cache `.sqlx/`, nunca conecta ao banco durante build.
-- ⚠️ **Limitação**: mudanças em crates compartilhados (`infrastructure_*`) podem quebrar apps dependentes sem este script detectar. Use `test-local.ps1` antes do push.
-
-#### `test-local.ps1` — esteira completa pré-push
-
-```powershell
-.\infra\test-local.ps1               # esteira completa: fmt → clippy → suite completa com banco → sqlx prepare --check
-.\infra\test-local.ps1 -Fast         # sem banco: fmt → clippy → --lib --bins (igual ao CI)
-.\infra\test-local.ps1 -ResetTunnel  # idem, derrubando túneis SSH antigos antes
-```
-
-**Sempre rode `test-local.ps1` (sem flags) antes de cada push** para exercitar a integração com o banco remoto da Hostinger.
+A esteira da CI: `fmt → clippy -D warnings → cargo test --workspace (unit + integração) →
+cargo sqlx prepare --check`. Teste de integração novo só "passa" quando passa na CI.
 
 ### 11.2. SQLX_OFFLINE — regra crítica de compilação
 
-`SQLX_OFFLINE=true` deve estar ativo durante **toda** a compilação (clippy e testes). Sem ele, o SQLx conecta ao banco remoto via SSH para cada macro `query!()` durante o build, transformando 20 s de compilação em 14 min.
+`SQLX_OFFLINE=true` deve estar ativo durante **toda** a compilação (clippy e testes). Sem ele, o SQLx tenta conectar a um banco para cada macro `query!()` durante o build — e fora da CI não há banco.
 
 ```powershell
 # ✅ Correto: SQLX_OFFLINE=true para clippy E para cargo test
@@ -495,7 +479,7 @@ $env:SQLX_OFFLINE = ""   # faz SQLx conectar ao banco em cada query! durante com
 cargo test ...
 ```
 
-O cache `.sqlx/` (versionado no repo) contém os resultados das verificações offline. Atualize-o com `cargo sqlx prepare --workspace` (com túnel ativo) após cada nova `query!()`.
+O cache `.sqlx/` (versionado no repo) contém os resultados das verificações offline. Ele é regenerado na CI pelo workflow `sqlx-prepare.yml` (Postgres de serviço) em push de branch de feature — não há túnel para gerar contra o banco da VPS.
 
 ### 11.3. Dependências de dev pesadas (wiremock)
 
@@ -503,9 +487,7 @@ O cache `.sqlx/` (versionado no repo) contém os resultados das verificações o
 
 Para reduzir pico de CPU/RAM durante compilação lenta:
 ```powershell
-.\infra\test-quick.ps1 -Jobs 2   # limita threads de compilação
-# ou via env diretamente:
-$env:CARGO_BUILD_JOBS = "2"
+$env:CARGO_BUILD_JOBS = "2"   # limita threads de compilação
 ```
 
 ### 11.4. Outros comandos cargo úteis

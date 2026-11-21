@@ -42,6 +42,31 @@ O isolamento multi-tenant é a preocupação central. Dois mecanismos em profund
   - **Controles que sustentam a decisão**: `REDIS_PASSWORD` obrigatório, Redis sem porta publicada no host (rede interna do compose), TTL curto e nenhum log do payload — as mensagens de erro dos dois lados citam só o tipo da exceção, nunca o conteúdo.
   - **Ao expor o Redis** (réplica gerenciada, monitoramento externo, dump de RDB para backup), tratar o dump como material de credencial: rotacionar as chaves de LLM se vazar.
 
+## Segredos dos ambientes e governança de deploy
+
+- **Fonte dos segredos**: secret `ENV_FILE_B64` (o `.env` inteiro, base64) do GitHub
+  Environment `dev` e do `prod` — **secret de ambiente**, não de repositório: só chega ao
+  job que declarou o environment e passou pelas regras dele. Cópia do `prod.env` no cofre do
+  dono (sem a `ENCRYPTION_KEY` os dados cifrados se perdem).
+- **Materialização** (`infra/deploy/deploy.sh`): `umask 077`, escrita atômica em
+  `/opt/smartcore/<env>/env/<env>.env` (600, `gh-runner`), conteúdo decodificado nunca vai ao
+  log, sem `set -x`; validação de chaves obrigatórias (`required-keys.<env>`) e proibidas
+  (`COMPOSE_PROJECT_NAME`; `MINIO_*` na prod).
+- **Environment `prod`**: revisor obrigatório (o dono) e implantação só a partir de tags
+  `v*` e da `main`. Vale para release, rollback e infra compartilhada.
+- **Rulesets**: `main` só por PR (merge commit), sem force-push/exclusão — o único bypass é a
+  deploy key do runner (`/home/gh-runner/.ssh/smartcore_main_ff`), usada para o fast-forward
+  pós-release; `dev` sem force-push/exclusão; tags `vX.Y.Z` só o dono cria, nenhuma tag `v*`
+  é movida ou apagada.
+- **Versionamento**: imagens sempre com tag exata (`X.Y.Z` / `X.Y.Z-beta.N`), nunca `latest`
+  em ambiente (a CI reprova tag móvel em `docker/stack/`). O `gate-origem` do `deploy-prod`
+  só aceita tag em commit com beta testada na dev ou já na `main` (hotfix).
+- **Sem ambiente local**: Postgres e Redis da dev não publicam porta no host; o túnel SSH foi
+  removido (uma rota de acesso direto ao banco a menos).
+- **Ponto aberto**: o runner self-hosted (`gh-runner`, grupo `docker` = root efetivo) atende
+  dev e prod; a contenção é o revisor do environment `prod`. Runner separado para prod é a
+  decisão D3 do go-live.
+
 > Diretrizes completas de segurança: [seguranca.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/padroes_linguagens/seguranca.md).
 
 ## Risks & Open Decisions

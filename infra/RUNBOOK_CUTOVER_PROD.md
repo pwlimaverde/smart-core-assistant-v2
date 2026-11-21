@@ -1,3 +1,6 @@
+> **HISTÓRICO** (2026-11-21): substituído por `smart-agent-config/doc_dev/runbooks/RUNBOOK_DEPLOY.md`.
+> Os caminhos `docker/prod/compose.yml`, `tunnel.ps1` e o deploy por `:latest` citados abaixo não existem mais.
+
 # Runbook — publicação da v2 em produção (cutover v1 → v2)
 
 > **Nada aqui foi executado.** Este documento é procedimento; cada passo é uma
