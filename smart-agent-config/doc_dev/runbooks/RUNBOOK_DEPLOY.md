@@ -123,6 +123,9 @@ Rollback manual de emergência (runner fora do ar), como `gh-runner` na VPS:
 cd /opt/smartcore/ops/smart-core-assistant-v2   # scripts só leem o checkout
 sudo -u gh-runner infra/deploy/rollback.sh prod v0.2.0
 ```
+As imagens da versão alvo normalmente já estão em disco (`up --pull missing`). Se não
+estiverem, o pull exige login no GHCR (pacotes privados): `docker login ghcr.io` como
+`gh-runner` com um token `read:packages`.
 
 ## 7. Migrações (expand/contract)
 

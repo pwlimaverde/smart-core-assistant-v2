@@ -124,7 +124,7 @@ smoke() {
 }
 
 ANT="$(anterior)"
-if dci "$BUNDLE" pull --quiet && dci "$BUNDLE" up -d --remove-orphans && smoke "$BUNDLE"; then
+if dci "$BUNDLE" up -d --pull missing --quiet-pull --remove-orphans && smoke "$BUNDLE"; then
   ln -sfn "$ID" "$DIR_REL/.current.tmp" && mv -Tf "$DIR_REL/.current.tmp" "$DIR_REL/current"
   marca ok
   # Retenção: 5 bundles por componente (o current nunca sai).

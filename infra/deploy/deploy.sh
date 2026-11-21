@@ -91,9 +91,14 @@ else
 fi
 
 # --- 5/6. sobe e verifica ---------------------------------------------------------
+# `--pull missing`: baixa só o que não está em disco. Tag de versão é imutável,
+# então imagem presente é a imagem certa — e o rollback funciona mesmo sem acesso
+# ao GHCR (pacotes privados; fora do workflow o runner não tem login). Também
+# evita que `pgvector:pg16`/`redis:7-alpine` mudem de versão em silêncio a cada
+# deploy: atualizar imagem base passa a ser decisão explícita.
 sobe() {
   local bundle="$1"
-  dc "$bundle" pull --quiet && dc "$bundle" up -d --remove-orphans
+  dc "$bundle" up -d --pull missing --quiet-pull --remove-orphans
 }
 
 if sobe "$BUNDLE" && "$DIR_SCRIPTS/smoke.sh" "$AMB" "$ID"; then
