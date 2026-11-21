@@ -43,6 +43,11 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # Sem `base`, em push numa branch que NÃO é a padrão (a padrão é a
+          # main) o filtro compara com a main — e marcava TUDO como mudado,
+          # reconstruindo as seis imagens a cada push. Com a própria branch
+          # como base, compara com o commit anterior ao push.
+          base: ${{ github.ref_name }}
           filters: |
             server:
               - 'server/**'
@@ -406,7 +411,8 @@ jobs:
             echo "::warning::v$base já foi lançada; betas seguem em $novo — atualize o arquivo VERSION"
             base="$novo"
           done
-          n=$(git tag -l "v$base-beta.*" | sed 's/.*-beta\.//' | grep -E '^[0-9]+$' | sort -n | tail -n1)
+          # `|| true`: sem beta nenhuma ainda, o grep sai 1 e o pipefail mataria o passo.
+          n=$(git tag -l "v$base-beta.*" | sed 's/.*-beta\.//' | { grep -E '^[0-9]+$' || true; } | sort -n | tail -n1)
           n=$(( ${n:-0} + 1 ))
           echo "imagem=$base-beta.$n" >> "$GITHUB_OUTPUT"
           echo "id=v$base-beta.$n" >> "$GITHUB_OUTPUT"
