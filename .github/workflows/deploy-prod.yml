@@ -21,8 +21,39 @@ jobs:
   # `environment: production` pede aprovação humana, mas quem aprova não tem como
   # saber, do próprio deploy, se a suíte passou. A tag é criada depois do push em
   # `dev`, então o CI daquele SHA já terminou: aqui é só consulta, custa segundos.
+  # Portão de origem: só vira release o commit que já rodou na dev como beta
+  # (tag vX.Y.Z-beta.N criada pelo deploy-dev) ou que está na `main` (hotfix).
+  # Tag em commit de feature, ou com sufixo de pré-release, é recusada aqui.
+  gate-origem:
+    name: Exige origem válida (beta testado na dev ou main)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Confere tag e procedência do commit
+        env:
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tag '$TAG' não é X.Y.Z estável"; exit 1
+          fi
+          git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/dev:refs/remotes/origin/dev'
+          betas=$(git tag --points-at "$SHA" -l 'v*-beta.*' | tr '\n' ' ')
+          if [ -n "$betas" ] && git merge-base --is-ancestor "$SHA" origin/dev; then
+            echo "ok  commit implantado na dev como: $betas"
+          elif git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "ok  commit pertence à main (hotfix)"
+          else
+            echo "::error::$SHA não tem tag beta na dev nem está na main — release recusada."
+            exit 1
+          fi
+
   verifica-ci:
     name: Exige CI verde no commit da tag
+    needs: gate-origem
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -281,7 +312,10 @@ jobs:
     name: Deploy PROD (compose)
     needs: [build-server, build-web, build-web-tenant, build-ia-engine, build-ia-engine-jev, build-mcp-server]
     runs-on: [self-hosted, hostinger]
-    environment: production
+    # `prod` é o environment protegido (revisor obrigatório + só tags v*). Era
+    # `production`, que não existia: a primeira tag criaria um ambiente SEM regra
+    # e iria para produção sem aprovação.
+    environment: prod
     steps:
       # O runner self-hosted reutiliza a workspace entre execuções (a mesma do deploy
       # dev, por ser o mesmo repo). Containers que rodaram como root podem deixar

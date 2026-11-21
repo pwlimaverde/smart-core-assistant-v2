@@ -1,0 +1,5 @@
+# Rótulos do runner self-hosted da VPS (srv1321059), para o actionlint não
+# acusar `hostinger` como desconhecido.
+self-hosted-runner:
+  labels:
+    - hostinger
