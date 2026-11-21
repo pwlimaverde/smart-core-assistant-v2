@@ -1,0 +1,73 @@
+name: Rollback → PROD
+
+# Volta a produção para um bundle já implantado antes (compose, scripts e tags
+# de imagem daquela versão), com aprovação do environment `prod`. Também serve
+# para reaplicar a versão em uso depois de rotacionar o secret ENV_FILE_B64.
+#
+# Disparar a partir da `main` (a política do environment só aceita main e tags).
+on:
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: 'Versão alvo (ex.: v0.2.0) — precisa existir em /opt/smartcore/prod/releases/'
+        required: true
+      aceito_migracao:
+        description: 'A versão em uso aplicou migração que a alvo não conhece e eu li o RUNBOOK_DEPLOY.md'
+        type: choice
+        options: ['nao', 'sim']
+        default: 'nao'
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  rollback:
+    name: Rollback PROD para ${{ inputs.versao }}
+    runs-on: [self-hosted, hostinger]
+    environment: prod
+    steps:
+      - name: Valida entrada
+        env:
+          VERSAO: ${{ inputs.versao }}
+        run: |
+          [[ "$VERSAO" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::versão inválida: '$VERSAO' (use vX.Y.Z)"; exit 1; }
+
+      - name: Sanitiza posse da workspace (runner self-hosted)
+        run: |
+          docker run --rm -v "${{ github.workspace }}":/ws busybox \
+            chown -R "$(id -u):$(id -g)" /ws
+
+      - uses: actions/checkout@v5
+
+      - name: Docker login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # Confere bundle e imagens, aplica o portão de migração, faz pg_dump e
+      # reimplanta com smoke test (deploy.sh).
+      - name: Rollback (rollback.sh)
+        env:
+          ENV_FILE_B64: ${{ secrets.ENV_FILE_B64 }}
+          ACEITO_MIGRACAO: ${{ inputs.aceito_migracao }}
+          VERSAO: ${{ inputs.versao }}
+        run: |
+          inicio=$(date +%s)
+          infra/deploy/rollback.sh prod "$VERSAO"
+          echo "duracao=$(( $(date +%s) - inicio ))" >> "$GITHUB_ENV"
+
+      # Sem canal de alerta definido ainda (decisão D7 do go-live): o aviso é o
+      # resumo do job e o e-mail de falha do GitHub.
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Rollback PROD → ${{ inputs.versao }}"
+            echo ""
+            echo "- current: \`$(readlink /opt/smartcore/prod/releases/current 2>/dev/null)\`"
+            echo "- duração: ${duracao:-?}s"
+            echo "- último marcador: \`$(tail -n1 /opt/smartcore/prod/deploys.log 2>/dev/null)\`"
+          } >> "$GITHUB_STEP_SUMMARY"

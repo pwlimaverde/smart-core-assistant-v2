@@ -200,15 +200,16 @@ auth.smartcoreassistant.com.br {
 		respond "não encontrado" 404
 	}
 
+	# Porta PROPRIA da prod (docker/stack/prod.vars: MCP_OAUTH_HOST_PORT=8096).
+	# Antes era 8095, a mesma da dev: o dominio de prod caia no control_plane da dev.
 	handle {
-		reverse_proxy host.docker.internal:{$MCP_OAUTH_HOST_PORT:8095}
+		reverse_proxy host.docker.internal:8096
 	}
 }
 
 # ----- DEV: os mesmos dois papeis, na stack de desenvolvimento -----
-# Mesmas portas do host: hoje so a stack DEV esta no ar (docker/prod nao subiu).
-# Quando o prod subir, estas duas linhas precisam apontar para portas proprias —
-# senao os dois ambientes competem pelo mesmo processo.
+# Portas da dev (docker/stack/dev.vars): 8095 (auth) e 8099 (mcp). As da prod
+# sao 8096 e 8100 — nunca repetir: os dois ambientes publicam no mesmo host.
 auth.dev.smartcoreassistant.com.br {
 	encode gzip zstd
 
@@ -229,7 +230,7 @@ auth.dev.smartcoreassistant.com.br {
 	}
 
 	handle {
-		reverse_proxy host.docker.internal:{$MCP_OAUTH_HOST_PORT:8095}
+		reverse_proxy host.docker.internal:8095
 	}
 }
 
@@ -242,7 +243,7 @@ mcp.dev.smartcoreassistant.com.br {
 		-Server
 	}
 
-	reverse_proxy host.docker.internal:{$MCP_HOST_PORT:8099} {
+	reverse_proxy host.docker.internal:8099 {
 		flush_interval -1
 		transport http {
 			read_timeout 300s
@@ -261,7 +262,8 @@ mcp.smartcoreassistant.com.br {
 		-Server
 	}
 
-	reverse_proxy host.docker.internal:{$MCP_HOST_PORT:8099} {
+	# Porta PROPRIA da prod (prod.vars: MCP_HOST_PORT=8100).
+	reverse_proxy host.docker.internal:8100 {
 		# Streamable HTTP usa SSE na resposta. Sem `flush_interval -1` o Caddy
 		# bufferiza e o cliente fica esperando por um stream que ja chegou —
 		# sintoma classico: a tool "trava" e estoura o timeout do lado do agente.

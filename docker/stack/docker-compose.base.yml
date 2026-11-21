@@ -1,0 +1,573 @@
+# =============================================================================
+# Stack de aplicação — BASE ÚNICA dos ambientes dev e prod (Smart Core v2)
+# =============================================================================
+# Este arquivo NÃO é usado sozinho nem a partir do repositório: o deploy monta um
+# bundle em /opt/smartcore/<env>/releases/<versão>/ com esta base, o overlay do
+# ambiente (dev.override.yml | prod.override.yml), `backup/`, `init-scripts/`,
+# `<env>.vars` (topologia, sem segredo) e `images.env` (tag de cada imagem).
+#
+#   docker compose -p smart-core-v2-<env> --project-directory <bundle> \
+#     -f docker-compose.base.yml -f <env>.override.yml \
+#     --env-file .env --env-file <env>.vars --env-file images.env up -d
+#
+# Quem faz isso é infra/deploy/deploy.sh. Regras:
+#   - SEM `name:` — o projeto vem de `-p` (o mesmo nome de antes: os volumes com
+#     dados, `smart-core-v2-<env>_postgres_data` etc., são reaproveitados).
+#   - Bind mounts relativos ao BUNDLE (./backup, ./init-scripts), nunca à
+#     workspace do runner — antes um deploy da dev trocava o backup.sh que o
+#     pg_backup de produção executava.
+#   - `:?` em tudo que muda por ambiente: um bundle incompleto falha no
+#     `compose config`, antes de tocar container, em vez de cair num default.
+#   - Diferenças permitidas entre ambientes: só as dos overlays e dos `.vars`.
+# =============================================================================
+
+x-server-image: &server-image ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-server:${SERVER_TAG:?SERVER_TAG ausente (images.env do bundle)}
+
+# Rotação de log. O default do Docker (json-file sem limite) cresce até encher o
+# disco — e disco cheio na VPS derruba a stack inteira, não só quem escreveu
+# demais. Com o promtail levando tudo para o Loki, o arquivo local é só buffer.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "${LOG_MAX_SIZE:-10m}"
+    max-file: "${LOG_MAX_FILE:-5}"
+
+# Sonda padrão dos serviços que atendem no `transport::Server`: o binário
+# `healthcheck` troca PING→PONG no endpoint que o próprio serviço abriu. Sem
+# isto, `restart: unless-stopped` só cobria processo que MORRE — serviço travado
+# ficava `running` para sempre.
+x-ulimits-rede: &ulimits-rede
+  # O soft limit padrao do container e 1024 descritores — medido em
+  # /proc/<pid>/limits em 2026-09-11, com o hard limit em 524288.
+  #
+  # Isso derrubou producao: em 2026-09-08 13:15 uma rajada de 6829 webhooks em 11
+  # minutos encostou no teto e o `data_postgres` morreu com "Too many open files
+  # (os error 24)". O laco de accept tratava EMFILE como fatal (corrigido em
+  # transport/src/runtime.rs), mas o gatilho foi o teto ridiculo.
+  #
+  # 65536 nao e generosidade: e a ordem de grandeza de qualquer servidor de rede.
+  # O hard limit do daemon permite bem mais; nao ha custo em reservar isto.
+  nofile:
+    soft: 65536
+    hard: 65536
+
+x-healthcheck-rpc: &healthcheck-rpc
+  interval: 20s
+  timeout: 5s
+  retries: 3
+  start_period: 30s
+
+# -----------------------------------------------------------------------------
+# Interfaces de publicação de porta
+# -----------------------------------------------------------------------------
+# O Docker NÃO respeita o UFW: ele insere as próprias regras e uma porta
+# publicada em 0.0.0.0 fica acessível pela internet mesmo com `ufw` ativo e
+# política DROP. Verificado neste servidor em 2026-09-11 — a `DOCKER-USER` está
+# vazia e todas as portas abaixo respondiam pelo IP público.
+#
+# `HOST_BRIDGE_IP` — portas que o Caddy da borda consome. Ele alcança o host por
+# `host.docker.internal`, que resolve para o gateway da docker0 (172.17.0.1).
+# Publicar ali mantém o roteamento e tira a porta da interface pública.
+#
+# `HOST_ADMIN_IP` — porta de depuração (webhook_ingress). Só loopback. Banco e
+# cache NÃO publicam porta: não há ambiente local nem túnel (Fase R4).
+networks:
+  internal:
+    driver: bridge
+  # Rede exclusiva do mcp_server + runtime_api (N13.4).
+  #
+  # É ela que faz o invariante "o mcp_server não alcança o banco" ser topologia
+  # e não convenção: fora de `internal`, os nomes `postgres`, `data_postgres`,
+  # `data_redis` e `data_storage` simplesmente não resolvem dentro daquele
+  # container. NÃO acrescente `internal` ao serviço `mcp_server` — o teste
+  # `tests/integration/test_isolamento_de_rede.py` existe para pegar isso.
+  mcp_net:
+    driver: bridge
+  # Criada pela stack de observabilidade (que sobe antes). Só o collector e os
+  # `mcp_server` vivem nela — é o caminho de telemetria SEM dar ao mcp_server
+  # alcance aos serviços de dados, que compartilham a `observability`.
+  mcp_telemetria:
+    name: ${MCP_TELEMETRIA_NET:?MCP_TELEMETRIA_NET ausente (<env>.vars)}
+    external: true
+  # Rede de telemetria POR AMBIENTE (C1 do go-live): na dev é a rede histórica
+  # da observabilidade; na prod é outra, onde só o collector também mora — senão
+  # `data_postgres` resolveria para containers dos DOIS ambientes.
+  observability:
+    name: ${OBS_NET:?OBS_NET ausente (<env>.vars)}
+    external: true
+  evolution_net:
+    name: smart_core_v2_evolution_net
+    external: true
+
+services:
+  # ---------- DADOS ----------
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_POSTGRES:-1g}
+
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+      --maxmemory 150mb --maxmemory-policy allkeys-lru --bind 0.0.0.0 --protected-mode yes
+    volumes: [redis_data:/data]
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_REDIS:-256m}
+
+  redis-bus:
+    image: redis:7-alpine
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+      --maxmemory 150mb --maxmemory-policy noeviction --bind 0.0.0.0 --protected-mode yes
+    volumes: [redis_bus_data:/data]
+    networks: [internal]
+    # O barramento não tinha sonda, apesar de ser por onde passa TODA mensagem e
+    # todo evento de auditoria: era o ponto mais crítico sem verificação.
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_REDIS:-256m}
+
+  # Backup lógico do Postgres. Roda como serviço (e não como cron do host) para
+  # ser instalado pelo deploy junto com a stack — cron do host é passo manual, e
+  # passo manual é o que não existe no servidor novo.
+  pg_backup:
+    image: pgvector/pgvector:pg16
+    entrypoint: ["/bin/sh", "/opt/backup/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVALO_SEGUNDOS: ${BACKUP_INTERVALO_SEGUNDOS:-86400}
+      BACKUP_RETENCAO_DIAS: ${BACKUP_RETENCAO_DIAS:-14}
+      BACKUP_RETENCAO_MAX_ARQUIVOS: ${BACKUP_RETENCAO_MAX_ARQUIVOS:-60}
+    volumes:
+      - ./backup:/opt/backup:ro
+      - pg_backups:/backups
+    networks: [internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+    # Sonda o RESULTADO, não o processo: o container passa o dia dormindo, então
+    # "vivo" não diz nada. O que interessa é ter havido backup bem-sucedido na
+    # janela — um serviço que acorda, falha no pg_dump e volta a dormir seguiria
+    # `running` para sempre.
+    healthcheck:
+      test: ["CMD", "/bin/sh", "/opt/backup/healthcheck.sh"]
+      # `interval` curto apesar de o backup ser diário: o Docker só roda a
+      # primeira sonda depois de um intervalo inteiro, e com 300s o container
+      # ficaria `starting` por cinco minutos — tempo em que o smoke test do
+      # deploy não teria veredito nenhum sobre ele.
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_BACKUP:-256m}
+
+  # Storage de mídia: MinIO só na dev (dev.override.yml); prod usa Cloudflare R2.
+
+  # ---------- SERVICOS RUST (imagem unica, command por servico) ----------
+  data_postgres:
+    image: *server-image
+    ulimits: *ulimits-rede
+    command: ["data_postgres"]
+    env_file: [.env]
+    environment:
+      # Este serviço faz DUAS coisas: atende RPC e consome o barramento. A sonda
+      # de PING só enxerga a primeira — ver o healthcheck abaixo.
+      SMARTCORE_LIVENESS_FILE: /tmp/data_postgres_batimento
+    networks: [internal, observability]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      <<: *healthcheck-rpc
+      # Duas condições, porque há dois jeitos de este serviço morrer sem morrer.
+      #
+      # Em 2026-09-11 o consumidor do barramento ficou 15 HORAS preso num socket
+      # morto do Redis (ver `reconectar_consumidor` em transport/src/bus.rs) e o
+      # container seguiu `healthy` o tempo todo: a porta RPC continuava
+      # respondendo PING. A trilha de auditoria parou e nada acusou.
+      #
+      # O `&&` cobre o outro lado também: só o batimento deixaria passar um
+      # processo que consome o barramento com o servidor RPC travado.
+      #
+      # `start_period` folgado de propósito: o consumidor só sobe depois das
+      # migrations, e sem essa folga uma migration demorada viraria laço de
+      # restart — o watchdog reiniciando um serviço que estava subindo.
+      start_period: 120s
+      test:
+        [
+          "CMD-SHELL",
+          "healthcheck rpc DATA_POSTGRES && healthcheck batimento /tmp/data_postgres_batimento 90",
+        ]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_DATA_POSTGRES:-512m}
+
+  data_redis:
+    image: *server-image
+    ulimits: *ulimits-rede
+    command: ["data_redis"]
+    env_file: [.env]
+    networks: [internal, observability]
+    depends_on:
+      redis: { condition: service_healthy }
+      redis-bus: { condition: service_started }
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "DATA_REDIS"]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_DATA_REDIS:-384m}
+
+  data_storage:
+    image: *server-image
+    ulimits: *ulimits-rede
+    command: ["data_storage"]
+    env_file: [.env]
+    environment:
+      # Este serviço faz DUAS coisas: atende RPC e consome o barramento. A sonda
+      # de PING só enxerga a primeira — ver o healthcheck abaixo.
+      SMARTCORE_LIVENESS_FILE: /tmp/data_storage_batimento
+    networks: [internal, observability]
+    healthcheck:
+      <<: *healthcheck-rpc
+      # Duas condições, porque há dois jeitos de este serviço morrer sem morrer.
+      #
+      # Em 2026-09-11 o consumidor do barramento ficou 15 HORAS preso num socket
+      # morto do Redis (ver `reconectar_consumidor` em transport/src/bus.rs) e o
+      # container seguiu `healthy` o tempo todo: a porta RPC continuava
+      # respondendo PING. A trilha de auditoria parou e nada acusou.
+      #
+      # O `&&` cobre o outro lado também: só o batimento deixaria passar um
+      # processo que consome o barramento com o servidor RPC travado.
+      #
+      # `start_period` folgado de propósito: o consumidor só sobe depois das
+      # migrations, e sem essa folga uma migration demorada viraria laço de
+      # restart — o watchdog reiniciando um serviço que estava subindo.
+      start_period: 120s
+      test:
+        [
+          "CMD-SHELL",
+          "healthcheck rpc DATA_STORAGE && healthcheck batimento /tmp/data_storage_batimento 90",
+        ]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_DATA_STORAGE:-512m}
+
+  control_plane:
+    image: *server-image
+    ulimits: *ulimits-rede
+    command: ["control_plane"]
+    env_file: [.env]
+    # `mcp_net` porque o mcp_server troca o token do cliente por um JWT interno
+    # aqui (N13.4). O AS também escuta HTTP para o navegador; quem publica isso
+    # para fora é o Caddy da borda, no subdomínio `auth.`.
+    networks: [internal, observability, mcp_net]
+    ports:
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${MCP_OAUTH_HOST_PORT:?MCP_OAUTH_HOST_PORT ausente (<env>.vars)}:8095"
+    depends_on:
+      data_postgres: { condition: service_started }
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "CONTROL_PLANE"]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_CONTROL_PLANE:-384m}
+
+  # ---------- MOTOR DE IA (Python, gRPC — imagem própria) ----------
+  ia_engine:
+    image: ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-ia-engine:${IA_ENGINE_TAG:?IA_ENGINE_TAG ausente (images.env do bundle)}
+    env_file: [.env]
+    networks: [internal, observability]
+    # Serve `grpc.health.v1` — usa a própria sonda do pacote (sem binário extra
+    # na imagem). Foi o primeiro serviço da stack a ter healthcheck, e o modelo
+    # para os demais: sem isto, um processo no ar mas com o servidor gRPC travado
+    # aparece como `running` e passa no smoke test.
+    healthcheck:
+      test: ["CMD", "python", "-m", "ia_engine.healthcheck"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_IA_ENGINE:-2g}
+
+  # ---------- MOTOR DE IA JEV (plano ia-engine-jev — imagem própria) ----------
+  # Mesmo contrato gRPC do ia_engine; as decisões (intenção, entidades,
+  # transferência, trechos da base) são do Jev (TypeSafe) e a LLM só escreve o
+  # texto. Quem o usa é decidido por tenant (`motor_analise`: llm | sombra | jev)
+  # — com `llm`, este serviço fica de pé sem receber tráfego.
+  #
+  # A chave TypeSafe NÃO entra por variável de ambiente: é a CoreSetting
+  # `TYPESAFE_API_KEY` (configuração geral), publicada no Redis com a config de
+  # cada tenant. O SDK leria `TYPESAFE_API_KEY` do ambiente sozinho — por isso
+  # ela não pode existir aqui.
+  ia_engine_jev:
+    image: ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-ia-engine-jev:${IA_ENGINE_JEV_TAG:?IA_ENGINE_JEV_TAG ausente (images.env do bundle)}
+    env_file: [.env]
+    environment:
+      TYPESAFE_API_KEY: ""
+      # Teto de requisições ao Jev por minuto neste processo (a conta aceita
+      # 1.200/min para todos os tenants). A sombra é descartada antes da conversa.
+      JEV_REQ_POR_MINUTO: ${JEV_REQ_POR_MINUTO:-1000}
+    networks: [internal, observability]
+    healthcheck:
+      test: ["CMD", "python", "-m", "ia_engine_jev.healthcheck"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_IA_ENGINE_JEV:-1g}
+
+  # ---------- SERVIDOR MCP (Python — imagem própria) ----------
+  # Resource server do módulo N13: é onde Claude, ChatGPT e Cursor se conectam.
+  #
+  # Rede: [mcp_net, observability] e NUNCA `internal`. Ver o comentário em
+  # `networks:` — este é o serviço cujo isolamento a rede existe para garantir.
+  mcp_server:
+    image: ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-mcp-server:${MCP_SERVER_TAG:?MCP_SERVER_TAG ausente (images.env do bundle)}
+    # SEM `env_file`, ao contrário de todos os outros serviços — e é o ponto.
+    #
+    # O `dev.env` traz `DATABASE_URL` e `DATABASE_ADMIN_URL`. Um serviço cujo
+    # invariante é "não alcança o banco" não pode receber a credencial do banco:
+    # a rede já barra, mas entregar o segredo a quem não deve usá-lo é convidar o
+    # atalho. Cada variável abaixo é declarada de propósito.
+    environment:
+      MCP_OAUTH_ISSUER: ${MCP_OAUTH_ISSUER}
+      MCP_OAUTH_RESOURCE: ${MCP_OAUTH_RESOURCE}
+      # A chave PÚBLICA. A privada fica no control_plane e não entra aqui.
+      MCP_OAUTH_PUBLIC_KEY_PEM: ${MCP_OAUTH_PUBLIC_KEY_PEM}
+      MCP_SERVICE_SECRET: ${MCP_SERVICE_SECRET}
+      MCP_ACCESS_TTL_S: ${MCP_ACCESS_TTL_S:-900}
+      MCP_RUNTIME_ENDPOINT: runtime_api:50051
+      MCP_TOKEN_EXCHANGE_URL: http://control_plane:8095/internal/mcp/token-exchange
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SERVICE_NAMESPACE: ${OTEL_SERVICE_NAMESPACE:-smart-core-v2}
+      RUST_LOG: ${RUST_LOG:-info}
+    # NÃO entra em `observability`: aquela rede tem `data_postgres`, `data_redis` e
+    # `data_storage`, e estar nela dava ao mcp_server alcance de rede aos três —
+    # o oposto do invariante. A telemetria vai pela `mcp_telemetria`, onde só o
+    # collector mora.
+    networks: [mcp_net, mcp_telemetria]
+    ports:
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${MCP_HOST_PORT:?MCP_HOST_PORT ausente (<env>.vars)}:8099"
+    depends_on:
+      runtime_api: { condition: service_started }
+      control_plane: { condition: service_started }
+    # A sonda bate no próprio endpoint sem token e espera 401: prova que o
+    # processo está de pé E que a autenticação está montada. Um 200 aqui seria
+    # falha, não saúde.
+    healthcheck:
+      test: ["CMD", "python", "-m", "mcp_server.healthcheck"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_MCP_SERVER:-512m}
+
+  worker:
+    image: *server-image
+    ulimits: *ulimits-rede
+    command: ["worker"]
+    env_file: [.env]
+    environment:
+      # O worker não atende ninguém: só consome do barramento. Não há porta para
+      # sondar, então o loop de consumo registra a própria passagem neste arquivo
+      # e a sonda mede a idade dele. É o que distingue "worker parado" de
+      # "worker vivo sem trabalho".
+      SMARTCORE_LIVENESS_FILE: /tmp/worker_batimento
+      # Plano ia-engine-jev: o motor Jev. Sem ele, todo tenant fica no
+      # motor atual, qualquer que seja o `motor_analise`.
+      SMARTCORE_IA_ENGINE_JEV_ENDPOINT: ${SMARTCORE_IA_ENGINE_JEV_ENDPOINT:-http://ia_engine_jev:50060}
+    networks: [internal, observability]
+    depends_on:
+      data_postgres: { condition: service_started }
+      data_redis: { condition: service_started }
+      ia_engine: { condition: service_started }
+      ia_engine_jev: { condition: service_started }
+    healthcheck:
+      # 90s de tolerância: o loop bate a cada volta (~1s) e o piso de escrita é
+      # de 5s, então essa folga só dispara em travamento de verdade.
+      test: ["CMD", "healthcheck", "batimento", "/tmp/worker_batimento", "90"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WORKER:-768m}
+
+  runtime_api:
+    image: *server-image
+    ulimits: *ulimits-rede
+    command: ["runtime_api"]
+    env_file: [.env]
+    environment:
+      # Plano ia-engine-jev: o teste de regra de transferência e o ensaio de
+      # pergunta de quem está no motor Jev ou na sombra.
+      SMARTCORE_IA_ENGINE_JEV_ENDPOINT: ${SMARTCORE_IA_ENGINE_JEV_ENDPOINT:-http://ia_engine_jev:50060}
+    # `mcp_net` além das de sempre: é por ela que o mcp_server chega ao gRPC
+    # daqui, sem que ele precise entrar na rede `internal`.
+    networks: [internal, observability, mcp_net]
+    # Publica a fachada gRPC-Web no host; o admin.caddy do Caddy do host faz o
+    # reverse_proxy p/ esta porta (dev 50051, prod 50052).
+    ports:
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${RUNTIME_WEB_PORT:?RUNTIME_WEB_PORT ausente (<env>.vars)}:50051"
+    depends_on:
+      control_plane: { condition: service_started }
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "RUNTIME_API"]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_RUNTIME_API:-512m}
+
+  # Client admin (Flutter Web) — bundle embutido na imagem. Publicado no host; o
+  # edge faz reverse_proxy p/ host.docker.internal:${WEB_HOST_PORT} no /v2/admin/*.
+  web:
+    image: ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-web:${WEB_TAG:?WEB_TAG ausente (images.env do bundle)}
+    ports:
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${WEB_HOST_PORT:?WEB_HOST_PORT ausente (<env>.vars)}:80"
+    networks: [internal]
+    # Serve o bundle estático pelo Caddy; `wget` vem do busybox da imagem alpine.
+    # Buscar a index confirma que o bundle está no lugar — container de pé com
+    # /srv vazio devolveria 404 e ninguém saberia até alguém abrir o app.
+    healthcheck: &healthcheck-web
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WEB:-128m}
+
+  # Client operacional/tenant (Flutter Web) — mesma imagem generica do docker/web
+  # (só muda o bundle e a tag). Publicado no host; o edge faz reverse_proxy p/
+  # host.docker.internal:${WEB_TENANT_HOST_PORT} no /v2/tenant/*.
+  # A midia deste app e baixada por presign direto do R2 (cross-site) — depende do
+  # CORS do bucket aplicado por data_storage (S3_CORS_ALLOWED_ORIGINS, N5.3).
+  web-tenant:
+    image: ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-web-tenant:${WEB_TENANT_TAG:?WEB_TENANT_TAG ausente (images.env do bundle)}
+    ports:
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${WEB_TENANT_HOST_PORT:?WEB_TENANT_HOST_PORT ausente (<env>.vars)}:80"
+    networks: [internal]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WEB:-128m}
+
+  # ---------- MENSAGERIA / WHATSAPP ----------
+  data_whatsapp:
+    image: *server-image
+    ulimits: *ulimits-rede
+    command: ["data_whatsapp"]
+    env_file: [.env]
+    networks: [internal, observability, evolution_net]
+    depends_on:
+      redis: { condition: service_healthy }
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "DATA_WHATSAPP"]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_DATA_WHATSAPP:-512m}
+
+  webhook_ingress:
+    image: *server-image
+    ulimits: *ulimits-rede
+    command: ["webhook_ingress"]
+    env_file: [.env]
+    networks: [internal, observability, evolution_net]
+    ports:
+      - "${HOST_ADMIN_IP:-127.0.0.1}:${WEBHOOK_INGRESS_PORT:?WEBHOOK_INGRESS_PORT ausente (<env>.vars)}:9200"
+      # Só loopback: o Evolution alcança este serviço pelo nome na rede
+      # `evolution_net` (verificado — resolve para 172.24.0.x). A porta publicada
+      # existe apenas para depuração a partir do próprio host.
+    # HTTP puro (axum), não `transport::Server`: a sonda é a rota /health, que
+    # exercita o roteador e não apenas a porta aberta. `curl` já vem na imagem.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "http://127.0.0.1:9200/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WEBHOOK_INGRESS:-384m}
+
+  # ---------- VIGIA ----------
+  # Fecha o laço dos healthchecks acima: o compose MARCA um container como
+  # unhealthy, mas não faz nada com isso (reiniciar não saudável é comportamento
+  # de Swarm/Kubernetes). O watchdog reinicia, audita cada intervenção e publica
+  # `smartcore_service_up` — a métrica que dá ao alerting um zero concreto quando
+  # um serviço cai, já que com push (OTLP) a série de um serviço morto some em
+  # vez de ir a zero.
+  watchdog:
+    image: *server-image
+    ulimits: *ulimits-rede
+    command: ["watchdog"]
+    # A imagem roda como `smartcore` (sem privilégio), que não pertence ao grupo
+    # dono de /var/run/docker.sock — sem isto o watchdog sobe e falha em toda
+    # rodada com "permission denied". Falar com o daemon já é privilégio
+    # equivalente a root no host: a contenção real aqui é o escopo por projeto,
+    # não o usuário.
+    user: root
+    env_file: [.env]
+    environment:
+      SMARTCORE_WATCHDOG_PROJETO: ${STACK_PROJETO:?STACK_PROJETO ausente (<env>.vars)}
+      SMARTCORE_WATCHDOG_INTERVALO_SEGUNDOS: ${WATCHDOG_INTERVALO_SEGUNDOS:-30}
+      SMARTCORE_WATCHDOG_MAX_TENTATIVAS: ${WATCHDOG_MAX_TENTATIVAS:-3}
+      SMARTCORE_WATCHDOG_JANELA_SEGUNDOS: ${WATCHDOG_JANELA_SEGUNDOS:-900}
+    volumes:
+      # Precisa do socket para inspecionar e reiniciar. É acesso privilegiado ao
+      # daemon: `:ro` impede escrita no arquivo, não as operações da API — por
+      # isso o watchdog é escopado ao projeto do compose e não toca em container
+      # de outra stack do mesmo host (dev, prod, evolution e observabilidade
+      # convivem aqui).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [internal, observability]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WATCHDOG:-128m}
+
+volumes:
+  postgres_data:
+  redis_data:
+  redis_bus_data:
+  pg_backups:

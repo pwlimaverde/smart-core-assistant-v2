@@ -1,0 +1,12 @@
+# =============================================================================
+# Overlay PROD — aplicado sobre docker-compose.base.yml
+# =============================================================================
+# Só o que a prod tem de diferente. Portas, redes de telemetria, tetos e
+# retenção vêm de prod.vars; storage é Cloudflare R2 pelo prod.env (sem MinIO).
+# =============================================================================
+services:
+  data_postgres:
+    healthcheck:
+      # O banco de prod é maior: as migrations de uma release levam mais tempo
+      # antes de o consumidor do barramento começar a bater.
+      start_period: 180s

@@ -1,0 +1,146 @@
+name: Deploy → INFRA compartilhada
+
+# Borda (Caddy 80/443), observabilidade (LGTM) e Evolution servem dev E prod ao
+# mesmo tempo. Por isso só mudam por aqui, com a aprovação do environment `prod`
+# — nunca por push na dev (antes, todo deploy da dev reconstruía a borda e
+# recriava a observabilidade e a Evolution).
+#
+# Gatilhos:
+#   - push na `main` que mude docker/edge, docker/observability ou
+#     docker/evolution (a main só anda em release: a infra muda junto);
+#   - workflow_dispatch (a partir da main) para ajustar infra sem release.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docker/edge/**'
+      - 'docker/observability/**'
+      - 'docker/evolution/**'
+      - 'infra/deploy/deploy-infra.sh'
+  workflow_dispatch:
+    inputs:
+      componente:
+        description: 'Componente a implantar'
+        type: choice
+        options: ['edge', 'observability', 'evolution', 'todos']
+        required: true
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  detecta:
+    name: Detecta componentes
+    runs-on: ubuntu-latest
+    outputs:
+      edge: ${{ steps.saida.outputs.edge }}
+      observability: ${{ steps.saida.outputs.observability }}
+      evolution: ${{ steps.saida.outputs.evolution }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filtro
+        if: github.event_name == 'push'
+        with:
+          filters: |
+            edge: ['docker/edge/**', 'infra/deploy/deploy-infra.sh']
+            observability: ['docker/observability/**', 'infra/deploy/deploy-infra.sh']
+            evolution: ['docker/evolution/**', 'infra/deploy/deploy-infra.sh']
+      - id: saida
+        env:
+          EVENTO: ${{ github.event_name }}
+          ESCOLHA: ${{ inputs.componente }}
+          F_EDGE: ${{ steps.filtro.outputs.edge }}
+          F_OBS: ${{ steps.filtro.outputs.observability }}
+          F_EVO: ${{ steps.filtro.outputs.evolution }}
+        run: |
+          for c in edge observability evolution; do
+            if [ "$EVENTO" = workflow_dispatch ]; then
+              { [ "$ESCOLHA" = "$c" ] || [ "$ESCOLHA" = todos ]; } && v=true || v=false
+            else
+              case $c in edge) v=$F_EDGE ;; observability) v=$F_OBS ;; evolution) v=$F_EVO ;; esac
+            fi
+            echo "$c=${v:-false}" >> "$GITHUB_OUTPUT"
+          done
+
+  build-edge:
+    name: Build Edge (borda)
+    needs: detecta
+    if: needs.detecta.outputs.edge == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      imagem: ${{ steps.tag.outputs.imagem }}
+    steps:
+      - uses: actions/checkout@v5
+      # Valida ANTES de publicar: Caddyfile inválido deixa o site inteiro fora.
+      - name: caddy validate
+        run: |
+          docker run --rm -v "$PWD/docker/edge/Caddyfile":/etc/caddy/Caddyfile:ro caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - id: tag
+        run: echo "imagem=ghcr.io/${{ github.repository }}/smartcore-edge:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: docker/edge
+          file: docker/edge/Dockerfile
+          push: true
+          tags: ${{ steps.tag.outputs.imagem }}
+          cache-from: type=gha,scope=edge
+          cache-to: type=gha,mode=max,scope=edge
+
+  deploy:
+    name: Deploy infra (aprovação prod)
+    needs: [detecta, build-edge]
+    if: >-
+      ${{ always() && needs.detecta.result == 'success' && needs.build-edge.result != 'failure'
+          && (needs.detecta.outputs.edge == 'true' || needs.detecta.outputs.observability == 'true'
+              || needs.detecta.outputs.evolution == 'true') }}
+    runs-on: [self-hosted, hostinger]
+    environment: prod
+    steps:
+      - name: Sanitiza posse da workspace (runner self-hosted)
+        run: |
+          docker run --rm -v "${{ github.workspace }}":/ws busybox \
+            chown -R "$(id -u):$(id -g)" /ws
+      - uses: actions/checkout@v5
+      - name: Docker login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # Ordem: observabilidade (redes de telemetria) -> Evolution (rede
+      # evolution_net) -> borda (que só roteia).
+      - name: Observabilidade
+        if: needs.detecta.outputs.observability == 'true'
+        env:
+          OBS_ENV_FILE_B64: ${{ secrets.OBS_ENV_FILE_B64 }}
+        run: infra/deploy/deploy-infra.sh observability "sha-${GITHUB_SHA::7}-${GITHUB_RUN_ATTEMPT}"
+      - name: Evolution
+        if: needs.detecta.outputs.evolution == 'true'
+        env:
+          EVOLUTION_ENV_FILE_B64: ${{ secrets.EVOLUTION_ENV_FILE_B64 }}
+        run: infra/deploy/deploy-infra.sh evolution "sha-${GITHUB_SHA::7}-${GITHUB_RUN_ATTEMPT}"
+      - name: Borda (edge)
+        if: needs.detecta.outputs.edge == 'true'
+        env:
+          EDGE_IMAGE: ${{ needs.build-edge.outputs.imagem }}
+        run: infra/deploy/deploy-infra.sh edge "sha-${GITHUB_SHA::7}-${GITHUB_RUN_ATTEMPT}"
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Deploy INFRA"
+            echo '```'
+            tail -n 3 /opt/smartcore/infra/deploys.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

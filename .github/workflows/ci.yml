@@ -402,6 +402,48 @@ jobs:
           path: mcp_server/coverage.xml
           if-no-files-found: ignore
 
+  # Infra (Fase R2/R3/R5 do plano servidor-reestruturacao-dev-prod): o que
+  # quebra o deploy sem quebrar teste nenhum — compose que não resolve, tag
+  # móvel em imagem de aplicação, script de deploy com erro, workflow inválido,
+  # Caddyfile que derruba a borda.
+  infra:
+    name: Infra — compose, scripts, workflows e borda
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: compose config (dev e prod) com env de exemplo
+        run: |
+          set -euo pipefail
+          for amb in dev prod; do
+            b="$RUNNER_TEMP/bundle-$amb"; mkdir -p "$b"
+            cp docker/stack/docker-compose.base.yml "docker/stack/$amb.override.yml" "docker/stack/$amb.vars" "$b/"
+            cp -r docker/backup docker/init-scripts "$b/"
+            grep -vE '^#' "infra/deploy/required-keys.$amb" | sed 's/$/=exemplo/' > "$b/.env"
+            for v in SERVER_TAG WEB_TAG WEB_TENANT_TAG IA_ENGINE_TAG IA_ENGINE_JEV_TAG MCP_SERVER_TAG; do
+              echo "$v=0.0.0" >> "$b/images.env"
+            done
+            docker compose -p "smart-core-v2-$amb" --project-directory "$b" \
+              -f "$b/docker-compose.base.yml" -f "$b/$amb.override.yml" \
+              --env-file "$b/.env" --env-file "$b/$amb.vars" --env-file "$b/images.env" config -q
+            echo "ok  compose $amb"
+          done
+      - name: Sem tag móvel nas imagens da aplicação
+        run: |
+          if grep -nE 'image: .*smartcore-[a-z-]+:(latest|dev)' docker/stack/*.yml; then
+            echo "::error::imagem da aplicação com tag móvel — use \${*_TAG} (images.env do bundle)"; exit 1
+          fi
+      - name: shellcheck (infra/deploy)
+        run: docker run --rm -v "$PWD":/mnt -w /mnt koalaman/shellcheck:stable -x -P SCRIPTDIR infra/deploy/*.sh
+      - name: actionlint (deploy/rollback/infra)
+        run: |
+          docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:latest -color \
+            .github/workflows/deploy-dev.yml .github/workflows/deploy-prod.yml \
+            .github/workflows/deploy-infra.yml .github/workflows/rollback-prod.yml
+      - name: caddy validate (borda)
+        run: |
+          docker run --rm -v "$PWD/docker/edge/Caddyfile":/etc/caddy/Caddyfile:ro caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
   # Detecta se o app Flutter já existe.
   # hashFiles() NÃO funciona em if de nível de job (avaliado antes do checkout),
   # por isso a detecção roda num job próprio com checkout e expõe um output.

@@ -1,37 +1,45 @@
 name: Deploy → PROD
 
+# Release = tag vX.Y.Z criada por PESSOA (o ruleset de tags só deixa o dono
+# criar). Tag criada por automação com GITHUB_TOKEN não dispara workflow.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
+# Mesmo grupo de todo deploy na VPS (dev, prod, infra, rollback).
 concurrency:
-  group: deploy-prod
+  group: deploy-vps
   cancel-in-progress: false
 
 permissions:
   contents: read
   packages: write
+  actions: read
+  pull-requests: write
 
-# Release: build completo de proposito (a imagem versionada de cada tag precisa
-# existir mesmo sem mudanca de codigo). A borda (edge) e compartilhada e construida
-# no fluxo dev; aqui apenas a subimos.
+# Fluxo (plano servidor-reestruturacao-dev-prod, Fase R5):
+#   gate-origem  tag X.Y.Z estável, em commit com beta testada na dev (ou na main)
+#   verifica-ci  CI verde no SHA
+#   build        web/web-tenant SEMPRE (endereços de prod no --dart-define);
+#                backend só se não houver beta (hotfix) — senão é PROMOVIDO:
+#                X.Y.Z vira outro nome do mesmo digest testado na dev
+#   deploy       environment `prod` (aprovação do dono) -> bundle -> deploy.sh
+#                (pg_dump, up, smoke, rollback automático) -> main avança
+# A infraestrutura compartilhada (borda, observabilidade, Evolution) NÃO é
+# tocada aqui: muda só por deploy-infra.yml.
 jobs:
-  # Portão: a tag só vira release se o CI daquele commit tiver passado. Antes, uma
-  # tag em cima de um commit com teste vermelho ia direto para produção — o
-  # `environment: production` pede aprovação humana, mas quem aprova não tem como
-  # saber, do próprio deploy, se a suíte passou. A tag é criada depois do push em
-  # `dev`, então o CI daquele SHA já terminou: aqui é só consulta, custa segundos.
-  # Portão de origem: só vira release o commit que já rodou na dev como beta
-  # (tag vX.Y.Z-beta.N criada pelo deploy-dev) ou que está na `main` (hotfix).
-  # Tag em commit de feature, ou com sufixo de pré-release, é recusada aqui.
   gate-origem:
     name: Exige origem válida (beta testado na dev ou main)
     runs-on: ubuntu-latest
+    outputs:
+      versao: ${{ steps.gate.outputs.versao }}
+      beta: ${{ steps.gate.outputs.beta }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Confere tag e procedência do commit
+        id: gate
         env:
           TAG: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
@@ -40,16 +48,22 @@ jobs:
           if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::tag '$TAG' não é X.Y.Z estável"; exit 1
           fi
+          versao="${TAG#v}"
           git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/dev:refs/remotes/origin/dev'
-          betas=$(git tag --points-at "$SHA" -l 'v*-beta.*' | tr '\n' ' ')
-          if [ -n "$betas" ] && git merge-base --is-ancestor "$SHA" origin/dev; then
-            echo "ok  commit implantado na dev como: $betas"
+          # Beta mais recente apontando para este commit (a que passou na dev).
+          beta=$(git tag --points-at "$SHA" -l 'v*-beta.*' | sort -V | tail -n1)
+          if [ -n "$beta" ] && git merge-base --is-ancestor "$SHA" origin/dev; then
+            [ "${beta%%-beta.*}" = "$TAG" ] || echo "::warning::beta $beta tem outra base que $TAG (VERSION desatualizado?)"
+            echo "ok  commit implantado na dev como $beta — backend será promovido, sem rebuild"
           elif git merge-base --is-ancestor "$SHA" origin/main; then
-            echo "ok  commit pertence à main (hotfix)"
+            beta=""
+            echo "ok  commit pertence à main (hotfix) — backend será construído"
           else
             echo "::error::$SHA não tem tag beta na dev nem está na main — release recusada."
             exit 1
           fi
+          echo "versao=$versao" >> "$GITHUB_OUTPUT"
+          echo "beta=${beta#v}" >> "$GITHUB_OUTPUT"
 
   verifica-ci:
     name: Exige CI verde no commit da tag
@@ -79,37 +93,9 @@ jobs:
               exit 1 ;;
           esac
 
-  build-server:
-    name: Build Rust Server (PROD)
-    needs: verifica-ci
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}/smartcore-server
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/server/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha,scope=server
-          cache-to: type=gha,mode=max,scope=server
-
   build-web:
     name: Build Web Admin (PROD)
-    needs: verifica-ci
+    needs: [gate-origem, verifica-ci]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -150,9 +136,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}/smartcore-web
+          # Só a versão exata: prod nunca usa tag móvel (rollback por versão).
           tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=${{ needs.gate-origem.outputs.versao }}
 
       - uses: docker/build-push-action@v6
         with:
@@ -163,13 +149,9 @@ jobs:
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
-  # Paridade com o admin: a imagem do tenant e construida na tag, e o servico
-  # web-tenant sobe no compose prod. O ROTEAMENTO prod do app (Caddy) segue
-  # pendente de decisao (ver infra/caddy/tenant.caddy e docker/edge/Caddyfile) —
-  # o container roda sem rota publica ate a decisao, exatamente como o admin prod.
   build-web-tenant:
     name: Build Web Tenant/Operacional (PROD)
-    needs: verifica-ci
+    needs: [gate-origem, verifica-ci]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -205,9 +187,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}/smartcore-web-tenant
+          # Só a versão exata: prod nunca usa tag móvel (rollback por versão).
           tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=${{ needs.gate-origem.outputs.versao }}
 
       - uses: docker/build-push-action@v6
         with:
@@ -218,13 +200,10 @@ jobs:
           cache-from: type=gha,scope=web-tenant
           cache-to: type=gha,mode=max,scope=web-tenant
 
-  # Imagem Python do ia_engine (paridade com o dev). O compose de prod referencia
-  # ghcr.io/.../smartcore-ia-engine:latest via `docker compose pull`; sem este job
-  # a imagem nunca é publicada e o "Compose pull & up (PROD)" falha com "not found".
-  # Contexto = raiz do repo (o Dockerfile gera os stubs do .proto do contracts).
-  build-ia-engine:
-    name: Build IA Engine (PROD)
-    needs: verifica-ci
+  build-server:
+    name: Build Rust Server (PROD, só hotfix sem beta)
+    needs: [gate-origem, verifica-ci]
+    if: needs.gate-origem.outputs.beta == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -234,26 +213,41 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v5
+      - uses: docker/build-push-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}/smartcore-ia-engine
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
+          context: .
+          file: docker/server/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/smartcore-server:${{ needs.gate-origem.outputs.versao }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
+
+  build-ia-engine:
+    name: Build IA Engine (PROD, só hotfix sem beta)
+    needs: [gate-origem, verifica-ci]
+    if: needs.gate-origem.outputs.beta == ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: ia_engine/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ghcr.io/${{ github.repository }}/smartcore-ia-engine:${{ needs.gate-origem.outputs.versao }}
           cache-from: type=gha,scope=ia-engine
           cache-to: type=gha,mode=max,scope=ia-engine
 
-  # Plano ia-engine-jev — o motor Jev, paridade com o dev.
   build-ia-engine-jev:
-    name: Build IA Engine Jev (PROD)
-    needs: verifica-ci
+    name: Build IA Engine Jev (PROD, só hotfix sem beta)
+    needs: [gate-origem, verifica-ci]
+    if: needs.gate-origem.outputs.beta == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -263,26 +257,19 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}/smartcore-ia-engine-jev
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: ia_engine_jev/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ghcr.io/${{ github.repository }}/smartcore-ia-engine-jev:${{ needs.gate-origem.outputs.versao }}
           cache-from: type=gha,scope=ia-engine-jev
           cache-to: type=gha,mode=max,scope=ia-engine-jev
 
-  # Imagem Python do mcp_server (N13), paridade com o dev.
   build-mcp-server:
-    name: Build MCP Server (PROD)
-    needs: verifica-ci
+    name: Build MCP Server (PROD, só hotfix sem beta)
+    needs: [gate-origem, verifica-ci]
+    if: needs.gate-origem.outputs.beta == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -292,196 +279,104 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}/smartcore-mcp-server
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: mcp_server/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ghcr.io/${{ github.repository }}/smartcore-mcp-server:${{ needs.gate-origem.outputs.versao }}
           cache-from: type=gha,scope=mcp-server
           cache-to: type=gha,mode=max,scope=mcp-server
 
   deploy-prod:
-    name: Deploy PROD (compose)
-    needs: [build-server, build-web, build-web-tenant, build-ia-engine, build-ia-engine-jev, build-mcp-server]
+    name: Deploy PROD (bundle vX.Y.Z)
+    needs: [gate-origem, verifica-ci, build-web, build-web-tenant, build-server, build-ia-engine, build-ia-engine-jev, build-mcp-server]
+    if: >-
+      ${{ always()
+          && needs.gate-origem.result == 'success'
+          && needs.verifica-ci.result == 'success'
+          && needs.build-web.result == 'success'
+          && needs.build-web-tenant.result == 'success'
+          && !contains(needs.*.result, 'failure')
+          && !contains(needs.*.result, 'cancelled') }}
     runs-on: [self-hosted, hostinger]
-    # `prod` é o environment protegido (revisor obrigatório + só tags v*). Era
-    # `production`, que não existia: a primeira tag criaria um ambiente SEM regra
-    # e iria para produção sem aprovação.
+    # `prod`: revisor obrigatório (o dono) + só tags v* e a main. Era
+    # `production`, que não existia — a primeira tag iria sem aprovação.
     environment: prod
+    env:
+      VERSAO: ${{ needs.gate-origem.outputs.versao }}
+      BETA: ${{ needs.gate-origem.outputs.beta }}
     steps:
-      # O runner self-hosted reutiliza a workspace entre execuções (a mesma do deploy
-      # dev, por ser o mesmo repo). Containers que rodaram como root podem deixar
-      # arquivos root em .git/objects, fazendo o checkout falhar com "insufficient
-      # permission ... .git/objects" (git exit 128). O gh-runner não tem sudo chown
-      # (sudoers só libera `docker compose`), mas tem acesso ao Docker — então um
-      # container descartável devolve a posse ao usuário do runner ANTES do checkout.
       - name: Sanitiza posse da workspace (runner self-hosted)
         run: |
           docker run --rm -v "${{ github.workspace }}":/ws busybox \
             chown -R "$(id -u):$(id -g)" /ws
 
       - uses: actions/checkout@v5
-
-      # Este é o único ponto de retorno se a release corromper dados. Antes, a falha
-      # do `pg_dump` era engolida (`|| echo`) e o deploy seguia: o arquivo ficava
-      # truncado ou vazio (o redirecionamento cria o arquivo mesmo quando o comando
-      # falha) e ninguém percebia até precisar restaurar. Agora, com o container no
-      # ar, backup que falha ABORTA o deploy; a ausência do container segue sendo
-      # caso legítimo (primeiro deploy).
-      - name: Backup banco de dados PROD (pg_dump)
-        run: |
-          set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          BACKUP_FILE="/opt/smartcore/prod/backups/db-backup-${TAG}-$(date +%Y%m%d%H%M).dump"
-          mkdir -p /opt/smartcore/prod/backups
-          CONTAINER="smart-core-v2-prod-postgres-1"
-          if ! docker ps --format '{{.Names}}' | grep -q "$CONTAINER"; then
-            echo "Container $CONTAINER ausente (primeiro deploy) — sem backup."
-            exit 0
-          fi
-          echo "Gerando backup do banco usando $CONTAINER..."
-          if ! docker exec "$CONTAINER" pg_dump -U smartcore_app -F c smartcore_v2 > "$BACKUP_FILE"; then
-            rm -f "$BACKUP_FILE"
-            echo "::error::pg_dump falhou — deploy abortado (produção ficaria sem ponto de retorno)."
-            exit 1
-          fi
-          # Um dump custom-format válido tem cabeçalho "PGDMP" e nunca é minúsculo:
-          # pega o caso do dump que "termina bem" mas sai vazio/truncado.
-          tamanho=$(stat -c%s "$BACKUP_FILE")
-          if [ "$tamanho" -lt 1024 ]; then
-            echo "::error::backup suspeito (${tamanho} bytes) — deploy abortado."
-            exit 1
-          fi
-          if ! head -c 5 "$BACKUP_FILE" | grep -q "PGDMP"; then
-            echo "::error::backup sem cabeçalho PGDMP — deploy abortado."
-            exit 1
-          fi
-          echo "Backup: $BACKUP_FILE (${tamanho} bytes)"
-          ls -t /opt/smartcore/prod/backups/db-backup-*.dump 2>/dev/null | tail -n +6 | xargs -r rm -f || true
+        with:
+          fetch-depth: 0
 
       - name: Docker login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Provisiona env real do servidor (PROD)
-        run: cp /opt/smartcore/prod/env/prod.env docker/prod/.env
-
-      # --force-recreate é necessário: os configs (otel-collector, loki, tempo,
-      # prometheus) entram por bind mount, e `up -d` sozinho NÃO recria o
-      # container quando só o conteúdo do arquivo montado muda — foi assim que
-      # os painéis do Grafana passaram dois meses vazios sem ninguém notar.
-      - name: Provisiona env da observabilidade
-        run: cp /opt/smartcore/observability/env/observability.env docker/observability/.env
-
-      - name: Sobe observabilidade
-        working-directory: docker/observability
-        run: docker compose --env-file .env up -d --force-recreate
-
-      - name: Compose pull & up (PROD)
-        working-directory: docker/prod
+      # Com beta: server/ia_engine/jev/mcp são o MESMO digest testado na dev,
+      # só com o nome X.Y.Z. Web e web-tenant foram construídos agora (prod).
+      - name: Promove imagens para X.Y.Z
         run: |
-          docker compose --env-file .env pull
-          docker compose --env-file .env up -d --remove-orphans
+          set -euo pipefail
+          origem="${BETA:-$VERSAO}"
+          infra/deploy/promove-imagens.sh "$VERSAO" "$RUNNER_TEMP/images.env" "$origem" \
+            "smartcore-web=$VERSAO" "smartcore-web-tenant=$VERSAO"
 
-      - name: Sobe a borda (edge)
-        working-directory: docker/edge
-        run: |
-          docker compose pull
-          docker compose up -d
+      - name: Monta o bundle
+        run: infra/deploy/bundle.sh prod "v$VERSAO" "$RUNNER_TEMP/images.env"
 
-      # A borda ocupa 80/443 e roteia TUDO — inclusive o painel v1 em produção.
-      # Ela vive num compose próprio (docker/edge), fora da lista do smoke test
-      # abaixo, então um Caddyfile inválido a deixava em crash-loop com o deploy
-      # verde e o site fora do ar (2026-07-28: sintaxe `{$VAR:-default}`, que o
-      # Caddy lê como default literal `-8082`). Falha rápido e alto.
-      - name: Smoke test da borda (PROD)
-        working-directory: docker/edge
-        run: |
-          set -u
-          sleep 10
-          cid=$(docker compose ps -q caddy || true)
-          if [ -z "$cid" ]; then
-            echo "::error::edge/caddy: container inexistente"
-            exit 1
-          fi
-          status=$(docker inspect -f '{{.State.Status}}' "$cid")
-          restarts=$(docker inspect -f '{{.RestartCount}}' "$cid")
-          if [ "$status" != "running" ] || [ "$restarts" -gt 2 ]; then
-            echo "::error::edge/caddy: status=$status restarts=$restarts"
-            docker logs --tail 30 "$cid" || true
-            exit 1
-          fi
-          # Estar `running` não prova que o Caddy aceitou a config e abriu a
-          # porta: valida o handshake de verdade contra o domínio público.
-          codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
-            https://smartcoreassistant.com.br/ || echo 000)
-          if [ "$codigo" = "000" ]; then
-            echo "::error::edge/caddy: 80/443 não respondem (HTTP $codigo)"
-            docker logs --tail 30 "$cid" || true
-            exit 1
-          fi
-          echo "ok  edge/caddy (status=$status restarts=$restarts HTTP=$codigo)"
+      # pg_dump validado (aborta se falhar), up, smoke e rollback automático
+      # para o bundle anterior — tudo dentro do deploy.sh.
+      - name: Implanta (deploy.sh)
+        env:
+          ENV_FILE_B64: ${{ secrets.ENV_FILE_B64 }}
+        run: infra/deploy/deploy.sh prod "v$VERSAO"
 
-      # Smoke test: `compose up -d` devolve sucesso assim que os containers são
-      # CRIADOS. Sem esta verificação, uma release que sobe serviços em crash-loop
-      # (env faltando, migration quebrada) era publicada como deploy bem-sucedido —
-      # e o PR de release ainda pedia "smoke tests em prod verificados" como item
-      # manual de checklist.
-      #
-      # Agora TODOS os serviços têm sonda: os RPC pelo PING do transport, o worker
-      # pelo batimento do loop de consumo, o webhook_ingress pelo /health e o
-      # pg_backup pela idade do último backup bem-sucedido. O gate deixou de ser
-      # "o processo está de pé" e passou a ser "o serviço responde". O watchdog
-      # não declara sonda (é ele quem sonda os outros) e segue julgado pelo
-      # estado do container.
-      - name: Smoke test dos serviços (PROD)
-        working-directory: docker/prod
+      # A main é o ponteiro da última release. O ruleset dela só aceita PR — ou
+      # a deploy key do runner (bypass), que é o que este passo usa. Só avança
+      # por fast-forward; se a main tiver commit que a tag não tem (hotfix
+      # ainda não trazido para a dev), não força nada e abre PR main -> dev.
+      - name: Avança a main até a release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -u
-          sleep 25
-          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine ia_engine_jev watchdog pg_backup"
-          falhas=""
-          for svc in $servicos; do
-            cid=$(docker compose --env-file .env ps -q "$svc" || true)
-            if [ -z "$cid" ]; then
-              echo "::error::$svc: container inexistente"
-              falhas="$falhas $svc"
-              continue
-            fi
-            status=$(docker inspect -f '{{.State.Status}}' "$cid")
-            restarts=$(docker inspect -f '{{.RestartCount}}' "$cid")
-            # Containers sem healthcheck declarado não têm .State.Health; o
-            # template devolve "n/a" para eles e o veredito não os julga.
-            tpl='{{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}}'
-            health=$(docker inspect -f "$tpl" "$cid")
-            # `starting` não é veredito: espera a sonda concluir antes de
-            # decidir, senão o gate aprovaria por sorte de timing. A janela é de
-            # 240s por causa do pg_backup, cujo `start_period` cobre o tempo do
-            # primeiro dump — em prod o banco é maior que o de dev.
-            espera=0
-            while [ "$health" = "starting" ] && [ "$espera" -lt 240 ]; do
-              sleep 5
-              espera=$((espera + 5))
-              health=$(docker inspect -f "$tpl" "$cid")
-            done
-            if [ "$status" != "running" ] || [ "$restarts" -gt 2 ] \
-               || [ "$health" = "unhealthy" ] || [ "$health" = "starting" ]; then
-              echo "::error::$svc: status=$status restarts=$restarts health=$health"
-              docker logs --tail 50 "$cid" || true
-              falhas="$falhas $svc"
-            else
-              echo "ok  $svc (status=$status restarts=$restarts health=$health)"
-            fi
-          done
-          if [ -n "$falhas" ]; then
-            echo "::error::serviços com falha:$falhas"
-            echo "Rollback: reimplante a tag anterior (as imagens versionadas seguem no GHCR)."
-            exit 1
+          set -euo pipefail
+          git fetch --force origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/dev:refs/remotes/origin/dev'
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "main já contém v$VERSAO (hotfix)"
+          elif git merge-base --is-ancestor origin/main "$GITHUB_SHA"; then
+            GIT_SSH_COMMAND="ssh -i $HOME/.ssh/smartcore_main_ff -o IdentitiesOnly=yes" \
+              git push "git@github.com:${{ github.repository }}.git" "$GITHUB_SHA:refs/heads/main"
+            echo "main -> v$VERSAO ($GITHUB_SHA)"
+          else
+            echo "::warning::main divergiu de v$VERSAO — não avançada. Traga a main para a dev (PR abaixo)."
           fi
+          # Backport: a main tem commit que a dev não tem (hotfix) -> PR main -> dev.
+          if [ -n "$(git rev-list origin/dev..origin/main)" ]; then
+            gh pr create --repo "${{ github.repository }}" --base dev --head main \
+              --title "backport: main -> dev após v$VERSAO" \
+              --body "A main tem commit(s) que a dev não tem (hotfix). Mergear com **merge commit** (não squash)." \
+              || echo "PR main -> dev já existe."
+          fi
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Deploy PROD v$VERSAO"
+            echo ""
+            echo "Origem do backend: ${BETA:+beta $BETA (promovida, sem rebuild)}${BETA:-build do hotfix}"
+            echo ""
+            echo "| Imagem | Tag |"; echo "|---|---|"
+            sed 's/=/ | /; s/^/| /; s/$/ |/' "$RUNNER_TEMP/images.env" 2>/dev/null || true
+            echo ""
+            echo "Último marcador: \`$(tail -n1 /opt/smartcore/prod/deploys.log 2>/dev/null)\`"
+            echo ""
+            echo "Rollback: Actions -> rollback-prod -> versão anterior."
+          } >> "$GITHUB_STEP_SUMMARY"

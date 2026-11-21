@@ -4,30 +4,40 @@ on:
   push:
     branches: [dev]
 
+# Um único grupo para TODO deploy na VPS (dev, prod, infra, rollback): o host é
+# um só, e dois `compose pull`/`up` simultâneos disputam disco e memória.
 concurrency:
-  group: deploy-dev
+  group: deploy-vps
   cancel-in-progress: false
 
 permissions:
-  contents: read
-  packages: write
+  contents: write   # cria a tag vX.Y.Z-beta.N depois do smoke test
+  packages: write   # publica e promove imagens no GHCR
+
+# Versionamento da dev: cada deploy aprovado no smoke test vira
+# vX.Y.Z-beta.N (X.Y.Z do arquivo VERSION, N sequencial). TODAS as imagens da
+# aplicação ganham essa tag (as não reconstruídas herdam a do bundle em uso), e
+# a tag git marca o commit como "testado na dev" — só esses commits podem virar
+# release de prod (gate-origem do deploy-prod.yml).
+#
+# A dev NÃO toca a infraestrutura compartilhada (borda, observabilidade,
+# Evolution): ela serve os dois ambientes e só muda por deploy-infra.yml, com
+# aprovação. Antes, um push na dev reconstruía a borda e recriava o resto.
 
 jobs:
   # Monorepo: so builda o que mudou.
-  #   server  -> imagem Rust         | web  -> imagem do client Flutter
-  #   edge    -> imagem da borda      | compose -> so reconcilia (up)
-  # Mudar o proprio workflow forca tudo.
+  #   server -> imagem Rust | web -> imagens Flutter | ia_engine/jev/mcp -> Python
+  #   stack  -> nenhuma imagem: so reimplanta o bundle (compose, scripts, VERSION)
   changes:
     name: Detecta mudanças
     runs-on: ubuntu-latest
     outputs:
       server: ${{ steps.filter.outputs.server }}
       web: ${{ steps.filter.outputs.web }}
-      edge: ${{ steps.filter.outputs.edge }}
       ia_engine: ${{ steps.filter.outputs.ia_engine }}
       ia_engine_jev: ${{ steps.filter.outputs.ia_engine_jev }}
       mcp_server: ${{ steps.filter.outputs.mcp_server }}
-      compose: ${{ steps.filter.outputs.compose }}
+      stack: ${{ steps.filter.outputs.stack }}
     steps:
       - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v3
@@ -37,32 +47,27 @@ jobs:
             server:
               - 'server/**'
               - 'docker/server/**'
-              - '.github/workflows/deploy-dev.yml'
             web:
               - 'clients/**'
               - 'docker/web/**'
-              - '.github/workflows/deploy-dev.yml'
-            edge:
-              - 'docker/edge/**'
-              - '.github/workflows/deploy-dev.yml'
             ia_engine:
               - 'ia_engine/**'
               # Os stubs gRPC do ia_engine são gerados do .proto canônico do contracts.
               - 'server/crates/contracts/**'
-              - '.github/workflows/deploy-dev.yml'
             ia_engine_jev:
               - 'ia_engine_jev/**'
               - 'server/crates/contracts/**'
-              - '.github/workflows/deploy-dev.yml'
             mcp_server:
               - 'mcp_server/**'
               # Os stubs gRPC do mcp_server saem do mesmo .proto canônico.
               - 'server/crates/contracts/**'
-              - '.github/workflows/deploy-dev.yml'
-            compose:
-              - 'docker/dev/**'
+            # Muda o bundle sem mudar imagem: só reimplanta (sem rebuild).
+            stack:
+              - 'docker/stack/**'
+              - 'docker/backup/**'
               - 'docker/init-scripts/**'
-              - 'docker/observability/**'
+              - 'infra/deploy/**'
+              - 'VERSION'
               - '.github/workflows/deploy-dev.yml'
 
   build-server:
@@ -128,6 +133,9 @@ jobs:
       - name: Prepara contexto (./web)
         run: cp -r clients/apps/smart-core-admin/build/web ./web
 
+      - id: sha
+        run: echo "curto=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -139,7 +147,11 @@ jobs:
           context: .
           file: docker/web/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/smartcore-web:dev
+          # sha-<curto> é o que o bundle usa (promovido a vX.Y.Z-beta.N); `dev`
+          # é só referência humana — o compose nunca usa tag móvel.
+          tags: |
+            ghcr.io/${{ github.repository }}/smartcore-web:dev
+            ghcr.io/${{ github.repository }}/smartcore-web:sha-${{ steps.sha.outputs.curto }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
@@ -172,6 +184,9 @@ jobs:
       - name: Prepara contexto (./web)
         run: cp -r clients/apps/smart-core-tenant/build/web ./web
 
+      - id: sha
+        run: echo "curto=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -184,7 +199,11 @@ jobs:
           context: .
           file: docker/web/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/smartcore-web-tenant:dev
+          # sha-<curto> é o que o bundle usa (promovido a vX.Y.Z-beta.N); `dev`
+          # é só referência humana — o compose nunca usa tag móvel.
+          tags: |
+            ghcr.io/${{ github.repository }}/smartcore-web-tenant:dev
+            ghcr.io/${{ github.repository }}/smartcore-web-tenant:sha-${{ steps.sha.outputs.curto }}
           cache-from: type=gha,scope=web-tenant
           cache-to: type=gha,mode=max,scope=web-tenant
 
@@ -238,29 +257,6 @@ jobs:
           path: clients/build/smart-core-tenant-windows-dev.zip
           retention-days: 30
           if-no-files-found: error
-
-  build-edge:
-    name: Build Edge (borda)
-    needs: changes
-    if: needs.changes.outputs.edge == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      # Imagem da borda e env-agnostica (roteia v1 + dev + prod + grafana).
-      - uses: docker/build-push-action@v6
-        with:
-          context: docker/edge
-          file: docker/edge/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository }}/smartcore-edge:latest
-          cache-from: type=gha,scope=edge
-          cache-to: type=gha,mode=max,scope=edge
 
   # Imagem Python do ia_engine. O compose (docker/dev/compose.yml) referencia
   # ghcr.io/.../smartcore-ia-engine:dev via `docker compose pull`; sem este job a
@@ -361,226 +357,118 @@ jobs:
           cache-to: type=gha,mode=max,scope=mcp-server
 
   deploy-dev:
-    name: Deploy DEV (compose)
-    needs: [changes, build-server, build-web, build-web-tenant, build-edge, build-ia-engine, build-ia-engine-jev, build-mcp-server]
+    name: Deploy DEV (bundle vX.Y.Z-beta.N)
+    needs: [changes, build-server, build-web, build-web-tenant, build-ia-engine, build-ia-engine-jev, build-mcp-server]
     if: >-
       ${{ always()
           && needs.build-server.result != 'failure'
           && needs.build-web.result != 'failure'
           && needs.build-web-tenant.result != 'failure'
-          && needs.build-edge.result != 'failure'
           && needs.build-ia-engine.result != 'failure'
           && needs.build-ia-engine-jev.result != 'failure'
           && needs.build-mcp-server.result != 'failure'
           && (needs.changes.outputs.server == 'true'
               || needs.changes.outputs.web == 'true'
-              || needs.changes.outputs.edge == 'true'
               || needs.changes.outputs.ia_engine == 'true'
               || needs.changes.outputs.ia_engine_jev == 'true'
               || needs.changes.outputs.mcp_server == 'true'
-              || needs.changes.outputs.compose == 'true') }}
+              || needs.changes.outputs.stack == 'true') }}
     runs-on: [self-hosted, hostinger]
     environment: dev
     steps:
       # O runner self-hosted reutiliza a workspace entre execuções. Containers que
-      # rodaram como root em ciclos anteriores podem deixar arquivos pertencentes a
-      # root em .git/objects, e aí o checkout falha com "insufficient permission for
-      # adding an object to repository database .git/objects" (git exit 128). O
-      # gh-runner não tem sudo chown (sudoers só libera `docker compose`), mas tem
-      # acesso ao Docker — então usamos um container descartável para devolver a
-      # posse ao usuário do runner ANTES do checkout. Idempotente e defensivo.
+      # rodaram como root podem deixar arquivos root em .git/objects e o checkout
+      # falha com "insufficient permission" (git exit 128). O gh-runner não tem
+      # sudo chown, mas tem Docker: um container descartável devolve a posse.
       - name: Sanitiza posse da workspace (runner self-hosted)
         run: |
           docker run --rm -v "${{ github.workspace }}":/ws busybox \
             chown -R "$(id -u):$(id -g)" /ws
 
+      # fetch-depth 0: o cálculo do N da beta precisa de todas as tags.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Docker login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Provisiona env real do servidor (DEV)
+      - name: Calcula a versão beta
+        id: versao
         run: |
-          cp -f /opt/smartcore/dev/env/dev.env docker/dev/.env
-          # Um .env incompleto sobe o compose sem senhas: os serviços caem em laço.
-          for k in POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB REDIS_PASSWORD MINIO_ROOT_PASSWORD EVOLUTION_GLOBAL_API_KEY; do
-            if ! grep -q "^$k=." docker/dev/.env; then
-              echo "::error::docker/dev/.env sem $k (ver /opt/smartcore/dev/env/dev.env)"; exit 1
-            fi
+          set -euo pipefail
+          base=$(tr -d '[:space:]' < VERSION)
+          [[ "$base" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::VERSION inválido: '$base'"; exit 1; }
+          # VERSION já lançado em prod? As betas seguintes vão para o próximo
+          # PATCH até alguém subir o VERSION (MINOR/MAJOR é decisão humana).
+          while git rev-parse -q --verify "refs/tags/v$base" >/dev/null; do
+            IFS=. read -r ma mi pa <<< "$base"; novo="$ma.$mi.$((pa + 1))"
+            echo "::warning::v$base já foi lançada; betas seguem em $novo — atualize o arquivo VERSION"
+            base="$novo"
           done
-          # O evolution sobe a partir do MESMO dev.env (compose lê via --env-file;
-          # vars extras são ignoradas). Exige EVOLUTION_POSTGRES_USER/PASSWORD,
-          # EVOLUTION_GLOBAL_API_KEY e EVOLUTION_PORT no dev.env (ver .env.example).
-          # IMPORTANTE: o dev.env NÃO pode conter COMPOSE_PROJECT_NAME — cada compose
-          # tem seu próprio `name:`. Se vazasse aqui, o env sobreporia o name: do
-          # evolution e ele cairia no projeto smart-core-v2-dev (vira órfão e some).
-          cp /opt/smartcore/dev/env/dev.env docker/evolution/.env
+          n=$(git tag -l "v$base-beta.*" | sed 's/.*-beta\.//' | grep -E '^[0-9]+$' | sort -n | tail -n1)
+          n=$(( ${n:-0} + 1 ))
+          echo "imagem=$base-beta.$n" >> "$GITHUB_OUTPUT"
+          echo "id=v$base-beta.$n" >> "$GITHUB_OUTPUT"
+          echo "versão da dev: v$base-beta.$n"
 
-      # Observabilidade (cria a rede external compartilhada). --force-recreate
-      # é necessário: os configs (otel-collector, loki, tempo, prometheus)
-      # entram por bind mount, e `up -d` sozinho NÃO recria o container quando
-      # só o conteúdo do arquivo montado muda — foi assim que os painéis do
-      # Grafana passaram dois meses vazios sem ninguém notar.
-      - name: Provisiona env da observabilidade
-        run: cp /opt/smartcore/observability/env/observability.env docker/observability/.env
-
-      - name: Sobe observabilidade
-        working-directory: docker/observability
-        run: docker compose --env-file .env up -d --force-recreate
-
-      # Stack FUNDACIONAL evolution: stateful (sessão/auth do WhatsApp em volumes +
-      # restart: unless-stopped). `up -d` é idempotente — NÃO reinicia se a config
-      # não mudou — e CRIA a rede externa `smart_core_v2_evolution_net` consumida por
-      # data_whatsapp/webhook_ingress. PRECEDE o docker/dev, que depende dessa rede.
-      # `-p smart-core-v2-evolution` força o projeto próprio explicitamente (defesa
-      # extra contra herdar COMPOSE_PROJECT_NAME e cair no projeto do dev).
-      - name: Sobe stack evolution (fundacional)
-        working-directory: docker/evolution
+      # Imagem reconstruída agora: origem sha-<curto>. As demais herdam a tag do
+      # bundle em uso (exatamente o que está rodando); sem bundle (primeira vez),
+      # a tag `dev`.
+      - name: Promove imagens para a versão beta
+        env:
+          REBUILT_SERVER: ${{ needs.build-server.result }}
+          REBUILT_WEB: ${{ needs.build-web.result }}
+          REBUILT_WEB_TENANT: ${{ needs.build-web-tenant.result }}
+          REBUILT_IA_ENGINE: ${{ needs.build-ia-engine.result }}
+          REBUILT_IA_ENGINE_JEV: ${{ needs.build-ia-engine-jev.result }}
+          REBUILT_MCP_SERVER: ${{ needs.build-mcp-server.result }}
         run: |
-          docker compose -p smart-core-v2-evolution --env-file .env pull
-          docker compose -p smart-core-v2-evolution --env-file .env up -d
+          set -euo pipefail
+          curto="sha-${GITHUB_SHA::7}"
+          atual=/opt/smartcore/dev/releases/current/images.env
+          origem() { # <resultado do build> <variável do images.env>
+            if [ "$1" = success ]; then echo "$curto"
+            elif [ -f "$atual" ] && grep -q "^$2=" "$atual"; then grep "^$2=" "$atual" | cut -d= -f2
+            else echo dev; fi
+          }
+          infra/deploy/promove-imagens.sh "${{ steps.versao.outputs.imagem }}" "$RUNNER_TEMP/images.env" dev \
+            "smartcore-server=$(origem "$REBUILT_SERVER" SERVER_TAG)" \
+            "smartcore-web=$(origem "$REBUILT_WEB" WEB_TAG)" \
+            "smartcore-web-tenant=$(origem "$REBUILT_WEB_TENANT" WEB_TENANT_TAG)" \
+            "smartcore-ia-engine=$(origem "$REBUILT_IA_ENGINE" IA_ENGINE_TAG)" \
+            "smartcore-ia-engine-jev=$(origem "$REBUILT_IA_ENGINE_JEV" IA_ENGINE_JEV_TAG)" \
+            "smartcore-mcp-server=$(origem "$REBUILT_MCP_SERVER" MCP_SERVER_TAG)"
 
-      # Stack do ambiente dev (inclui o container web do client). Idempotente.
-      # --remove-orphans é seguro: a remoção de órfãos é escopada ao projeto
-      # (smart-core-v2-dev). O evolution roda em projeto próprio
-      # (smart-core-v2-evolution), então NÃO é tratado como órfão do dev mesmo
-      # compartilhando a rede smart_core_v2_evolution_net (verificado no servidor).
-      - name: Compose pull & up (DEV)
-        working-directory: docker/dev
+      - name: Monta o bundle
+        run: infra/deploy/bundle.sh dev "${{ steps.versao.outputs.id }}" "$RUNNER_TEMP/images.env"
+
+      # Materializa /opt/smartcore/dev/env/dev.env a partir do secret, valida
+      # chaves, faz pg_dump, sobe, roda o smoke test e troca o `current`. Se o
+      # smoke reprovar, volta sozinho para o bundle anterior.
+      - name: Implanta (deploy.sh)
+        env:
+          ENV_FILE_B64: ${{ secrets.ENV_FILE_B64 }}
+        run: infra/deploy/deploy.sh dev "${{ steps.versao.outputs.id }}"
+
+      # Só depois do smoke: a tag beta significa "rodou e passou na dev". Criada
+      # com GITHUB_TOKEN — de propósito não dispara workflow nenhum.
+      - name: Cria a tag ${{ steps.versao.outputs.id }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          docker compose --env-file .env pull
-          docker compose --env-file .env up -d --remove-orphans
+          gh api "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/tags/${{ steps.versao.outputs.id }}" -f sha="$GITHUB_SHA" --silent
+          echo "tag ${{ steps.versao.outputs.id }} -> $GITHUB_SHA"
 
-      # Borda (Caddy em 80/443: roteia v1 + v2 + grafana). Idempotente; pull pega
-      # a :latest mais recente da imagem do edge.
-      - name: Sobe a borda (edge)
-        working-directory: docker/edge
+      - name: Resumo
+        if: always()
         run: |
-          docker compose pull
-          docker compose up -d
-
-      # A config de tenant é publicada pelo data_postgres e lida pelo ia_engine
-      # em INSTÂNCIAS Redis diferentes se o wiring estiver errado (cache x bus).
-      # Nesse caso ela fica íntegra e invisível: nenhum serviço reclama, e só a
-      # primeira mensagem de WhatsApp revelaria — com FAILED_PRECONDITION. Este
-      # passo compara os dois lados. Nenhum teste unitário pega wiring.
-      - name: Smoke test da config no Redis (DEV)
-        working-directory: docker/dev
-        run: |
-          set -u
-          # As credenciais vivem no .env do compose, não no ambiente do runner.
-          PG_USER=$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2-)
-          PG_DB=$(grep -E '^POSTGRES_DB=' .env | cut -d= -f2-)
-          RD_PASS=$(grep -E '^REDIS_PASSWORD=' .env | cut -d= -f2-)
-
-          ativos=$(docker compose --env-file .env exec -T postgres \
-            psql -U "$PG_USER" -d "$PG_DB" -t -A \
-            -c "SELECT count(*) FROM tenants_tenant WHERE active = TRUE" 2>/dev/null \
-            | tr -d '[:space:]')
-          if [ -z "${ativos:-}" ] || [ "$ativos" = "0" ]; then
-            echo "ok  sem tenants ativos — nada a publicar"
-            exit 0
-          fi
-
-          # O ia_engine se conecta por REDIS_URL: a chave TEM de estar nesse Redis.
-          publicadas=$(docker compose --env-file .env exec -T redis \
-            redis-cli -a "$RD_PASS" --scan --pattern 'tenant:config:*' 2>/dev/null \
-            | grep -c 'tenant:config:' || true)
-          if [ "${publicadas:-0}" = "0" ]; then
-            echo "::error::$ativos tenant(s) ativo(s) e nenhuma config em tenant:config:* no Redis de cache."
-            echo "::error::Verifique se o data_postgres publica em REDIS_URL (e não em REDIS_BUS_URL)."
-            docker compose --env-file .env logs --tail 30 data_postgres || true
-            exit 1
-          fi
-          echo "ok  config no Redis ($publicadas de $ativos tenant(s) ativo(s))"
-
-      # A borda ocupa 80/443 e roteia TUDO — inclusive o painel v1 em produção.
-      # Ela vive num compose próprio (docker/edge), fora da lista do smoke test
-      # abaixo, então um Caddyfile inválido a deixava em crash-loop com o deploy
-      # verde e o site fora do ar (2026-07-28: sintaxe `{$VAR:-default}`, que o
-      # Caddy lê como default literal `-8082`). Falha rápido e alto.
-      - name: Smoke test da borda (DEV)
-        working-directory: docker/edge
-        run: |
-          set -u
-          sleep 10
-          cid=$(docker compose ps -q caddy || true)
-          if [ -z "$cid" ]; then
-            echo "::error::edge/caddy: container inexistente"
-            exit 1
-          fi
-          status=$(docker inspect -f '{{.State.Status}}' "$cid")
-          restarts=$(docker inspect -f '{{.RestartCount}}' "$cid")
-          if [ "$status" != "running" ] || [ "$restarts" -gt 2 ]; then
-            echo "::error::edge/caddy: status=$status restarts=$restarts"
-            docker logs --tail 30 "$cid" || true
-            exit 1
-          fi
-          # Estar `running` não prova que o Caddy aceitou a config e abriu a
-          # porta: valida o handshake de verdade contra o domínio público.
-          codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
-            https://smartcoreassistant.com.br/ || echo 000)
-          if [ "$codigo" = "000" ]; then
-            echo "::error::edge/caddy: 80/443 não respondem (HTTP $codigo)"
-            docker logs --tail 30 "$cid" || true
-            exit 1
-          fi
-          echo "ok  edge/caddy (status=$status restarts=$restarts HTTP=$codigo)"
-
-      # Smoke test: `compose up -d` devolve sucesso assim que os containers são
-      # CRIADOS — um serviço que sobe e morre em seguida (env faltando, migration
-      # quebrada, dependência fora do ar) deixava o deploy "verde" e só aparecia
-      # depois, no uso.
-      #
-      # Agora TODOS os serviços têm sonda: os RPC pelo PING do transport, o worker
-      # pelo batimento do loop de consumo, o webhook_ingress pelo /health e o
-      # pg_backup pela idade do último backup bem-sucedido. O gate deixou de ser
-      # "o processo está de pé" e passou a ser "o serviço responde" — um processo
-      # no ar com o servidor travado aparece como `running` e passava antes.
-      # O watchdog não declara sonda (é ele quem sonda os outros) e continua
-      # julgado pelo estado do container.
-      - name: Smoke test dos serviços (DEV)
-        working-directory: docker/dev
-        run: |
-          set -u
-          # Janela para um crash-loop se manifestar (restart: unless-stopped é
-          # imediato, então poucos segundos já expõem o RestartCount subindo).
-          sleep 25
-          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine ia_engine_jev watchdog pg_backup"
-          falhas=""
-          for svc in $servicos; do
-            cid=$(docker compose --env-file .env ps -q "$svc" || true)
-            if [ -z "$cid" ]; then
-              echo "::error::$svc: container inexistente"
-              falhas="$falhas $svc"
-              continue
-            fi
-            status=$(docker inspect -f '{{.State.Status}}' "$cid")
-            restarts=$(docker inspect -f '{{.RestartCount}}' "$cid")
-            # Containers sem healthcheck declarado não têm .State.Health; o
-            # template devolve "n/a" para eles e o veredito não os julga.
-            tpl='{{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}}'
-            health=$(docker inspect -f "$tpl" "$cid")
-            # `starting` não é veredito: espera a sonda concluir antes de
-            # decidir, senão o gate aprovaria por sorte de timing. A janela é de
-            # 180s por causa do pg_backup, cujo `start_period` cobre o tempo do
-            # primeiro dump — os demais resolvem em segundos.
-            espera=0
-            while [ "$health" = "starting" ] && [ "$espera" -lt 180 ]; do
-              sleep 5
-              espera=$((espera + 5))
-              health=$(docker inspect -f "$tpl" "$cid")
-            done
-            if [ "$status" != "running" ] || [ "$restarts" -gt 2 ] \
-               || [ "$health" = "unhealthy" ] || [ "$health" = "starting" ]; then
-              echo "::error::$svc: status=$status restarts=$restarts health=$health"
-              docker logs --tail 50 "$cid" || true
-              falhas="$falhas $svc"
-            else
-              echo "ok  $svc (status=$status restarts=$restarts health=$health)"
-            fi
-          done
-          if [ -n "$falhas" ]; then
-            echo "::error::serviços com falha:$falhas"
-            exit 1
-          fi
+          {
+            echo "### Deploy DEV ${{ steps.versao.outputs.id }}"
+            echo ""
+            echo "| Imagem | Tag |"; echo "|---|---|"
+            sed 's/=/ | /; s/^/| /; s/$/ |/' "$RUNNER_TEMP/images.env" 2>/dev/null || true
+            echo ""
+            echo "Último marcador: \`$(tail -n1 /opt/smartcore/dev/deploys.log 2>/dev/null)\`"
+          } >> "$GITHUB_STEP_SUMMARY"

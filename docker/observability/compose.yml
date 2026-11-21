@@ -1,14 +1,14 @@
 # =============================================================================
 # Observabilidade (LGTM) — Smart Core Assistant v2
 # =============================================================================
-# Stack COMPARTILHADA e separada dos ambientes. Cria a rede external
-# `smart_core_v2_observability`, que dev e prod referenciam. Suba ESTA stack
-# ANTES de dev/prod (senao o `up` deles falha por rede inexistente).
+# Stack COMPARTILHADA e separada dos ambientes. Cria as redes de telemetria da
+# dev (`smart_core_v2_observability`, `smart_core_v2_mcp_telemetria`) e consome
+# as da prod (`*_prod`, criadas pelo deploy). Implantada SÓ pelo
+# deploy-infra.yml (com aprovação), nunca pelo deploy da dev.
 # A separacao dev/prod nos dados/traces e por OTEL_SERVICE_NAMESPACE (no .env de
 # cada ambiente: smart-core-v2-dev / smart-core-v2-prod).
 #
-# Subir (a partir de docker/observability/):
-#   docker compose up -d
+# Subir: workflow deploy-infra.yml (componente observability).
 # =============================================================================
 name: smart-core-v2-observability
 
@@ -32,6 +32,18 @@ networks:
   smart_core_v2_mcp_telemetria:
     name: smart_core_v2_mcp_telemetria
     driver: bridge
+
+  # Redes de telemetria da PROD (C1 do go-live). A `smart_core_v2_observability`
+  # é a rede de telemetria da DEV: se a prod entrasse nela, `data_postgres`
+  # resolveria para containers dos dois ambientes. Cada ambiente tem a sua; só o
+  # collector está em todas. Externas porque o deploy da prod
+  # (infra/deploy/lib.sh: garante_redes) as cria antes de subir o ambiente.
+  smart_core_v2_telemetria_prod:
+    name: smart_core_v2_telemetria_prod
+    external: true
+  smart_core_v2_mcp_telemetria_prod:
+    name: smart_core_v2_mcp_telemetria_prod
+    external: true
 
   # Só o promtail e o proxy do socket. `internal`: sem saída para fora, e
   # nenhum outro serviço alcança o proxy.
@@ -65,7 +77,11 @@ services:
     image: otel/opentelemetry-collector-contrib:0.153.0
     volumes:
       - ./otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
-    networks: [smart_core_v2_observability, smart_core_v2_mcp_telemetria]
+    networks:
+      - smart_core_v2_observability
+      - smart_core_v2_mcp_telemetria
+      - smart_core_v2_telemetria_prod
+      - smart_core_v2_mcp_telemetria_prod
     restart: unless-stopped
 
   loki:
