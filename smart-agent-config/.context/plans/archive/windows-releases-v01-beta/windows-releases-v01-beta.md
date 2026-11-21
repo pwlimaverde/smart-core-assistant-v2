@@ -8,7 +8,9 @@ summary: "Fecha as lacunas do plano servidor-releases-windows: releases_server f
 prevc_scale: LARGE
 supersedes_partially: servidor-releases-windows
 generated: 2026-10-03
-status: aguardando-review
+status: archived
+progress: 100
+archived: 2026-11-21
 
 phases:
   - id: "phase-p"
@@ -73,6 +75,7 @@ phases:
       - "Painel Grafana + 3 alertas"
       - "Runbook (publicar, reverter, rotacionar segredos, revogar ticket)"
       - "INTEGRACAO_DOWNLOAD_ADMIN.md removido (descreve Django, que não é o admin v2)"
+lastUpdated: "2026-11-21T13:41:48.574Z"
 ---
 
 # Smart Core Tenant — Instalador Windows v0.1.0-beta
@@ -189,3 +192,27 @@ Só identificadores: `jti`, `user_id`, versão, arquivo e `traceparent`.
 - **D4** Ticket assinado no control_plane (recomendado, pedido do dono) x direto no runtime_api.
 - **D5** Assinatura de código (Authenticode) fica fora da beta; o SmartScreen avisa, e isso vai documentado.
 - **D6** Tag `win-vX.Y.Z-beta.N` para o canal beta e `win-vX.Y.Z` para stable; um único workflow.
+
+## Execution History
+
+> Last updated: 2026-11-21T13:41:48.574Z | Progress: 100% — plano concluído e arquivado em 2026-11-21 (workflow PREVC fechado na fase C).
+
+### phase-c [DONE]
+- Started: 2026-11-21T13:41:48.574Z
+- Completed: 2026-11-21T13:41:48.574Z
+
+### phase-e [DONE]
+- Started: 2026-11-21T13:41:46.971Z
+- Completed: 2026-11-21T13:41:46.971Z
+
+### phase-p [DONE]
+- Started: 2026-11-21T13:41:45.900Z
+- Completed: 2026-11-21T13:41:45.900Z
+
+### phase-r [DONE]
+- Started: 2026-11-21T13:41:46.117Z
+- Completed: 2026-11-21T13:41:46.117Z
+
+### phase-v [DONE]
+- Started: 2026-11-21T13:41:47.872Z
+- Completed: 2026-11-21T13:41:47.872Z

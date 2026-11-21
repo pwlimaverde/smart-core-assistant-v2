@@ -12,12 +12,11 @@ This directory contains plans for coordinating work across documentation and pla
 7. [N13 Mcp Agentes](./n13-mcp-agentes.md)
 8. [N9 Conversa Completa](./n9-conversa-completa.md)
 9. [Painel Crm E Campos Do Cartao](./painel-crm-e-campos-do-cartao.md)
-10. [Regras Do Bot E Permissoes](./regras-do-bot-e-permissoes.md)
-11. [Servidor Releases Windows](./servidor-releases-windows.md)
-12. [Windows Releases v0.1 Beta](./windows-releases-v01-beta.md)
-13. [Visual Cliente Windows](./visual-cliente-windows.md)
-14. [Vinculo Contatos Clientes](./vinculo-contatos-clientes.md)
-15. [Producao Go Live](./producao-go-live.md)
+10. [Producao Go Live](./producao-go-live.md)
+11. [Regras Do Bot E Permissoes](./regras-do-bot-e-permissoes.md)
+12. [Servidor Reestruturacao Dev Prod](./servidor-reestruturacao-dev-prod.md)
+13. [Servidor Releases Windows](./servidor-releases-windows.md)
+14. [Visual Cliente Windows](./visual-cliente-windows.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.
