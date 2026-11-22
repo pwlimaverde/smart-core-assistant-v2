@@ -9,6 +9,12 @@
 # cada ambiente: smart-core-v2-dev / smart-core-v2-prod).
 #
 # Subir: workflow deploy-infra.yml (componente observability).
+#
+# Memória (decisão D1, 2026-11-22): cada serviço tem teto (`mem_limit`, antes
+# sem limite nenhum — Tempo/Loki/Prometheus crescem com o volume) e
+# `oom_score_adj` 300: sob falta de memória no host o kernel mata a dev (900)
+# primeiro, depois a observabilidade, e só por último a prod (0). Soma dos
+# tetos: ~2,8 GiB; pico medido em 2026-11-22: ~1 GiB.
 # =============================================================================
 name: smart-core-v2-observability
 
@@ -72,6 +78,8 @@ services:
       - ./docker-proxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg.template:ro
     networks: [docker_proxy]
     restart: unless-stopped
+    mem_limit: ${MEM_OBS_DOCKER_PROXY:-64m}
+    oom_score_adj: ${OBS_OOM_SCORE_ADJ:-300}
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.153.0
@@ -83,6 +91,8 @@ services:
       - smart_core_v2_telemetria_prod
       - smart_core_v2_mcp_telemetria_prod
     restart: unless-stopped
+    mem_limit: ${MEM_OBS_OTEL_COLLECTOR:-256m}
+    oom_score_adj: ${OBS_OOM_SCORE_ADJ:-300}
 
   loki:
     image: grafana/loki:3.7.2
@@ -91,6 +101,8 @@ services:
       - loki_data:/loki
     networks: [smart_core_v2_observability]
     restart: unless-stopped
+    mem_limit: ${MEM_OBS_LOKI:-512m}
+    oom_score_adj: ${OBS_OOM_SCORE_ADJ:-300}
 
   tempo:
     # Pinada (nao ":latest"): a tag "latest" no Docker Hub aponta hoje para o
@@ -106,6 +118,8 @@ services:
       - tempo_data:/var/tempo
     networks: [smart_core_v2_observability]
     restart: unless-stopped
+    mem_limit: ${MEM_OBS_TEMPO:-768m}
+    oom_score_adj: ${OBS_OOM_SCORE_ADJ:-300}
 
   prometheus:
     image: prom/prometheus:v3.12.0
@@ -123,6 +137,8 @@ services:
       - prometheus_data:/prometheus
     networks: [smart_core_v2_observability]
     restart: unless-stopped
+    mem_limit: ${MEM_OBS_PROMETHEUS:-512m}
+    oom_score_adj: ${OBS_OOM_SCORE_ADJ:-300}
 
   grafana:
     image: grafana/grafana:13.0.2
@@ -164,18 +180,30 @@ services:
       - grafana_data:/var/lib/grafana
     networks: [smart_core_v2_observability]
     restart: unless-stopped
+    mem_limit: ${MEM_OBS_GRAFANA:-512m}
+    oom_score_adj: ${OBS_OOM_SCORE_ADJ:-300}
 
   promtail:
     image: grafana/promtail:3.6.8
     volumes:
       - ./promtail-config.yml:/etc/promtail/config.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - promtail_positions:/positions
+      # Marcadores de deploy (job deploy_markers). Arquivo por arquivo, só
+      # leitura: o diretório /opt/smartcore/<env> tem o <env>.env com segredos.
+      # Os scripts só fazem append (>>), então o inode — e o bind — se mantém.
+      - /opt/smartcore/dev/deploys.log:/var/log/smartcore/deploys-dev.log:ro
+      - /opt/smartcore/prod/deploys.log:/var/log/smartcore/deploys-prod.log:ro
+      - /opt/smartcore/infra/deploys.log:/var/log/smartcore/deploys-infra.log:ro
     # Docker só pelo `docker-proxy` (ver acima), nunca pelo socket.
     networks: [smart_core_v2_observability, docker_proxy]
     depends_on: [docker-proxy]
     restart: unless-stopped
+    mem_limit: ${MEM_OBS_PROMTAIL:-192m}
+    oom_score_adj: ${OBS_OOM_SCORE_ADJ:-300}
 
 volumes:
+  promtail_positions:
   loki_data:
   tempo_data:
   prometheus_data:

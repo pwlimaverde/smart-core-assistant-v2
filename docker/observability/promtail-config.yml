@@ -3,7 +3,9 @@ server:
   grpc_listen_port: 0
 
 positions:
-  filename: /tmp/positions.yaml
+  # Em volume (compose: promtail_positions): em /tmp, todo recreate do promtail
+  # relia os arquivos do início — no job deploy_markers isso duplicava eventos.
+  filename: /positions/positions.yaml
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
@@ -39,3 +41,39 @@ scrape_configs:
       # em cima do conteudo da linha (log estruturado da aplicacao).
       - static_labels:
           job: containerlogs
+
+  # Marcadores de deploy (plano servidor-reestruturacao-dev-prod, R6): uma linha
+  # logfmt por deploy/rollback, escrita por infra/deploy/lib.sh (marcador) e
+  # infra/deploy/deploy-infra.sh (marca). Viram anotações no painel "Deploys".
+  #
+  # Os arquivos entram montados UM A UM no compose (nunca o diretório
+  # /opt/smartcore/<env>): ao lado deles mora o <env>.env com os segredos, e o
+  # promtail processa conteúdo vindo de fora.
+  - job_name: deploy_markers
+    # `env` vem do arquivo, não da linha: os marcadores da infra compartilhada
+    # (borda, observabilidade, Evolution) não têm `env=`.
+    static_configs:
+      - targets: [localhost]
+        labels: {job: deploy_markers, env: dev, __path__: /var/log/smartcore/deploys-dev.log}
+      - targets: [localhost]
+        labels: {job: deploy_markers, env: prod, __path__: /var/log/smartcore/deploys-prod.log}
+      - targets: [localhost]
+        labels: {job: deploy_markers, env: infra, __path__: /var/log/smartcore/deploys-infra.log}
+    pipeline_stages:
+      - logfmt:
+          mapping:
+            ts:
+            event:
+            componente:
+            status:
+      # Cardinalidade baixa: poucos eventos, componentes e status. `version`,
+      # `sha` e `run` ficam no corpo da linha (um stream por release incharia o
+      # índice do Loki).
+      - labels:
+          event:
+          componente:
+          status:
+      # O horário do evento é o do deploy, não o da leitura pelo promtail.
+      - timestamp:
+          source: ts
+          format: RFC3339

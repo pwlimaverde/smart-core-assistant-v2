@@ -7,6 +7,13 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
+  # Primeiro da fila em todo pipeline: com o teto de 256m do container
+  # (compose.yml, decisão D1), o collector passa a recusar dados (o SDK refaz)
+  # antes de o kernel matá-lo por OOM — o que derrubaria a telemetria inteira.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+    spike_limit_mib: 50
   batch:
     send_batch_size: 1000
     timeout: 1s
@@ -44,13 +51,13 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlp/tempo]
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [prometheus]
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp/loki]

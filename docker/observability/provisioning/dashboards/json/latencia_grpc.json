@@ -1,5 +1,10 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": [
+      {"datasource": {"type": "loki", "uid": "loki"}, "enable": true, "hide": false, "iconColor": "red", "name": "Deploys prod", "expr": "{job=\"deploy_markers\", env=\"prod\"}", "target": {"expr": "{job=\"deploy_markers\", env=\"prod\"}", "refId": "Annoprod"}, "instant": false, "tagKeys": "env,event,status,componente", "titleFormat": "{{event}} {{env}} {{status}}", "textFormat": "{{__line__}}"},
+      {"datasource": {"type": "loki", "uid": "loki"}, "enable": true, "hide": false, "iconColor": "blue", "name": "Deploys dev", "expr": "{job=\"deploy_markers\", env=\"dev\"}", "target": {"expr": "{job=\"deploy_markers\", env=\"dev\"}", "refId": "Annodev"}, "instant": false, "tagKeys": "env,event,status,componente", "titleFormat": "{{event}} {{env}} {{status}}", "textFormat": "{{__line__}}"}
+    ]
+  },
   "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
