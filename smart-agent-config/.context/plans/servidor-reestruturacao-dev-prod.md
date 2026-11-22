@@ -5,7 +5,7 @@ planSlug: servidor-reestruturacao-dev-prod
 description: "Elimina o ambiente local e fixa dois ambientes na VPS: dev (merge na branch dev → deploy-dev.yml) e prod (tag vX.Y.Z criada por pessoa num commit da main → deploy-prod.yml com aprovação). Compose base único + overlay por ambiente, bundle de release por ambiente em /opt/smartcore/<env>/releases/<id> (tira dev e prod da workspace compartilhada do runner), segredos como secret de GitHub Environment, imagens por versão exata e rollback por troca de bundle. Infra compartilhada (borda, observabilidade, Evolution, releases) só muda pelo fluxo de prod."
 summary: "Corrige sete defeitos de processo levantados no servidor em 2026-11-21 — o mais grave: deploy-prod.yml usa environment 'production', que não existe, então a primeira tag iria para produção sem revisor. Fatia de pipeline e topologia do producao-go-live, que continua dono do isolamento de rede (C1–C3), backup externo e das decisões D1/D3/D7/D10."
 status: in_progress
-progress: 80
+progress: 90
 generated: "2026-11-21"
 scaffoldVersion: "2.0.0"
 agents:
@@ -47,7 +47,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "in_progress"
-lastUpdated: "2026-11-21T15:30:00.000Z"
+lastUpdated: "2026-11-22T23:00:00.000Z"
 ---
 
 # Reestruturação dev/prod — dois ambientes, deploy por merge e por tag
@@ -108,7 +108,7 @@ expand/contract. Bloqueante externo: **D1 do go-live (memória da VPS)**.
 
 ## Execution History
 
-> Last updated: 2026-11-21 | Progress: 80% (R6 pendente do dono)
+> Last updated: 2026-11-22 | Progress: 90% (ensaios de rollback/hotfix aguardam aprovação do dono)
 
 | Fase | Estado | Evidência |
 |---|---|---|
@@ -117,5 +117,5 @@ expand/contract. Bloqueante externo: **D1 do go-live (memória da VPS)**.
 | R3 | ✅ | `infra/deploy/{lib,bundle,deploy,smoke,rollback,promove-imagens,deploy-infra}.sh`; `ENV_FILE_B64` no env `dev`; layout `/opt/smartcore/<env>/{env,releases,backups-deploy,deploys.log}`; legado systemd em `/opt/smartcore/_legado/` |
 | R4 | ✅ | `test_support` sem túnel; `.ps1` locais em `infra/_legado/`; sensores → `node infra/ci-verde.mjs`; docs sem ambiente local; banco/redis sem porta no host |
 | R5 | ✅ | `deploy-dev` (beta.N, promoção, bundle, tag), `deploy-prod` (gate, promoção do digest da beta, main ff), `rollback-prod`, `deploy-infra`; concurrency `deploy-vps`; job `infra` na CI |
-| R6 | ⏳ | dev validada (`v0.2.0-beta.1` em 64 s; infra compartilhada intocada). **Prod bloqueada**: falta `prod.env` (secret `ENV_FILE_B64` do env `prod`), decisão D1 (memória), go-live C2 (webhook por ambiente) e aprovação humana da tag |
-| R7 | ✅ (parcial) | `doc_dev/runbooks/RUNBOOK_DEPLOY.md`; architecture/development-workflow/testing-strategy/tooling/security; `docker/{dev,prod}/compose.yml` removidos. `CLAUDE.md` (projeto e global) e `AGENTS.md` **não** editados — pendem do dono |
+| R6 | ⏳ | Prod no ar: `v0.2.1` (2026-11-22, 64 s). **D1 decidida** (tetos por ambiente nos `.vars`, soma da prod ~7,6 GiB; `oom_score_adj` dev 900 / obs 300 / prod 0; obs com teto, ~2,8 GiB). **C2 resolvido no código** (`WEBHOOK_INGRESS_URL`; prod em `http://172.17.0.1:9211`). Marcadores no Grafana (job `deploy_markers` + painel *Deploys*). RC sem deploy (`release-candidate.yml`). `v0.2.2-beta.1` na dev (116 s) e tag `v0.2.2` criada — deploy de prod **aguardando aprovação do dono**; ensaio de rollback (`v0.2.2 → v0.2.1`) e de hotfix (`v0.2.3`) seguem a aprovação |
+| R7 | ✅ | `doc_dev/runbooks/RUNBOOK_DEPLOY.md` (+ §4.1 RC, §12 memória, §13 webhook); architecture/development-workflow/testing-strategy/tooling/security; `docker/{dev,prod}/compose.yml` removidos. `CLAUDE.md` do projeto (seção de ambientes) e global do VPS atualizados em 2026-11-22 |
