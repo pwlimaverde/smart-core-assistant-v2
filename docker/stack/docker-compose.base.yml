@@ -260,6 +260,11 @@ services:
       # de PING só enxerga a primeira — ver o healthcheck abaixo.
       SMARTCORE_LIVENESS_FILE: /tmp/data_storage_batimento
     networks: [internal, observability]
+    # O consumidor de purga abre o barramento no boot; sem esta espera ele
+    # morria com "Temporary failure in name resolution" (redis-bus ainda não
+    # criado) e contava restart — visto no deploy v0.2.0 da prod (2026-11-22).
+    depends_on:
+      redis-bus: { condition: service_healthy }
     healthcheck:
       <<: *healthcheck-rpc
       # Duas condições, porque há dois jeitos de este serviço morrer sem morrer.
@@ -449,8 +454,12 @@ services:
     # reverse_proxy p/ esta porta (dev 50051, prod 50052).
     ports:
       - "${HOST_BRIDGE_IP:-172.17.0.1}:${RUNTIME_WEB_PORT:?RUNTIME_WEB_PORT ausente (<env>.vars)}:50051"
+    # data_redis entra porque o runtime_api conecta nele no boot; sem isso o
+    # primeiro start desistia antes de o data_redis existir (1 restart no
+    # deploy v0.2.0 da prod).
     depends_on:
       control_plane: { condition: service_started }
+      data_redis: { condition: service_healthy }
     healthcheck:
       <<: *healthcheck-rpc
       test: ["CMD", "healthcheck", "rpc", "RUNTIME_API"]
@@ -519,6 +528,13 @@ services:
       # Só loopback: o Evolution alcança este serviço pelo nome na rede
       # `evolution_net` (verificado — resolve para 172.24.0.x). A porta publicada
       # existe apenas para depuração a partir do próprio host.
+    # O boot conecta em data_postgres e data_redis e desiste após ~6s de backoff.
+    # Sem esta espera, no primeiro `up` de um ambiente o serviço reiniciava 3x
+    # até as dependências subirem — e o smoke (limite: 2 restarts) reprovou o
+    # deploy v0.2.0 da prod em 2026-11-22 com a stack, na verdade, saudável.
+    depends_on:
+      data_postgres: { condition: service_healthy }
+      data_redis: { condition: service_healthy }
     # HTTP puro (axum), não `transport::Server`: a sonda é a rota /health, que
     # exercita o roteador e não apenas a porta aberta. `curl` já vem na imagem.
     healthcheck:
