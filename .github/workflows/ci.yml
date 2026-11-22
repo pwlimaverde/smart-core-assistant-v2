@@ -438,7 +438,8 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:latest -color \
             .github/workflows/deploy-dev.yml .github/workflows/deploy-prod.yml \
-            .github/workflows/deploy-infra.yml .github/workflows/rollback-prod.yml
+            .github/workflows/deploy-infra.yml .github/workflows/rollback-prod.yml \
+            .github/workflows/release-candidate.yml
       - name: caddy validate (borda)
         run: |
           docker run --rm -v "$PWD/docker/edge/Caddyfile":/etc/caddy/Caddyfile:ro caddy:2-alpine \

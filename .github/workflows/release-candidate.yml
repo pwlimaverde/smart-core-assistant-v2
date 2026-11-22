@@ -1,0 +1,238 @@
+name: Release Candidate (sem deploy)
+
+# RC = ensaio de release de PROD, sem tocar a VPS (plano
+# servidor-reestruturacao-dev-prod, correção 14 e decisão R-D4: obrigatório
+# para release com migração). Não há staging nem RAM para um terceiro ambiente
+# (decisão D1), então o RC prova o que dá para provar sem subir nada:
+#   - o commit tem origem válida (beta testada na dev, ou a main) e CI verde;
+#   - web e web-tenant COMPILAM com os endereços de prod;
+#   - as imagens de backend existem e ganham o nome X.Y.Z-rc.N (mesmo digest
+#     da beta — a release final promove o mesmo binário);
+#   - o bundle de prod monta e o `compose config` passa com as chaves de prod;
+#   - lista as migrações que a release traz (o que o RUNBOOK pede para ler).
+#
+# Uso: git tag -a v0.3.0-rc.1 -m "RC v0.3.0" <commit> && git push origin v0.3.0-rc.1
+# Depois do RC verde: tag vX.Y.Z no MESMO commit -> deploy-prod.yml.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+']
+
+permissions:
+  contents: read
+  packages: write
+  actions: read
+
+jobs:
+  gate-origem:
+    name: Exige origem válida (beta testada na dev ou main)
+    runs-on: ubuntu-latest
+    outputs:
+      versao: ${{ steps.gate.outputs.versao }}
+      final: ${{ steps.gate.outputs.final }}
+      beta: ${{ steps.gate.outputs.beta }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Confere tag e procedência do commit
+        id: gate
+        env:
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-rc\.[0-9]+$ ]] || { echo "::error::tag '$TAG' não é vX.Y.Z-rc.N"; exit 1; }
+          final="${BASH_REMATCH[1]}"
+          if git rev-parse -q --verify "refs/tags/v$final" >/dev/null; then
+            echo "::error::v$final já foi lançada — RC de versão publicada não faz sentido"; exit 1
+          fi
+          git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/dev:refs/remotes/origin/dev'
+          beta=$(git tag --points-at "$SHA" -l 'v*-beta.*' | sort -V | tail -n1)
+          if [ -n "$beta" ] && git merge-base --is-ancestor "$SHA" origin/dev; then
+            echo "ok  commit implantado na dev como $beta"
+          elif git merge-base --is-ancestor "$SHA" origin/main; then
+            beta=""; echo "ok  commit pertence à main (hotfix)"
+          else
+            echo "::error::$SHA não tem tag beta na dev nem está na main — RC recusado."; exit 1
+          fi
+          {
+            echo "versao=${TAG#v}"
+            echo "final=$final"
+            echo "beta=${beta#v}"
+          } >> "$GITHUB_OUTPUT"
+
+  verifica-ci:
+    name: Exige CI verde no commit
+    needs: gate-origem
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta a conclusão do workflow CI para o SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          conclusao=$(gh api "repos/$REPO/actions/runs?head_sha=$SHA&per_page=100" \
+            --jq '[.workflow_runs[] | select(.name == "CI")] | sort_by(.run_started_at) | last | .conclusion // "ausente"')
+          echo "CI para $SHA: $conclusao"
+          [ "$conclusao" = success ] || { echo "::error::CI '$conclusao' para $SHA"; exit 1; }
+
+  build-web:
+    name: Build ${{ matrix.app }} (PROD, RC)
+    needs: [gate-origem, verifica-ci]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - app: smart-core-admin
+            imagem: smartcore-web
+            base_href: /v2/admin/
+            escopo: web
+          - app: smart-core-tenant
+            imagem: smartcore-web-tenant
+            base_href: /v2/tenant/
+            escopo: web-tenant
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Mesma versão fixa do deploy-dev/deploy-prod (ver comentário lá).
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Build web (PROD, --wasm)
+        working-directory: clients
+        env:
+          APP: ${{ matrix.app }}
+          BASE_HREF: ${{ matrix.base_href }}
+        run: |
+          flutter pub get
+          cd "apps/$APP"
+          flutter build web --wasm \
+            --base-href "$BASE_HREF" \
+            -t lib/main_prod.dart \
+            --dart-define=SMARTCORE_API_ENDPOINT=https://smartcoreassistant.com.br
+      - name: Prepara contexto (./web)
+        run: cp -r "clients/apps/${{ matrix.app }}/build/web" ./web
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/${{ matrix.imagem }}:${{ needs.gate-origem.outputs.versao }}
+          cache-from: type=gha,scope=${{ matrix.escopo }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.escopo }}
+
+  build-backend:
+    name: Build ${{ matrix.imagem }} (RC de hotfix, sem beta)
+    needs: [gate-origem, verifica-ci]
+    if: needs.gate-origem.outputs.beta == ''
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - imagem: smartcore-server
+            dockerfile: docker/server/Dockerfile
+            escopo: server
+          - imagem: smartcore-ia-engine
+            dockerfile: ia_engine/Dockerfile
+            escopo: ia-engine
+          - imagem: smartcore-ia-engine-jev
+            dockerfile: ia_engine_jev/Dockerfile
+            escopo: ia-engine-jev
+          - imagem: smartcore-mcp-server
+            dockerfile: mcp_server/Dockerfile
+            escopo: mcp-server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ghcr.io/${{ github.repository }}/${{ matrix.imagem }}:${{ needs.gate-origem.outputs.versao }}
+          cache-from: type=gha,scope=${{ matrix.escopo }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.escopo }}
+
+  bundle:
+    name: Promove imagens e valida o bundle de PROD (sem deploy)
+    needs: [gate-origem, verifica-ci, build-web, build-backend]
+    if: >-
+      ${{ always()
+          && needs.gate-origem.result == 'success'
+          && needs.verifica-ci.result == 'success'
+          && needs.build-web.result == 'success'
+          && !contains(needs.*.result, 'failure')
+          && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    env:
+      VERSAO: ${{ needs.gate-origem.outputs.versao }}
+      BETA: ${{ needs.gate-origem.outputs.beta }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promove imagens para X.Y.Z-rc.N
+        run: |
+          set -euo pipefail
+          origem="${BETA:-$VERSAO}"
+          infra/deploy/promove-imagens.sh "$VERSAO" "$RUNNER_TEMP/images.env" "$origem" \
+            "smartcore-web=$VERSAO" "smartcore-web-tenant=$VERSAO"
+      # Mesmo bundle.sh da release, numa raiz descartável: prova que o bundle
+      # monta e que o compose de prod fecha com todas as chaves obrigatórias.
+      - name: Monta e valida o bundle
+        env:
+          SMARTCORE_RAIZ: ${{ runner.temp }}/smartcore
+        run: |
+          set -euo pipefail
+          mkdir -p "$SMARTCORE_RAIZ/prod/env"
+          grep -vE '^#' infra/deploy/required-keys.prod | sed 's/$/=exemplo/' > "$SMARTCORE_RAIZ/prod/env/prod.env"
+          infra/deploy/bundle.sh prod "v$VERSAO" "$RUNNER_TEMP/images.env"
+          b="$SMARTCORE_RAIZ/prod/releases/v$VERSAO"
+          docker compose -p smart-core-v2-prod --project-directory "$b" \
+            -f "$b/docker-compose.base.yml" -f "$b/prod.override.yml" \
+            --env-file "$b/.env" --env-file "$b/prod.vars" --env-file "$b/images.env" config -q
+          echo "ok  bundle de prod v$VERSAO válido"
+      - name: Resumo (imagens e migrações novas)
+        if: always()
+        run: |
+          {
+            echo "### RC v$VERSAO — sem deploy"
+            echo ""
+            echo "Origem do backend: ${BETA:+beta $BETA (promovida)}${BETA:-build do hotfix}"
+            echo ""
+            echo "| Imagem | Tag |"; echo "|---|---|"
+            sed 's/=/ | /; s/^/| /; s/$/ |/' "$RUNNER_TEMP/images.env" 2>/dev/null || true
+            echo ""
+            ultima=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -vE -- '-(beta|rc)\.' | sort -V | tail -n1)
+            echo "Migrações novas desde ${ultima:-o início}:"
+            echo '```'
+            if [ -n "$ultima" ]; then
+              git diff --name-only --diff-filter=A "$ultima" HEAD -- server/crates/infrastructure_postgres/migrations || true
+            fi
+            echo '```'
+            echo ""
+            echo "Próximo passo: tag \`v${{ needs.gate-origem.outputs.final }}\` neste mesmo commit -> deploy-prod (aprovação)."
+          } >> "$GITHUB_STEP_SUMMARY"
