@@ -10,3 +10,20 @@ services:
       # O banco de prod é maior: as migrations de uma release levam mais tempo
       # antes de o consumidor do barramento começar a bater.
       start_period: 180s
+
+  # CONTENÇÃO — vazamento dev→prod de webhooks do WhatsApp (2026-11-22).
+  #
+  # A `evolution_net` é uma rede ÚNICA, compartilhada pelos dois ambientes, e o
+  # data_whatsapp registra no Evolution a URL fixa `http://webhook_ingress:9200`
+  # (server/apps/data_whatsapp/src/main.rs). Com dev e prod na mesma rede, o
+  # DNS do Docker resolve esse nome para QUALQUER um dos dois containers: no
+  # primeiro deploy da v0.2.0 o Evolution passou a entregar os webhooks do
+  # tenant da dev no webhook_ingress da PROD (250 eventos no barramento de prod,
+  # recusados só pela FK de audit_log) e a dev ficou sem receber mensagens.
+  #
+  # Enquanto a URL do webhook não for por ambiente (alias próprio na rede +
+  # host configurável no data_whatsapp + re-registro das instâncias), a prod
+  # fica FORA da evolution_net. Sem tenants na prod v2 não há perda alguma.
+  # Remover este bloco só junto com essa correção.
+  webhook_ingress:
+    networks: !override [internal, observability]
