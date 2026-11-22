@@ -95,7 +95,22 @@ Pré-requisitos (uma vez — ver §9): secret `ENV_FILE_B64` no environment `pro
    Evolution, o push na `main` dispara `deploy-infra.yml` (nova aprovação).
 5. Subir o arquivo `VERSION` na `dev` (ex.: `0.3.0`) para as próximas betas.
 
-Release com migração de banco: ver §7 antes de taguear.
+Release com migração de banco: ver §7 antes de taguear, e **RC obrigatório** (§4.1).
+
+### 4.1 Release candidate (RC) — ensaio sem deploy
+
+Não há staging nem RAM para um terceiro ambiente (decisão D1, §12). O RC prova
+tudo o que dá para provar sem subir nada: origem e CI, build da web com os
+endereços de prod, promoção das imagens (`X.Y.Z-rc.N`, mesmo digest da beta) e
+montagem + `compose config` do bundle de prod. Também lista as migrações novas.
+
+```bash
+git tag -a v0.3.0-rc.1 v0.3.0-beta.4^{} -m "RC v0.3.0"
+git push origin v0.3.0-rc.1        # -> release-candidate.yml (sem aprovação, sem VPS)
+# RC verde: tag final no MESMO commit
+git tag -a v0.3.0 v0.3.0-rc.1^{} -m "Release v0.3.0" && git push origin v0.3.0
+```
+Obrigatório para release com migração (R-D4); opcional nas demais.
 
 ## 5. Hotfix
 
@@ -152,7 +167,7 @@ docker compose ... up -d
 | Secret | Onde | Uso |
 |---|---|---|
 | `ENV_FILE_B64` | environment `dev` | `dev.env` inteiro, base64 |
-| `ENV_FILE_B64` | environment `prod` | `prod.env` inteiro, base64 (**ainda não criado**) |
+| `ENV_FILE_B64` | environment `prod` | `prod.env` inteiro, base64 (criado em 2026-11-22) |
 | `OBS_ENV_FILE_B64` | environment `prod` (opcional) | env da observabilidade; sem ele vale o arquivo do servidor |
 | `EVOLUTION_ENV_FILE_B64` | environment `prod` (opcional) | env da Evolution; idem |
 | deploy key `deploy-prod: avança main` | repositório (escrita) + `/home/gh-runner/.ssh/smartcore_main_ff` | único caminho de push direto na `main` |
@@ -187,3 +202,40 @@ tail -n 5 /opt/smartcore/{dev,prod}/deploys.log /opt/smartcore/infra/deploys.log
 git ls-remote --tags origin 'v*' | tail
 gh run list -L 5
 ```
+
+Grafana → pasta *SmartCore v2* → painel **Deploys** (uid `smartcore-deploys`):
+os marcadores dos três `deploys.log` (job `deploy_markers` do promtail), com
+contagem de deploys/rollbacks/falhas. Os painéis *Serviços — saúde* e
+*Latência gRPC* mostram os deploys de dev e prod como anotações. O Loki guarda
+14 dias; o histórico completo é o próprio arquivo.
+
+## 12. Memória (decisão D1, 2026-11-22)
+
+VPS de 7,8 GiB + 2 GiB de swap para dev, prod, observabilidade, Evolution e borda.
+
+| Camada | Soma dos tetos | `oom_score_adj` | Onde |
+|---|---|---|---|
+| prod | ~7,6 GiB | 0 | `docker/stack/prod.vars` (`MEM_*`) |
+| dev | ~5,3 GiB | 900 | `docker/stack/dev.vars` |
+| observabilidade | ~2,8 GiB | 300 | `docker/observability/compose.yml` |
+
+- Teto não é reserva: o uso real medido (cgroup `memory.peak`) era ~3 GiB com
+  tudo no ar. A soma dos tetos da **prod** cabe na RAM sozinha.
+- Se o host inteiro ficar sem memória, o kernel mata **a dev primeiro**, depois
+  a observabilidade, e só por último a prod.
+- Recalibrar: `cat /sys/fs/cgroup/system.slice/docker-<id>.scope/memory.peak`
+  por container; ajustar `MEM_*` no `.vars` e seguir o fluxo normal (dev: push;
+  prod: release).
+
+## 13. Webhook do WhatsApp por ambiente
+
+A `evolution_net` é compartilhada e nela `webhook_ingress` resolve para os dois
+ambientes (incidente de 2026-11-22: webhooks da dev entregues na prod).
+
+- **dev**: `WEBHOOK_INGRESS_URL` padrão, `http://webhook_ingress:9200` (só o
+  ingress da dev está na `evolution_net`).
+- **prod**: `http://172.17.0.1:9211` — a porta da prod (`prod.vars`) publicada na
+  ponte do Docker, que só o ingress da prod responde (`prod.override.yml`).
+- Conferir: `docker exec smartcore-evolution wget -qO- http://172.17.0.1:9211/health`.
+- Instância criada antes da v0.2.2 na prod (não havia nenhuma) teria a URL
+  antiga gravada no Evolution: reconectar pelo painel regrava o webhook.

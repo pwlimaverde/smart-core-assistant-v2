@@ -60,11 +60,37 @@ com `skipContentGeneration: true`.
 | Security & Compliance Notes | `security.md` | Auth model, secrets management, compliance requirements |
 | Tooling & Productivity Guide | `tooling.md` | CLI scripts, IDE configs, automation workflows |
 
-## Ambiente da dev (VPS) — regra compartilhada
+## Ambientes na VPS (dev e prod) — regra compartilhada
 
-- Fonte do ambiente: `/opt/smartcore/dev/env/dev.env` (dono `gh-runner`, modo 600). **Nunca** editar `docker/*/.env` à mão.
-- O deploy da dev copia esse arquivo para `docker/dev/.env` no workspace do runner e **falha** se faltar uma chave obrigatória (`POSTGRES_*`, `REDIS_PASSWORD`, `MINIO_ROOT_PASSWORD`, `EVOLUTION_GLOBAL_API_KEY`).
-- O checkout `/opt/smartcore/ops/smart-core-assistant-v2` é espelho do `dev`: manter com `git pull --ff-only origin dev`. Não subir o compose de lá com um `.env` que não veio do `dev.env`.
-- Recriar serviços da dev à mão só depois de conferir `REDIS_PASSWORD` no `.env` usado (sem exibir o valor). Se a dúvida for de configuração, o caminho é o deploy.
+Desde 2026-11-22 a VPS Hostinger (`srv1321059`) roda **dois ambientes v2**, ambos
+implantados por bundle (`/opt/smartcore/<env>/releases/current`), nunca da
+workspace do runner. Detalhes: `doc_dev/runbooks/RUNBOOK_DEPLOY.md`.
+
+| | dev | prod |
+|---|---|---|
+| Gatilho | push/merge na `dev` → `deploy-dev.yml` | tag `vX.Y.Z` (só o dono) → `deploy-prod.yml` + **aprovação** no environment `prod` |
+| Versão | `vX.Y.Z-beta.N` automática (base no arquivo `VERSION`) | `vX.Y.Z` = mesmo digest da beta testada |
+| Compose | `docker/stack/docker-compose.base.yml` + `dev.override.yml` + `dev.vars` | idem com `prod.override.yml` + `prod.vars` |
+| Env | secret `ENV_FILE_B64` (env `dev`) → `/opt/smartcore/dev/env/dev.env` | secret `ENV_FILE_B64` (env `prod`) → `/opt/smartcore/prod/env/prod.env` |
+| Rollback | automático se o smoke falhar | idem + `gh workflow run rollback-prod.yml --ref main -f versao=vX.Y.Z` (aprovação) |
+| Domínio | `dev.smartcoreassistant.com.br` | `smartcoreassistant.com.br` |
+
+- **Fonte do ambiente é o secret do GitHub Environment**; o arquivo no servidor é
+  cópia materializada pelo deploy (dono `gh-runner`, modo 600). **Nunca** editar
+  `<env>.env` nem `docker/*/.env` à mão — rotação: `RUNBOOK_DEPLOY.md` §9.
+- O deploy falha se faltar chave de `infra/deploy/required-keys.<env>`.
+- RC (`vX.Y.Z-rc.N` → `release-candidate.yml`): build e bundle de prod **sem
+  deploy**; obrigatório para release com migração.
+- Hotfix: `hotfix/*` a partir da `main` → PR → tag `vX.Y.Z` → o deploy abre PR
+  `main → dev` (backport, merge commit).
+- Infra compartilhada (borda, observabilidade, Evolution) só muda por
+  `deploy-infra.yml` (push na `main` ou dispatch), com aprovação de prod.
+- Memória (decisão D1): tetos por ambiente nos `.vars`; `oom_score_adj` dev 900,
+  observabilidade 300, prod 0 — sob pressão o kernel mata a dev primeiro.
+- Webhook do WhatsApp: dev usa `http://webhook_ingress:9200`; prod usa
+  `http://172.17.0.1:9211` (a `evolution_net` é compartilhada).
+- O checkout `/opt/smartcore/ops/smart-core-assistant-v2` é espelho da `dev`
+  (`git pull --ff-only origin dev`). Não subir compose de lá.
+- Marcadores de deploy: `/opt/smartcore/{dev,prod,infra}/deploys.log` → painel
+  **Deploys** no Grafana.
 - Mesmo arquivo de regras para a sessão local e a sessão do VPS: mudanças de ambiente entram aqui.
-
