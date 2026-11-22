@@ -359,10 +359,7 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
     };
 
     // 3. Conecta a instância passando webhook Url embutido e eventos de assinatura
-    let webhook_url = format!(
-        "http://webhook_ingress:9200/webhook/{}/{}/{}",
-        provider_name, env.tenant_id, db_id
-    );
+    let webhook_url = url_webhook(provider_name, &env.tenant_id, db_id);
     let webhook_conf = WebhookConfig {
         url: webhook_url,
         subscribe: vec![
@@ -669,10 +666,7 @@ async fn handler_reconnect_whatsapp_instance(mut state: AppState, env: Envelope)
     // apertou o botão. Era isso o "não foi possível conectar" que ele via: o
     // botão chamava a rota que não podia funcionar no caso em que é usada.
     let webhook_conf = WebhookConfig {
-        url: format!(
-            "http://webhook_ingress:9200/webhook/{}/{}/{}",
-            provider_name, env.tenant_id, db_id
-        ),
+        url: url_webhook(provider_name, &env.tenant_id, db_id),
         subscribe: vec![
             "MESSAGE".to_string(),
             "CONNECTION".to_string(),
@@ -1024,10 +1018,7 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
     }
 
     let webhook_conf = WebhookConfig {
-        url: format!(
-            "http://webhook_ingress:9200/webhook/{}/{}/{}",
-            provider_name, env.tenant_id, db_id
-        ),
+        url: url_webhook(provider_name, &env.tenant_id, db_id),
         subscribe: vec![
             "MESSAGE".to_string(),
             "CONNECTION".to_string(),
@@ -1106,9 +1097,42 @@ fn chave_pareamento(name: &str) -> String {
     format!("whatsapp:pareamento:{name}")
 }
 
+/// Base padrão do webhook: o nome do serviço na `evolution_net`. É o que a dev
+/// usa e o que as instâncias já registradas no Evolution têm gravado.
+const WEBHOOK_INGRESS_URL_PADRAO: &str = "http://webhook_ingress:9200";
+
+/// Base da URL que o Evolution chama para entregar os eventos de uma instância.
+///
+/// Vem de `WEBHOOK_INGRESS_URL` (por ambiente, no `<env>.vars`). Motivo: a
+/// `evolution_net` é uma rede só, compartilhada por dev e prod, e nela o nome
+/// `webhook_ingress` resolve para os DOIS ambientes — em 2026-11-22 os webhooks
+/// do tenant da dev caíram no ingress da prod. A prod aponta para a porta
+/// própria dela na ponte do host (`http://172.17.0.1:9211`), que nenhum outro
+/// container responde.
+fn base_webhook() -> String {
+    montar_base_webhook(std::env::var("WEBHOOK_INGRESS_URL").ok().as_deref())
+}
+
+/// Parte pura de [`base_webhook`]: vazio ou ausente cai no padrão; barra final
+/// é removida para não gerar `//webhook`.
+fn montar_base_webhook(valor: Option<&str>) -> String {
+    match valor.map(str::trim).map(|v| v.trim_end_matches('/')) {
+        Some(v) if !v.is_empty() => v.to_string(),
+        _ => WEBHOOK_INGRESS_URL_PADRAO.to_string(),
+    }
+}
+
+/// URL completa do webhook de uma instância — único lugar que a monta.
+fn url_webhook(provider_name: &str, tenant_id: &str, db_id: i64) -> String {
+    format!(
+        "{}/webhook/{provider_name}/{tenant_id}/{db_id}",
+        base_webhook()
+    )
+}
+
 fn webhook_da_instancia(provider_name: &str, tenant_id: &str, db_id: i64) -> WebhookConfig {
     WebhookConfig {
-        url: format!("http://webhook_ingress:9200/webhook/{provider_name}/{tenant_id}/{db_id}"),
+        url: url_webhook(provider_name, tenant_id, db_id),
         subscribe: vec![
             "MESSAGE".to_string(),
             "CONNECTION".to_string(),
@@ -2860,6 +2884,25 @@ mod tests {
             "abaixo de um minuto a tela lenta perderia o QR"
         );
         std::env::remove_var("SMARTCORE_WHATSAPP_PAREAMENTO_TTL_S");
+    }
+
+    #[test]
+    fn base_do_webhook_e_configuravel_por_ambiente() {
+        assert_eq!(montar_base_webhook(None), "http://webhook_ingress:9200");
+        assert_eq!(montar_base_webhook(Some("")), "http://webhook_ingress:9200");
+        assert_eq!(
+            montar_base_webhook(Some("  ")),
+            "http://webhook_ingress:9200"
+        );
+        assert_eq!(
+            montar_base_webhook(Some("http://172.17.0.1:9211")),
+            "http://172.17.0.1:9211"
+        );
+        assert_eq!(
+            montar_base_webhook(Some(" http://172.17.0.1:9211/ ")),
+            "http://172.17.0.1:9211",
+            "barra final geraria //webhook"
+        );
     }
 
     #[test]

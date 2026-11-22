@@ -19,6 +19,14 @@
 #   - `:?` em tudo que muda por ambiente: um bundle incompleto falha no
 #     `compose config`, antes de tocar container, em vez de cair num default.
 #   - Diferenças permitidas entre ambientes: só as dos overlays e dos `.vars`.
+#
+# Memória (decisão D1, 2026-11-22 — ver comentário no topo de prod.vars):
+#   - `mem_limit: ${MEM_*}` é o TETO de cada serviço, calibrado por ambiente no
+#     `<env>.vars` (os defaults abaixo são só rede de segurança).
+#   - `oom_score_adj: ${OOM_SCORE_ADJ}` define QUEM o kernel sacrifica se a VPS
+#     inteira ficar sem memória: dev 900 (primeira a morrer), observabilidade
+#     300, prod 0. A soma dos tetos dos três passa da RAM de propósito — teto
+#     não é reserva — e a prioridade é o que protege a prod no pior caso.
 # =============================================================================
 
 x-server-image: &server-image ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-server:${SERVER_TAG:?SERVER_TAG ausente (images.env do bundle)}
@@ -120,6 +128,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_POSTGRES:-1g}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   redis:
     image: redis:7-alpine
@@ -136,6 +145,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_REDIS:-256m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   redis-bus:
     image: redis:7-alpine
@@ -154,6 +164,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_REDIS:-256m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # Backup lógico do Postgres. Roda como serviço (e não como cron do host) para
   # ser instalado pelo deploy junto com a stack — cron do host é passo manual, e
@@ -193,6 +204,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_BACKUP:-256m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # Storage de mídia: MinIO só na dev (dev.override.yml); prod usa Cloudflare R2.
 
@@ -233,6 +245,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_DATA_POSTGRES:-512m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   data_redis:
     image: *server-image
@@ -249,6 +262,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_DATA_REDIS:-384m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   data_storage:
     image: *server-image
@@ -289,6 +303,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_DATA_STORAGE:-512m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   control_plane:
     image: *server-image
@@ -309,6 +324,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_CONTROL_PLANE:-384m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # ---------- MOTOR DE IA (Python, gRPC — imagem própria) ----------
   ia_engine:
@@ -328,6 +344,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_IA_ENGINE:-2g}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # ---------- MOTOR DE IA JEV (plano ia-engine-jev — imagem própria) ----------
   # Mesmo contrato gRPC do ia_engine; as decisões (intenção, entidades,
@@ -357,6 +374,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_IA_ENGINE_JEV:-1g}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # ---------- SERVIDOR MCP (Python — imagem própria) ----------
   # Resource server do módulo N13: é onde Claude, ChatGPT e Cursor se conectam.
@@ -405,6 +423,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_MCP_SERVER:-512m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   worker:
     image: *server-image
@@ -437,6 +456,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_WORKER:-768m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   runtime_api:
     image: *server-image
@@ -466,6 +486,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_RUNTIME_API:-512m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # Client admin (Flutter Web) — bundle embutido na imagem. Publicado no host; o
   # edge faz reverse_proxy p/ host.docker.internal:${WEB_HOST_PORT} no /v2/admin/*.
@@ -486,6 +507,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_WEB:-128m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # Client operacional/tenant (Flutter Web) — mesma imagem generica do docker/web
   # (só muda o bundle e a tag). Publicado no host; o edge faz reverse_proxy p/
@@ -500,6 +522,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_WEB:-128m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # ---------- MENSAGERIA / WHATSAPP ----------
   data_whatsapp:
@@ -507,6 +530,11 @@ services:
     ulimits: *ulimits-rede
     command: ["data_whatsapp"]
     env_file: [.env]
+    environment:
+      # Base da URL que o Evolution chama para entregar os webhooks. O padrão é
+      # o nome do serviço na `evolution_net`, que resolve para dev E prod (rede
+      # compartilhada) — a prod sobrescreve no prod.override.yml.
+      WEBHOOK_INGRESS_URL: ${WEBHOOK_INGRESS_URL:-http://webhook_ingress:9200}
     networks: [internal, observability, evolution_net]
     depends_on:
       redis: { condition: service_healthy }
@@ -516,6 +544,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_DATA_WHATSAPP:-512m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   webhook_ingress:
     image: *server-image
@@ -546,6 +575,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_WEBHOOK_INGRESS:-384m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # ---------- VIGIA ----------
   # Fecha o laço dos healthchecks acima: o compose MARCA um container como
@@ -581,6 +611,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_WATCHDOG:-128m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
 volumes:
   postgres_data:

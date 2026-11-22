@@ -11,19 +11,27 @@ services:
       # antes de o consumidor do barramento começar a bater.
       start_period: 180s
 
-  # CONTENÇÃO — vazamento dev→prod de webhooks do WhatsApp (2026-11-22).
+  # ISOLAMENTO DO WEBHOOK DO WHATSAPP (incidente de 2026-11-22, correção v0.2.2).
   #
-  # A `evolution_net` é uma rede ÚNICA, compartilhada pelos dois ambientes, e o
-  # data_whatsapp registra no Evolution a URL fixa `http://webhook_ingress:9200`
-  # (server/apps/data_whatsapp/src/main.rs). Com dev e prod na mesma rede, o
-  # DNS do Docker resolve esse nome para QUALQUER um dos dois containers: no
-  # primeiro deploy da v0.2.0 o Evolution passou a entregar os webhooks do
-  # tenant da dev no webhook_ingress da PROD (250 eventos no barramento de prod,
-  # recusados só pela FK de audit_log) e a dev ficou sem receber mensagens.
+  # A `evolution_net` é uma rede ÚNICA, compartilhada pelos dois ambientes. Nela
+  # o nome `webhook_ingress` resolve para os containers dos DOIS: no primeiro
+  # deploy da v0.2.0 o Evolution entregou os webhooks do tenant da dev no
+  # webhook_ingress da PROD (250 eventos recusados só pela FK de audit_log) e a
+  # dev ficou sem mensagens.
   #
-  # Enquanto a URL do webhook não for por ambiente (alias próprio na rede +
-  # host configurável no data_whatsapp + re-registro das instâncias), a prod
-  # fica FORA da evolution_net. Sem tenants na prod v2 não há perda alguma.
-  # Remover este bloco só junto com essa correção.
+  # Correção: a prod NÃO entra na evolution_net com o ingress (o nome continua
+  # sendo só da dev, sem re-registrar as instâncias de lá) e registra no
+  # Evolution uma URL que só ela responde — a porta própria dela (prod.vars:
+  # WEBHOOK_INGRESS_PORT) publicada na ponte do Docker, a mesma por onde a borda
+  # já alcança a prod. 172.17.0.1 não é roteável de fora da VPS. Verificado em
+  # 2026-11-22: o container do Evolution alcança 172.17.0.1.
+  #
+  # A dev segue no padrão (`http://webhook_ingress:9200`) — nada muda lá.
+  data_whatsapp:
+    environment:
+      WEBHOOK_INGRESS_URL: http://${HOST_BRIDGE_IP:-172.17.0.1}:${WEBHOOK_INGRESS_PORT:?WEBHOOK_INGRESS_PORT ausente (prod.vars)}
+
   webhook_ingress:
     networks: !override [internal, observability]
+    ports: !override
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${WEBHOOK_INGRESS_PORT:?WEBHOOK_INGRESS_PORT ausente (prod.vars)}:9200"

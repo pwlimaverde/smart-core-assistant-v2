@@ -39,6 +39,7 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_MINIO:-512m}
+    oom_score_adj: ${OOM_SCORE_ADJ:-0}
 
   # Provisiona o bucket no MinIO. Sem ele, o data_storage entra em crash-loop num
   # volume novo ("bucket inexistente"). One-off idempotente.
