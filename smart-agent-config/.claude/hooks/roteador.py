@@ -183,6 +183,8 @@ def ler_ultima_decisao(session_id: str | None = None) -> dict | None:
             d = json.loads(linha)
         except ValueError:
             continue
+        if d.get("atalho") == "retorno_interno":
+            continue
         if session_id is None or d.get("session_id") == session_id:
             return d
     return None
@@ -636,6 +638,13 @@ def processar(entrada: dict, config: dict, *, seco: bool = False) -> tuple[dict,
         "modo": modo,
         "mensagem": mascarar(prompt)[:200],
     }
+    # Retorno de subagente ou notificação de tarefa: o Claude Code manda esse
+    # texto como "prompt", mas não é pedido do usuário — nem chama o Jev, nem
+    # conta como `anterior` para continuação (ver `ler_ultima_decisao`).
+    texto_bruto = prompt.strip()
+    if texto_bruto.startswith(("<agent-message", "<task-notification", "[Subagent hand-back]")):
+        return base | {"atalho": "retorno_interno"}, ""
+
     if modo == "off":
         return base | {"atalho": "off"}, ""
 
