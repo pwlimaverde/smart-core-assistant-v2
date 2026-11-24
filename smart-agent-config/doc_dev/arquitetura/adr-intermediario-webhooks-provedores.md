@@ -44,10 +44,12 @@
 
 | Item | Situação |
 |---|---|
-| `provider_edge` (crate, `server/apps/provider_edge`) | **Implementado**, com testes unitários e de rota (roda no CI). |
+| `provider_edge` (crate, `server/apps/provider_edge`) | **Implementado**, com testes de rota: repasse ao ambiente do caminho (status, corpo, query e apikey intactos), 404 para ambiente desconhecido ou caminho sem ambiente, 502 com destino fora do ar e 504 com destino lento. |
+| Imagem (`docker/server/Dockerfile`) | **Corrigido em 2026-11-24.** O binário `provider_edge` não era copiado para a imagem final. O primeiro deploy-infra teria subido o container com "executable not found", reprovado no smoke e voltado ao bundle anterior. A CI (job `infra`) agora confere que todo app chamado por `command:` em algum compose está no Dockerfile, e valida o compose do Evolution. |
+| OTLP do `provider_edge` | Desligado (`OTEL_SDK_DISABLED=true`): o serviço só está na `evolution_net`, sem rota para o collector. Os logs JSON do stdout chegam ao Loki pelo promtail. |
 | Compose (`docker/evolution/compose.yml`, serviço `provider_edge`) | **Implementado.** Só sobe com `PROVIDER_EDGE_IMAGE` no env do Evolution. |
 | Workflow `deploy-infra.yml` (job `build-provider-edge`) | **Implementado.** Gera a imagem por sha e a passa ao `deploy-infra.sh evolution`. |
-| Primeiro deploy de infra | **Pendente de aprovação** do environment `prod`. É o único passo que depende de decisão humana. |
+| Primeiro deploy de infra | **Pendente de aprovação** do environment `prod`. É o único passo que depende de decisão humana. Disparar de novo depois da correção da imagem: um run anterior a ela reprovaria. |
 | `webhook_ingress` por ambiente | Implementado. Normaliza eventos e aplica rate limit. A cota conta só mensagens (`5aceaf21`). O 429 é log-only por padrão (`fix2`). |
 | Checagem de nome único no gateway | Implementada em `data_whatsapp`: recusa criação se o nome já existe no Evolution, e falha fechada se a consulta falhar. |
 | Cutover das instâncias para o intermediário | **Pendente.** Depende do primeiro deploy de infra. |
@@ -58,7 +60,10 @@
 Feito em dev primeiro. Prod só depois de a dev ficar estável.
 
 1. Confirmar que o `provider_edge` está `healthy` (`docker ps`, healthcheck em `/health`).
-2. Trocar a URL base do webhook por ambiente: na dev, o default do `docker/stack/docker-compose.base.yml` (`WEBHOOK_INGRESS_URL`) para `http://provider_edge:8088/dev`; na prod, o valor **fixo** em `docker/stack/prod.override.yml` para `http://provider_edge:8088/prod` (hoje ele aponta para `172.17.0.1:9211`). Isso sai pelo `deploy-dev` / `deploy-prod`, com a mesma ordem de sempre.
+2. Trocar a URL base do webhook por ambiente. As duas mudanças já estão escritas no repositório, comentadas:
+   - dev: descomentar `WEBHOOK_INGRESS_URL=http://provider_edge:8088/dev` em `docker/stack/dev.vars` (o `.vars` vence o `.env` e o default do `docker-compose.base.yml`). Sai pelo `deploy-dev` no push da `dev`.
+   - prod: trocar o valor **fixo** em `docker/stack/prod.override.yml` por `http://provider_edge:8088/prod` (hoje `172.17.0.1:9211`). Só chega à prod numa tag `v*.*.*` aprovada (`deploy-prod`). Merge na `dev` ou na `main` não muda a prod sozinho.
+   - Não ativar nenhuma das duas antes de o passo 1 dar `healthy`: o Evolution chamaria um host inexistente e o ambiente pararia de receber mensagens.
 3. Reconectar a instância 181 pelo fluxo de reconciliação do `data_whatsapp` (`connect` regrava a URL). Conferir no Evolution que a URL passou a ser `http://provider_edge:8088/dev/...`.
 4. Verificar um webhook real: `docker logs smart-core-v2-dev-webhook_ingress-1` deve mostrar o evento; `smartcore-provider-edge` deve mostrar `webhook repassado`.
 5. Só então repetir para prod com a instância de prod (quando existir).
@@ -67,7 +72,7 @@ Feito em dev primeiro. Prod só depois de a dev ficar estável.
 
 1. **Aprovação do primeiro `deploy-infra`** (environment `prod`). Ação humana, prevista na regra R-D1.
 2. **Cutover** da instância 181 (passos da seção 5).
-3. **Valor de `WEBHOOK_RATE_LIMIT_ENFORCE` no secret de prod** (`true` hoje). Só muda com o secret do environment `prod`.
+3. **Valor de `WEBHOOK_RATE_LIMIT_ENFORCE` no secret de prod** (`true` hoje, conferido no container em 2026-11-24; na dev a chave está ausente, então vale o default `false`). Decisão: alinhar a prod ao default do código, `false` (log-only), pelo mesmo motivo do `fix2`: o 429 faz a Evolution desistir depois de 4 reentregas e a mensagem se perde. Os `.env.example` já foram alinhados. Ação do dono: editar o secret `ENV_FILE_B64` do environment `prod`. Vale no próximo deploy de prod. Hoje a prod tem zero instâncias, então não há perda em curso.
 4. **Sem namespace de nome de instância.** A checagem de nome único resolve a colisão, mas o nome continua sendo texto livre. Namespace por ambiente exigiria renomear instâncias existentes e fica como melhoria futura.
 
 ## 7. Referências

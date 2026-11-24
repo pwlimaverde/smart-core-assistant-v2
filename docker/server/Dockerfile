@@ -48,7 +48,11 @@ COPY --from=builder \
      /app/target/release/webhook_ingress \
      /app/target/release/watchdog \
      /app/target/release/healthcheck \
+     /app/target/release/provider_edge \
      /usr/local/bin/
+# Todo binário que algum compose chama em `command:` precisa estar nesta lista:
+# sem ele o container sobe com "executable not found" e o smoke reprova o deploy.
+# O job `infra` da CI confere isso.
 
 USER smartcore
 # Sem ENTRYPOINT: o command do compose escolhe o binário por serviço.

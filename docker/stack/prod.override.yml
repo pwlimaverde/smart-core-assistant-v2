@@ -27,6 +27,13 @@ services:
   # 2026-11-22: o container do Evolution alcança 172.17.0.1.
   #
   # A dev segue no padrão (`http://webhook_ingress:9200`) — nada muda lá.
+  #
+  # Cutover para o provider_edge (ADR adr-intermediario-webhooks-provedores.md,
+  # §5) — INATIVO, só depois do deploy-infra aprovado e da dev estável. Trocar a
+  # linha abaixo por:
+  #   WEBHOOK_INGRESS_URL: http://provider_edge:8088/prod
+  # A porta própria da prod na ponte continua publicada: é o destino `prod` que
+  # o provider_edge usa (PROVIDER_EDGE_DESTINOS).
   data_whatsapp:
     environment:
       WEBHOOK_INGRESS_URL: http://${HOST_BRIDGE_IP:-172.17.0.1}:${WEBHOOK_INGRESS_PORT:?WEBHOOK_INGRESS_PORT ausente (prod.vars)}
