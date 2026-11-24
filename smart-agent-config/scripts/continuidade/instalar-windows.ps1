@@ -5,7 +5,7 @@
 .DESCRIPTION
   1. Valida o script (py_compile + --status + --verificar --seco).
   2. Registra os ganchos em smart-agent-config/.claude/settings.local.json
-     (com backup ao lado do arquivo).
+     (backup em ~/.claude/roteador-continuidade/backups/, fora do repositório).
   3. Cria a tarefa "SmartCore\RoteadorContinuidade" no Agendador de Tarefas:
      a cada 15 min e no logon, com pyw (sem janela), sem instâncias
      simultâneas e executando assim que possível se um horário foi perdido.

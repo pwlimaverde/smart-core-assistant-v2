@@ -943,7 +943,10 @@ def registrar_hooks(arquivo: Path) -> int:
         escrever(f"ganchos já registrados em {arquivo}")
         return 0
     if arquivo.exists():
-        copia = arquivo.with_name(f"{arquivo.name}.bak-continuidade-{datetime.now():%Y%m%d%H%M%S}")
+        # Backup fora do repositório: ao lado do settings ele viraria arquivo não rastreado.
+        pasta = DIR_ESTADO / "backups"
+        pasta.mkdir(parents=True, exist_ok=True)
+        copia = pasta / f"{arquivo.name}.{datetime.now():%Y%m%d%H%M%S}"
         shutil.copy2(arquivo, copia)
         escrever(f"backup: {copia}")
     arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
