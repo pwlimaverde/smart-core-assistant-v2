@@ -1,7 +1,7 @@
 # Arquitetura Final — Adapters + gRPC (Comunicação Eficiente)
 
 **Data**: 18 de Novembro de 2026  
-**Status**: Planejamento Final — Pronto para Implementação  
+**Status**: Planejamento — **não implementado**; a entrada de webhooks por gRPC foi substituída pelo intermediário HTTP por provedor (ver `smart-agent-config/doc_dev/arquitetura/adr-intermediario-webhooks-provedores.md`, 2026-11-24)  
 **Versão**: 1.0
 
 ## Índice
