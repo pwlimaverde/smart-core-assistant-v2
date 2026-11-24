@@ -6,9 +6,12 @@ on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
-# Mesmo grupo de todo deploy na VPS (dev, prod, infra, rollback).
+# Grupo por tag: nenhum outro run (dev, infra, rollback, outra tag) cancela o
+# deploy desta tag enquanto ele espera a aprovação do environment `prod`. A
+# serialização no host vem do runner self-hosted `hostinger`, que é único e
+# roda um job por vez (ver comentário em deploy-dev.yml).
 concurrency:
-  group: deploy-vps
+  group: deploy-vps-prod-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:

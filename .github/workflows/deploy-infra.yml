@@ -25,8 +25,13 @@ on:
         options: ['edge', 'observability', 'evolution', 'todos']
         required: true
 
+# Grupo próprio: um run de infra parado na aprovação não trava mais o deploy da
+# dev nem o de prod, e eles não o cancelam. Um run de infra novo substitui o
+# pendente anterior; como o filtro de caminhos olha só o push daquele run, se o
+# substituído tocava outro componente, reaplique com workflow_dispatch "todos".
+# Serialização no host: runner self-hosted único (ver deploy-dev.yml).
 concurrency:
-  group: deploy-vps
+  group: deploy-vps-infra
   cancel-in-progress: false
 
 permissions:
