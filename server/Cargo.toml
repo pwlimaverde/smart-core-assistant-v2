@@ -22,6 +22,7 @@ members = [
     "crates/infrastructure_evolution",
     "crates/infrastructure_email",
     "apps/webhook_ingress",
+    "apps/provider_edge",
     "apps/data_whatsapp",
     "apps/healthcheck",
     "apps/watchdog",
