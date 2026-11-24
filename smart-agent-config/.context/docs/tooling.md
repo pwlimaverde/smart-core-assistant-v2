@@ -130,6 +130,64 @@ configuração. Não editar à mão.
 **Plugins e skills globais** (typesafe, anthropic-skills etc.) não passam pelo seletor e
 continuam listados; desative os que não usa com `/plugin`.
 
+### Continuidade após limite de uso
+
+`.claude/hooks/continuidade.py` (biblioteca padrão; reaproveita o `mascarar` do roteador)
+faz a sessão que parou por limite voltar sozinha, sem o coordenador intervir.
+
+- **Detecção** — gancho `StopFailure` (o Claude Code o dispara no lugar do `Stop` quando o
+  turno acaba em erro de API; `error` = `rate_limit`, `server_error`, ...; a saída é
+  ignorada). Erros em `erros_retomaveis` (padrão `rate_limit` e `server_error`) marcam a
+  sessão como `limite`. O horário de reset vem do transcript (`resetsAt` do último erro
+  de API, formato interno, best-effort) ou do texto `resets 3:45pm (Fuso)`. Sem horário,
+  a retomada segue com backoff a partir de 15 min. `UserPromptSubmit` guarda o último
+  pedido (mascarado, 400 caracteres), e `Stop` marca a tarefa como concluída.
+- **Agendador do sistema** (sobrevive ao fim da sessão, ao contrário de
+  `CronCreate`/`ScheduleWakeup`/`/loop`, que só disparam com a sessão aberta): systemd
+  timer `roteador-continuidade.timer` no VPS e a tarefa `\SmartCore\RoteadorContinuidade`
+  no Windows, **a cada 15 min**. A verificação é local, lê um JSON e não chama a API.
+  Vencido o horário, roda `claude -p --resume <sessão> --output-format json "<[continuidade] …>"`:
+  - **no lugar**, se nenhum processo segura a sessão;
+  - com **`--fork-session`**, se a sessão está viva. É o caso do Remote Control, que
+    roda `--print --sdk-url`. Duas escritas no mesmo transcript perdem mensagens.
+  - **Sessão interativa viva** (`entrypoint` `cli`): primeiro uma carência de 20 min
+    para o auto-continue nativo. A notificação `quota_auto_resume_fired` ou o
+    transcript andando cancelam a nossa retomada.
+- **Sem loop**: até `max_tentativas` (6), teto de `teto_horas` (30 h) desde a primeira
+  detecção (um reset além do teto desiste na hora) e timeout de 4 h por retomada. Só
+  limite de novo (ou timeout) volta para a fila; outra falha (binário ausente, sessão não
+  encontrada) vira `falha` com o motivo no aviso. Uma só verificação por vez (trava do SO,
+  `flock`/`msvcrt`, solta sozinha se o processo morre, + `oneshot`/`IgnoreNew`). A
+  retomada roda na pasta em que a sessão nasceu (`cwd_projeto`). No Windows, só com o
+  `claude.exe` nativo: um `claude.cmd` passaria o pedido pelo `cmd.exe`.
+- **Sinal de vida**: avisos injetados na próxima mensagem ou `SessionStart` de qualquer
+  sessão do mesmo diretório (limite detectado, retomada iniciada ou terminada,
+  desistência, e agendador sem rodar há mais de 45 min com sessão esperando). Também
+  vão para `log.jsonl`, para o journal (`journalctl -u roteador-continuidade`) e para a
+  segunda linha da statusline. `notificar_cmd` (opcional) recebe cada aviso no stdin.
+- **Estado** em `~/.claude/roteador-continuidade/`: `estado.json`, `log.jsonl` (rotação
+  em 1 MB), `status.txt` e `config.json` opcional, que sobrepõe os padrões de `PADRAO`
+  no script. Não guarda segredo nem token.
+- **Comandos**: `continuidade.py --status`, `--verificar --seco` (diz o que faria) e
+  `--registrar-hooks <settings.json>` (idempotente, com backup).
+
+**Instalação** (valida com `py_compile` + `--status` + `--verificar --seco` antes de ativar):
+
+- VPS: `git -C /opt/smartcore/ops/smart-core-assistant-v2 pull --ff-only origin dev` e
+  `bash smart-agent-config/scripts/continuidade/instalar-vps.sh`. O script registra os
+  ganchos no `/root/.claude/settings.json` (onde está o roteador) e instala as unidades.
+  A retomada roda como root em `bypassPermissions` com `IS_SANDBOX=1`, a mesma decisão do
+  `claude-rc`. Backup em `/root/.claude/backups/continuidade-<data>/`.
+- Windows: `pwsh smart-agent-config/scripts/continuidade/instalar-windows.ps1`. O script
+  registra os ganchos no `.claude/settings.local.json` do projeto (onde está o roteador
+  local) e cria a tarefa com `pyw`, sem janela. A permissão segue o `defaultMode` do
+  `~/.claude/settings.json`. `-SoValidar` só valida e `-Remover` tira a tarefa.
+
+**Limites conhecidos**: depende de o host estar ligado (o PC dormindo não retoma, e o
+`StartWhenAvailable` roda no despertar). No fork, a conversa do Remote Control não mostra a
+continuação ao vivo, mas o aviso chega na próxima mensagem com o id da sessão nova. A
+retomada consome o limite renovado.
+
 ## Related Resources
 
 - [Development Workflow](development-workflow.md)
