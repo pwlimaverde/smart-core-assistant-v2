@@ -64,6 +64,52 @@ fi
 garante_redes "$BUNDLE"
 dc "$BUNDLE" config -q || erro "compose config reprovado para $BUNDLE"
 
+# --- 3b. gate do cutover para o provider_edge -----------------------------------
+# Com a URL do webhook apontando para o provider_edge (ADR
+# adr-intermediario-webhooks-provedores.md, §5), o Evolution passa a entregar
+# TODAS as mensagens do ambiente por ele. Se ele não estiver no ar, o ambiente
+# para de receber mensagens sem nenhum erro visível. Por isso o deploy só segue
+# se o caminho inteiro responde: Evolution-net -> provider_edge -> ingress deste
+# ambiente. Roda antes do backup e de qualquer container ser tocado: reprovado,
+# nada muda no servidor.
+#
+# Prova ponta a ponta: POST com corpo que não é JSON no caminho do webhook. O
+# ingress responde 400 antes de autenticar ou auditar (nada é gravado). O
+# provider_edge só produz 404 (ambiente desconhecido), 502 (destino fora) e 504
+# (destino lento); qualquer outro código veio do ingress do ambiente.
+# Bloqueia: edge fora de healthy, 000 (nome/porta da URL inalcançável na
+# evolution_net) e 404 (ambiente ausente em PROVIDER_EDGE_DESTINOS). 502/503/504
+# só avisam: o ingress do ambiente pode estar fora justamente porque este deploy
+# é o conserto, e travar o deploy deixaria o ambiente sem saída.
+#
+# Rollback (EVENTO=rollback) só avisa: travar o retorno a um bundle bom deixaria
+# a release ruim no ar.
+#
+# A URL sai do `compose config` em JSON, sem jq (o host não precisa dele). A
+# chave só existe no data_whatsapp.
+url_webhook=$(dc "$BUNDLE" config --format json \
+  | grep -oE '"WEBHOOK_INGRESS_URL": *"[^"]*"' | head -n1 | sed -E 's/.*: *"([^"]*)"/\1/' || true)
+bloqueia_cutover() {
+  if [ "${EVENTO:-deploy}" = rollback ]; then aviso "rollback segue apesar do gate: $*"; else erro "$*"; fi
+}
+if [[ "$url_webhook" == *provider_edge* || "$url_webhook" == *provider-edge* ]]; then
+  saude=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}sem-healthcheck{{end}}' \
+    smartcore-provider-edge 2>/dev/null || echo inexistente)
+  [ "$saude" = healthy ] \
+    || bloqueia_cutover "cutover bloqueado: WEBHOOK_INGRESS_URL=$url_webhook, mas o provider_edge está '$saude'. Suba-o pelo deploy-infra (evolution) ou volte a URL no $AMB.vars/override."
+  codigo=$(docker exec smartcore-provider-edge curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+    -X POST -H 'content-type: application/json' --data 'gate-de-cutover' \
+    "${url_webhook%/}/webhook/evolution/00000000-0000-0000-0000-000000000000/0" 2>/dev/null || true)
+  case "${codigo:-000}" in
+    000|404)
+      bloqueia_cutover "cutover bloqueado: $url_webhook não é atendido pelo provider_edge para o $AMB (HTTP ${codigo:-000}). Conferir a URL e PROVIDER_EDGE_DESTINOS no evolution.env." ;;
+    502|503|504)
+      aviso "cutover: provider_edge healthy, mas o ingress do $AMB não respondeu (HTTP $codigo); segue, este deploy sobe o ingress" ;;
+    *)
+      info "cutover: provider_edge healthy e repassando ao ingress do $AMB (HTTP $codigo)" ;;
+  esac
+fi
+
 ANTERIOR="$(release_de current)"
 info "ambiente=$AMB versão=$ID anterior=${ANTERIOR:-nenhuma}"
 
