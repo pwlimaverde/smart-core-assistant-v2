@@ -1,6 +1,6 @@
 # Documentação Auxiliar — Conversão para produção (go-live da v2)
 
-> Gerado em: 14/11/2026 (revisão 2)
+> Gerado em: 14/11/2026 (revisão 2); revisado em 24/11/2026 (revisão 3)
 > Plano canônico: `.context/plans/producao-go-live.md`
 > Plano completo: `.context/plans/producao-go-live/plano_completo_producao-go-live.md`
 
@@ -105,22 +105,22 @@ endereço de webhook que o `data_whatsapp` registra.
 8. Ambientes protegidos, tags protegidas, visibilidade do repositório e das
    GitHub Releases.
 
-## Convenções propostas
+## Convenções (revisão 3: valores reais de `docker/stack/<env>.vars`)
 
 | Item | Dev | Produção |
 |---|---|---|
-| Rede de telemetria | `smart_core_v2_telemetria_dev` | `smart_core_v2_telemetria_prod` |
-| Apelido do webhook | `webhook-ingress-dev` | `webhook-ingress-prod` |
-| Prefixo de instância | `dev-` | `prod-` |
+| Rede de telemetria | `smart_core_v2_observability` (rede histórica) | `smart_core_v2_telemetria_prod` |
+| URL do webhook registrada no Evolution | `http://webhook_ingress:9200` (pela `evolution_net`) | `http://172.17.0.1:9211` (fora da `evolution_net`) |
+| Prefixo de instância (proposto, A3 aberto) | `dev-` | `prod-` |
 | gRPC no host | 50051 | 50052 |
-| Web admin / tenant | 8081 / 8083 | 8082 / (fechado) |
-| OAuth / MCP | 8095 / 8099 | 8096 / 8098 |
-| Webhook (depuração) | 9210 | 9201 |
+| Web admin / tenant | 8081 / 8083 | 8082 / 8084 (hoje de pé; fechar na Fase 2B/4) |
+| OAuth / MCP | 8095 / 8099 | 8096 / 8100 |
+| Webhook no host | 9210 | 9211 |
 | Site | — | 8085 |
 | Releases | 8086 (servidor único, dois canais) | 8086 |
 | Canal do app | `beta` (build dev) | `stable` (build prod) |
 | Tag | `win-vX.Y.Z-beta.N` | `vX.Y.Z` (servidor), `win-vX.Y.Z` (app) |
-| Arquivo de ambiente | `/opt/smartcore/dev/env/dev.env` | `/opt/smartcore/prod/env/prod.env`, `/opt/smartcore/releases/env/releases.env` |
+| Arquivo de ambiente | secret `ENV_FILE_B64` (env `dev`) → `/opt/smartcore/dev/env/dev.env` | secret `ENV_FILE_B64` (env `prod`) → `/opt/smartcore/prod/env/prod.env`; releases ainda em `/opt/smartcore/releases-stack/.env` (proposto: `/opt/smartcore/releases/env/releases.env`) |
 
 ## Notas gerais
 
@@ -131,3 +131,16 @@ endereço de webhook que o `data_whatsapp` registra.
   https://docs.velopack.io/packaging/deltas ·
   https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation ·
   https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options
+
+## Revisão 3 — Grafana Alloy e fim de vida do Promtail
+
+- Fonte: https://grafana.com/docs/loki/latest/send-data/promtail/ (consultada em 24/11/2026).
+- Texto oficial: "Promtail is end of life (EOL) as of March 2, 2026." Sem novas
+  correções nem atualizações; a Grafana indica o **Grafana Alloy** como
+  substituto e oferece conversão da configuração do Promtail
+  (`alloy convert --source-format=promtail`).
+- Relevância: o `docker/observability/compose.yml` ainda usa `promtail`. A troca
+  é a decisão pendente D22 (Fase 2B). O Alloy tem os componentes
+  `prometheus.exporter.unix` (host) e `prometheus.exporter.cadvisor`
+  (containers), o que cobre A8 sem `node_exporter` e `cAdvisor` separados.
+- Documentação do Alloy: https://grafana.com/docs/alloy/latest/
