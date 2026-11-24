@@ -26,7 +26,12 @@ feature/* ──PR──▶ dev ──push──▶ deploy-dev.yml ──▶ vX.
 | `rollback-prod.yml` | manual (da `main`) | `prod` | `rollback.sh prod vX.Y.Z` com portão de migração |
 | `deploy-infra.yml` | push na `main` em `docker/{edge,observability,evolution}` ou manual | `prod` | `deploy-infra.sh <componente>` (bundle, validação, smoke, retorno automático) |
 
-Todos usam `concurrency: deploy-vps` — um deploy por vez na VPS.
+Cada tipo de run tem o seu grupo de `concurrency`: `deploy-vps-dev`,
+`deploy-vps-prod-<tag>`, `deploy-vps-rollback-prod` e `deploy-vps-infra`. O GitHub
+guarda só um run pendente por grupo e cancela o anterior; com grupos separados,
+um deploy de um tipo não cancela nem trava o de outro. Um deploy por vez na VPS
+continua garantido pelo runner self-hosted `hostinger`, que é único e roda um job
+por vez.
 
 ## 2. Layout no servidor
 
@@ -121,6 +126,8 @@ Obrigatório para release com migração (R-D4); opcional nas demais.
 4. Sem beta, o `deploy-prod` constrói o backend na hora; resto igual ao §4.
 5. O job abre **PR `main → dev`** (backport). Mergear com merge commit; conflito se
    resolve no PR, nunca na `main`.
+6. Ensaio do fluxo completo (hotfix → tag → deploy → backport): `v0.2.3`,
+   2026-11-23, junto do ensaio de rollback `v0.2.2 → v0.2.1` (R6).
 
 ## 6. Rollback de produção
 
