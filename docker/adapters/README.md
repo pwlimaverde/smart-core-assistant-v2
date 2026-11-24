@@ -1,5 +1,10 @@
 # Adapters Layer — Architecture Documentation
 
+> **Status (2026-11-24): planejado, não implementado.** Não existe código, Dockerfile
+> nem compose desta camada no repositório. A entrada de webhooks por gRPC descrita
+> abaixo foi substituída pelo intermediário HTTP por provedor, em
+> `smart-agent-config/doc_dev/arquitetura/adr-intermediario-webhooks-provedores.md`.
+
 ## Overview
 
 The adapters layer is the **exclusive communication bridge** between external providers (Evolution, Telegram, WhatsApp Official, etc) and the Smart Core backend.
