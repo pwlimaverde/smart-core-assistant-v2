@@ -85,6 +85,10 @@ if [ "$COMP" = evolution ]; then
     info "init-scripts do Evolution atualizados em $INIT_ESTAVEL"
   fi
   chmod -R u+rwX,go+rX,go-w "$INIT_ESTAVEL"
+  # Gravado no evolution.env (não só exportado): um `compose up` manual no bundle
+  # também enxerga o caminho fixo e não recria o banco por engano.
+  ( umask 077; sed -i '/^EVOLUTION_INIT_SCRIPTS_DIR=/d' "$ARQ_ENV"
+    printf 'EVOLUTION_INIT_SCRIPTS_DIR=%s\n' "$INIT_ESTAVEL" >> "$ARQ_ENV" )
   export EVOLUTION_INIT_SCRIPTS_DIR="$INIT_ESTAVEL"
 fi
 [ -f "$ARQ_ENV" ] || erro "$ARQ_ENV inexistente e sem secret para materializar"

@@ -50,8 +50,11 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|v| v.parse().ok())
         .unwrap_or(PORTA_PADRAO);
 
+    // Sem seguir redirect: um 301/302 do destino viraria GET sem corpo e o
+    // webhook se perderia. O status do destino tem de chegar intacto ao provedor.
     let cliente = reqwest::Client::builder()
         .timeout(TIMEOUT_DO_DESTINO)
+        .redirect(reqwest::redirect::Policy::none())
         .build()?;
     tracing::info!(
         ambientes = ?destinos.keys().collect::<Vec<_>>(),

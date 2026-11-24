@@ -81,19 +81,28 @@ dc "$BUNDLE" config -q || erro "compose config reprovado para $BUNDLE"
 # evolution_net) e 404 (ambiente ausente em PROVIDER_EDGE_DESTINOS). 502/503/504
 # só avisam: o ingress do ambiente pode estar fora justamente porque este deploy
 # é o conserto, e travar o deploy deixaria o ambiente sem saída.
-command -v jq >/dev/null || erro "jq ausente no host — necessário para o gate do cutover"
-url_webhook=$(dc "$BUNDLE" config --format json | jq -r '.services.data_whatsapp.environment.WEBHOOK_INGRESS_URL // empty')
-if [[ "$url_webhook" == *provider_edge* ]]; then
+#
+# Rollback (EVENTO=rollback) só avisa: travar o retorno a um bundle bom deixaria
+# a release ruim no ar.
+#
+# A URL sai do `compose config` em JSON, sem jq (o host não precisa dele). A
+# chave só existe no data_whatsapp.
+url_webhook=$(dc "$BUNDLE" config --format json \
+  | grep -oE '"WEBHOOK_INGRESS_URL": *"[^"]*"' | head -n1 | sed -E 's/.*: *"([^"]*)"/\1/' || true)
+bloqueia_cutover() {
+  if [ "${EVENTO:-deploy}" = rollback ]; then aviso "rollback segue apesar do gate: $*"; else erro "$*"; fi
+}
+if [[ "$url_webhook" == *provider_edge* || "$url_webhook" == *provider-edge* ]]; then
   saude=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}sem-healthcheck{{end}}' \
     smartcore-provider-edge 2>/dev/null || echo inexistente)
   [ "$saude" = healthy ] \
-    || erro "cutover bloqueado: WEBHOOK_INGRESS_URL=$url_webhook, mas o provider_edge está '$saude'. Suba-o pelo deploy-infra (evolution) ou volte a URL no $AMB.vars/override."
+    || bloqueia_cutover "cutover bloqueado: WEBHOOK_INGRESS_URL=$url_webhook, mas o provider_edge está '$saude'. Suba-o pelo deploy-infra (evolution) ou volte a URL no $AMB.vars/override."
   codigo=$(docker exec smartcore-provider-edge curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
     -X POST -H 'content-type: application/json' --data 'gate-de-cutover' \
     "${url_webhook%/}/webhook/evolution/00000000-0000-0000-0000-000000000000/0" 2>/dev/null || true)
   case "${codigo:-000}" in
     000|404)
-      erro "cutover bloqueado: $url_webhook não é atendido pelo provider_edge para o $AMB (HTTP ${codigo:-000}). Conferir a URL e PROVIDER_EDGE_DESTINOS no evolution.env." ;;
+      bloqueia_cutover "cutover bloqueado: $url_webhook não é atendido pelo provider_edge para o $AMB (HTTP ${codigo:-000}). Conferir a URL e PROVIDER_EDGE_DESTINOS no evolution.env." ;;
     502|503|504)
       aviso "cutover: provider_edge healthy, mas o ingress do $AMB não respondeu (HTTP $codigo); segue, este deploy sobe o ingress" ;;
     *)

@@ -285,7 +285,13 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
         Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
     };
 
-    let instance_name = match payload.get("instance_name").and_then(|v| v.as_str()) {
+    // Vazio ou só espaço é recusado: com o prefixo da dev, viraria a instância
+    // literal `dev-` no gateway.
+    let instance_name = match payload
+        .get("instance_name")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+    {
         Some(s) => s,
         None => {
             return erro(
