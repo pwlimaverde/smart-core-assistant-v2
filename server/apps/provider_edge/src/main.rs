@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use axum::{
     body::Bytes,
     extract::{DefaultBodyLimit, State},
-    http::{HeaderMap, StatusCode, Uri},
+    http::{header::CONTENT_TYPE, HeaderMap, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{get, post},
     Router,
@@ -123,6 +123,9 @@ async fn encaminhar(
     match pedido.await {
         Ok(resposta) => {
             let status = resposta.status();
+            // O content-type do ingress segue junto: sem ele, um erro em JSON
+            // chegaria ao provedor como application/octet-stream.
+            let tipo = resposta.headers().get(CONTENT_TYPE).cloned();
             let corpo_resposta = resposta.bytes().await.unwrap_or_default();
             tracing::info!(
                 ambiente,
@@ -130,7 +133,11 @@ async fn encaminhar(
                 tempo_ms = inicio.elapsed().as_millis() as u64,
                 "webhook repassado"
             );
-            (status, corpo_resposta).into_response()
+            let mut saida = (status, corpo_resposta).into_response();
+            if let Some(tipo) = tipo {
+                saida.headers_mut().insert(CONTENT_TYPE, tipo);
+            }
+            saida
         }
         Err(erro) => {
             // 504 ou 502: o provedor reentrega. Não registra o corpo (dado do cliente).
@@ -367,6 +374,11 @@ mod tests {
                 .unwrap();
             // Status do ingress chega intacto ao provedor (202, não 200).
             assert_eq!(resposta.status(), StatusCode::ACCEPTED);
+            // O content-type do ingress (texto, no falso) também chega intacto.
+            assert!(resposta.headers()[CONTENT_TYPE]
+                .to_str()
+                .unwrap()
+                .starts_with("text/plain"));
             // Só o ambiente do caminho recebe; o prefixo sai; query, apikey e corpo seguem.
             assert_eq!(
                 corpo_texto(resposta).await,

@@ -44,7 +44,7 @@
 
 | Item | Situação |
 |---|---|
-| `provider_edge` (crate, `server/apps/provider_edge`) | **Implementado**, com testes de rota: repasse ao ambiente do caminho (status, corpo, query e apikey intactos), 404 para ambiente desconhecido ou caminho sem ambiente, 502 com destino fora do ar e 504 com destino lento. |
+| `provider_edge` (crate, `server/apps/provider_edge`) | **Implementado**, com testes de rota: repasse ao ambiente do caminho (status, content-type, corpo, query e apikey intactos), 404 para ambiente desconhecido ou caminho sem ambiente, 502 com destino fora do ar e 504 com destino lento. |
 | Imagem (`docker/server/Dockerfile`) | **Corrigido em 2026-11-24.** O binário `provider_edge` não era copiado para a imagem final. O primeiro deploy-infra teria subido o container com "executable not found", reprovado no smoke e voltado ao bundle anterior. A CI (job `infra`) agora confere que todo app chamado por `command:` em algum compose está no Dockerfile, e valida o compose do Evolution. |
 | OTLP do `provider_edge` | Desligado (`OTEL_SDK_DISABLED=true`): o serviço só está na `evolution_net`, sem rota para o collector. Os logs JSON do stdout chegam ao Loki pelo promtail. |
 | Compose (`docker/evolution/compose.yml`, serviço `provider_edge`) | **Implementado.** Só sobe com `PROVIDER_EDGE_IMAGE` no env do Evolution. |

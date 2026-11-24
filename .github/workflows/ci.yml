@@ -445,7 +445,9 @@ jobs:
           falta=0
           for dir in server/apps/*/; do
             app="$(basename "$dir")"
-            if grep -rqE "command: \[\"$app\"" docker/stack docker/evolution; then
+            # Formas cobertas: `command: ["app"`, lista em bloco (`- app`) e sonda
+            # `test: ["CMD", "app", ...]` (o binário healthcheck).
+            if grep -rqE "command: \[\"$app\"|^\s*-\s+\"?$app\"?\s*$|\"CMD\", \"$app\"" docker/stack docker/evolution; then
               if grep -q "/app/target/release/$app " docker/server/Dockerfile; then
                 echo "ok  $app"
               else
@@ -455,6 +457,18 @@ jobs:
             fi
           done
           exit "$falta"
+      # O destino `prod` do provider_edge (compose do Evolution) tem de bater com a
+      # porta que a prod publica na ponte (prod.vars). Se divergirem, depois do
+      # cutover todo webhook da prod vira 502 e a Evolution desiste.
+      - name: Destino prod do provider_edge igual à porta da prod
+        run: |
+          set -euo pipefail
+          porta="$(grep -E '^WEBHOOK_INGRESS_PORT=' docker/stack/prod.vars | cut -d= -f2)"
+          if grep -qE "PROVIDER_EDGE_DESTINOS:.*prod=http://172\.17\.0\.1:${porta}[},]" docker/evolution/compose.yml; then
+            echo "ok  prod=172.17.0.1:$porta"
+          else
+            echo "::error::PROVIDER_EDGE_DESTINOS (docker/evolution/compose.yml) não aponta para 172.17.0.1:$porta (prod.vars)"; exit 1
+          fi
       - name: Sem tag móvel nas imagens da aplicação
         run: |
           if grep -nE 'image: .*smartcore-[a-z-]+:(latest|dev)' docker/stack/*.yml; then
