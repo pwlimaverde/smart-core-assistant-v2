@@ -1,0 +1,13 @@
+# A cada 15 min: a verificação é local (lê um JSON, sem chamada de API), então
+# um intervalo curto reduz o tempo parado depois do reset sem custo de limite.
+[Unit]
+Description=Agenda o verificador da continuidade do Claude Code
+
+[Timer]
+OnBootSec=3min
+OnCalendar=*:0/15
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

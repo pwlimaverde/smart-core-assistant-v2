@@ -172,7 +172,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "cat \"${CLAUDE_PROJECT_DIR:-.}/.claude/roteador/status.txt\" 2>/dev/null || echo 'roteador: sem status'",
+    "command": "cat \"${CLAUDE_PROJECT_DIR:-.}/.claude/roteador/status.txt\" 2>/dev/null || echo 'roteador: sem status'; cat \"${ROTEADOR_CONTINUIDADE_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/roteador-continuidade}/status.txt\" 2>/dev/null; true",
     "padding": 0
   }
 }

@@ -1,0 +1,26 @@
+# Verificador da continuidade após limite de uso do Claude Code (VPS).
+# Disparado pelo roteador-continuidade.timer; roda e termina (oneshot). Se uma
+# retomada estiver em andamento, o systemd não inicia outra instância.
+[Unit]
+Description=Continuidade do Claude Code apos limite de uso (verificador)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root
+Environment=HOME=/root
+Environment=PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=TERM=xterm-256color
+Environment=ROTEADOR_MACHINE=VPS
+# Mesma decisão do claude-rc: a retomada roda como root em bypassPermissions,
+# e o Claude Code só aceita isso como root com IS_SANDBOX=1.
+Environment=IS_SANDBOX=1
+Environment=ROTEADOR_CONTINUIDADE_PERMISSAO=bypassPermissions
+ExecStart=/usr/bin/python3 /opt/smartcore/ops/smart-core-assistant-v2/smart-agent-config/.claude/hooks/continuidade.py --verificar
+# Uma retomada pode durar horas (timeout interno de 4 h); folga para o registro.
+TimeoutStartSec=5h
+Nice=5
+StandardOutput=journal
+StandardError=journal
