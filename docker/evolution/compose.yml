@@ -75,6 +75,31 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Intermediário de webhooks de provedores (ADR adr-intermediario-webhooks-provedores.md).
+  # Recebe o webhook do Evolution em `/{ambiente}/webhook/...` e repassa ao
+  # webhook_ingress daquele ambiente. Sem porta publicada: só a rede evolution_net
+  # alcança este serviço. Imagem fixa por sha, gravada pelo deploy-infra.sh.
+  provider_edge:
+    image: ${PROVIDER_EDGE_IMAGE:?PROVIDER_EDGE_IMAGE ausente (evolution.env)}
+    container_name: smartcore-provider-edge
+    command: ["provider_edge"]
+    environment:
+      PROVIDER_EDGE_PORT: "8088"
+      # ambiente=destino, separados por vírgula. dev: ingress na evolution_net;
+      # prod: ingress publicado na ponte do host (ver prod.override.yml).
+      PROVIDER_EDGE_DESTINOS: ${PROVIDER_EDGE_DESTINOS:-dev=http://webhook_ingress:9200,prod=http://172.17.0.1:9211}
+      RUST_LOG: ${PROVIDER_EDGE_RUST_LOG:-info}
+    networks:
+      - evolution_net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "http://127.0.0.1:8088/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 128m
+    restart: unless-stopped
+
 volumes:
   postgres_evolution_data:
   evolution_data:

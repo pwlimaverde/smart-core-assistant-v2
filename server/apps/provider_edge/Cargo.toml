@@ -1,0 +1,21 @@
+[package]
+name = "provider_edge"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "provider_edge"
+path = "src/main.rs"
+
+[dependencies]
+observability = { workspace = true }
+tokio         = { workspace = true }
+tracing       = { workspace = true }
+anyhow        = { workspace = true }
+axum          = "0.8"
+# Só HTTP interno (rede Docker e ponte do host): sem TLS, sem HTTP/2.
+reqwest       = { version = "0.12", default-features = false }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tower = { workspace = true }

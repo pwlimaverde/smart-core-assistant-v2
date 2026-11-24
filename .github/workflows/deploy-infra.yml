@@ -17,6 +17,10 @@ on:
       - 'docker/observability/**'
       - 'docker/evolution/**'
       - 'infra/deploy/deploy-infra.sh'
+      - 'server/apps/provider_edge/**'
+      - 'server/crates/observability/**'
+      - 'server/Cargo.lock'
+      - 'docker/server/Dockerfile'
   workflow_dispatch:
     inputs:
       componente:
@@ -55,7 +59,7 @@ jobs:
           filters: |
             edge: ['docker/edge/**', 'infra/deploy/deploy-infra.sh']
             observability: ['docker/observability/**', 'infra/deploy/deploy-infra.sh']
-            evolution: ['docker/evolution/**', 'infra/deploy/deploy-infra.sh']
+            evolution: ['docker/evolution/**', 'infra/deploy/deploy-infra.sh', 'server/apps/provider_edge/**', 'server/crates/observability/**', 'server/Cargo.lock', 'docker/server/Dockerfile']
       - id: saida
         env:
           EVENTO: ${{ github.event_name }}
@@ -104,11 +108,40 @@ jobs:
           cache-from: type=gha,scope=edge
           cache-to: type=gha,mode=max,scope=edge
 
+  # Intermediário de webhooks (provider_edge). Usa o mesmo Dockerfile do servidor:
+  # a imagem traz todos os binários do workspace e o compose escolhe o do serviço.
+  build-provider-edge:
+    name: Build Provider Edge (webhooks)
+    needs: detecta
+    if: needs.detecta.outputs.evolution == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      imagem: ${{ steps.tag.outputs.imagem }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: tag
+        run: echo "imagem=ghcr.io/${{ github.repository }}/smartcore-provider-edge:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/server/Dockerfile
+          push: true
+          tags: ${{ steps.tag.outputs.imagem }}
+          cache-from: type=gha,scope=provider-edge
+          cache-to: type=gha,mode=max,scope=provider-edge
+
   deploy:
     name: Deploy infra (aprovação prod)
-    needs: [detecta, build-edge]
+    needs: [detecta, build-edge, build-provider-edge]
     if: >-
       ${{ always() && needs.detecta.result == 'success' && needs.build-edge.result != 'failure'
+          && needs.build-provider-edge.result != 'failure'
           && (needs.detecta.outputs.edge == 'true' || needs.detecta.outputs.observability == 'true'
               || needs.detecta.outputs.evolution == 'true') }}
     runs-on: [self-hosted, hostinger]
@@ -133,6 +166,7 @@ jobs:
         if: needs.detecta.outputs.evolution == 'true'
         env:
           EVOLUTION_ENV_FILE_B64: ${{ secrets.EVOLUTION_ENV_FILE_B64 }}
+          PROVIDER_EDGE_IMAGE: ${{ needs.build-provider-edge.outputs.imagem }}
         run: infra/deploy/deploy-infra.sh evolution "sha-${GITHUB_SHA::7}-${GITHUB_RUN_ATTEMPT}"
       - name: Borda (edge)
         if: needs.detecta.outputs.edge == 'true'

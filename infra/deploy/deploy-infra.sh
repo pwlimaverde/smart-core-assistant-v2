@@ -63,6 +63,14 @@ if [ "$COMP" = edge ]; then
   [ -n "${EDGE_IMAGE:-}" ] || erro "EDGE_IMAGE não informado"
   ( umask 077; printf 'EDGE_IMAGE=%s\n' "$EDGE_IMAGE" > "$ARQ_ENV" )
 fi
+if [ "$COMP" = evolution ]; then
+  # Imagem do intermediário (provider_edge) vem do build do próprio run, não do
+  # secret: troca a cada deploy. Substitui a linha anterior, se houver.
+  [ -n "${PROVIDER_EDGE_IMAGE:-}" ] || erro "PROVIDER_EDGE_IMAGE não informado"
+  [ -f "$ARQ_ENV" ] || erro "$ARQ_ENV inexistente e sem secret para materializar"
+  ( umask 077; sed -i '/^PROVIDER_EDGE_IMAGE=/d' "$ARQ_ENV"
+    printf 'PROVIDER_EDGE_IMAGE=%s\n' "$PROVIDER_EDGE_IMAGE" >> "$ARQ_ENV" )
+fi
 [ -f "$ARQ_ENV" ] || erro "$ARQ_ENV inexistente e sem secret para materializar"
 
 # --- bundle --------------------------------------------------------------------
