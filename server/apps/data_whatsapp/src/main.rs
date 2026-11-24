@@ -310,6 +310,31 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
         Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
     };
 
+    // 0b. Nome único no gateway compartilhado. O Evolution é um só para dev e
+    // prod: criar com um nome já existente sobrescreveria a URL de webhook e o
+    // pareamento da instância que já está lá. Nome repetido é recusado com erro
+    // claro. Falha na consulta também recusa (fail-closed): criar às cegas é o
+    // que causa a colisão.
+    match p.list_all_instances().await {
+        Ok(nomes) if nomes.iter().any(|n| n == instance_name) => {
+            return erro(
+                error_core::AppError::Validation(
+                    "nome já em uso no gateway de WhatsApp; escolha outro nome".into(),
+                ),
+                &env,
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            return erro(
+                error_core::AppError::Internal(format!(
+                    "Falha ao verificar nomes no provedor: {e}"
+                )),
+                &env,
+            )
+        }
+    }
+
     // 1. Cria a instância no provedor
     let result = match p.create_instance(instance_name, None).await {
         Ok(res) => res,
