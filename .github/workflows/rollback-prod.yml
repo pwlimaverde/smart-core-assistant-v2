@@ -17,8 +17,11 @@ on:
         options: ['nao', 'sim']
         default: 'nao'
 
+# Grupo próprio: deploy de dev, de prod ou de infra não cancela mais um rollback
+# à espera de aprovação. Só um rollback novo substitui o pendente anterior.
+# Serialização no host: runner self-hosted único (ver deploy-dev.yml).
 concurrency:
-  group: deploy-vps
+  group: deploy-vps-rollback-prod
   cancel-in-progress: false
 
 permissions:
