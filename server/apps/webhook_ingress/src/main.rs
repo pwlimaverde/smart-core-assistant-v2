@@ -325,6 +325,18 @@ fn enforce_rate_limit_ligado(valor: Option<&str>) -> bool {
     }
 }
 
+/// Este evento consome a cota de rate limit da instância?
+///
+/// Só mensagens consomem. Recibos de leitura (`Receipt`), presença e conexão são
+/// sinalização, não tráfego do tenant, e chegam em volume alto: em 24h de dev,
+/// 540 recibos contra 473 mensagens. Contá-los deixava a cota de 120/min ser
+/// consumida pela leitura das mensagens enviadas, e a recusa 429 fazia a Evolution
+/// reentregar até desistir, perdendo a mensagem real. Eventos que não são
+/// mensagem seguem para a normalização mesmo acima do teto.
+fn conta_no_rate_limit(event_type: &str) -> bool {
+    canonical_event(event_type) == Some("MESSAGE")
+}
+
 #[tracing::instrument(
     skip(state, headers, body),
     fields(
@@ -465,7 +477,9 @@ async fn handle_webhook(
     // unificado via RPC no data_redis (mesma fonte do runtime_api), não mais um
     // contador próprio na conexão de bus deste serviço. Fail-open: erro na
     // checagem não derruba a ingestão (mesmo espírito do QuotaGuard).
-    {
+    // Só mensagens entram na cota: recibos, presença e conexão são sinalização
+    // (ver `conta_no_rate_limit`).
+    if conta_no_rate_limit(event_type) {
         let max = env::var("WEBHOOK_RATE_LIMIT_MAX")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
@@ -1294,6 +1308,22 @@ mod tests {
         assert!(!enforce_rate_limit_ligado(Some("false")));
         assert!(!enforce_rate_limit_ligado(Some("FALSE")));
         assert!(!enforce_rate_limit_ligado(Some("False")));
+    }
+
+    /// Regressão: recibo, presença e conexão não podem consumir a cota da instância
+    /// (causa: em dev, 540 recibos contra 473 mensagens em 24h). Mensagens, nos dois
+    /// formatos de evento (Go e traduzido), continuam contando.
+    #[test]
+    fn so_mensagem_consome_a_cota_do_rate_limit() {
+        assert!(conta_no_rate_limit("Message"));
+        assert!(conta_no_rate_limit("messages.upsert"));
+        assert!(conta_no_rate_limit("MESSAGE"));
+        assert!(!conta_no_rate_limit("Receipt"));
+        assert!(!conta_no_rate_limit("READ_RECEIPT"));
+        assert!(!conta_no_rate_limit("Presence"));
+        assert!(!conta_no_rate_limit("Connected"));
+        assert!(!conta_no_rate_limit("QRCode"));
+        assert!(!conta_no_rate_limit(""));
     }
 
     /// A whitelist cadastra números a IGNORAR (diretoria/supervisão/testes), e não
