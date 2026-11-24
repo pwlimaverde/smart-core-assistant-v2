@@ -101,10 +101,11 @@ expand/contract. Bloqueante externo: **D1 do go-live (memória da VPS)**.
 - [ ] `RUNBOOK_DEPLOY.md` publicado; `CLAUDE.md` e docs sem regra antiga.
 
 ## Estado do workflow PREVC
-`workflow-init` **não** foi executado: o `prevc.json` está ligado ao plano
-`windows-releases-v01-beta` (fase C em andamento) e seria sobrescrito. Rodar
-`workflow-init({ name: "servidor-reestruturacao-dev-prod", scale: "MEDIUM" })` +
-`plan({ action: "link" })` depois de fechar ou arquivar aquele workflow.
+Workflow criado e plano vinculado (`workflow-init` + `link` em 2026-11-21, `prevc.json`
+com `primary: servidor-reestruturacao-dev-prod`). Em 2026-11-24 o tracking do MCP foi
+conciliado com a execução real: P, R, E e C como concluídas; V em andamento (decisão
+`dec-1795515017915`). O gate R→E ainda pede aprovação formal do plano
+(`workflow-manage approvePlan`), que cabe ao dono.
 
 ## Execution History
 
