@@ -108,6 +108,14 @@ try {
         Write-Host "ok"
     }
 
+    # Diretório curto para o build Rust do cargokit (local_engine_ffi): o padrão,
+    # dentro de build\windows\..., estoura o MAX_PATH de 260 do link.exe
+    # (LNK1104). Ver clients/packages/local_engine_ffi/cargokit/cmake/cargokit.cmake.
+    if (-not $env:CARGOKIT_TEMP_DIR) {
+        $env:CARGOKIT_TEMP_DIR = if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP "ck" } else { Join-Path $env:LOCALAPPDATA "sc-ck" }
+    }
+    Write-Host "CARGOKIT_TEMP_DIR = $env:CARGOKIT_TEMP_DIR"
+
     Write-Etapa "flutter build windows --release"
     & flutter build windows --release `
         --target "lib/main_$Env.dart" `

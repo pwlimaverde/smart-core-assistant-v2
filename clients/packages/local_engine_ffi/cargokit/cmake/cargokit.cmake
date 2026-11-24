@@ -27,7 +27,17 @@ function(apply_cargokit target manifest_dir lib_name any_symbol_name)
         set(CARGOKIT_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}")
         set(OUTPUT_LIB "${CMAKE_CURRENT_BINARY_DIR}/${CARGOKIT_LIB_FULL_NAME}")
     endif()
-    set(CARGOKIT_TEMP_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargokit_build")
+    # Ajuste local (não é do cargokit original): no Windows, o diretório padrão
+    # fica dentro de build\windows\x64\plugins\<plugin>\cargokit_build, e os
+    # artefatos do cargo (build\<crate>\<hash>\out\lib<crate>-<hash>.rlib)
+    # passavam de 260 caracteres no runner -> LNK1104 no link.exe (MAX_PATH).
+    # Com CARGOKIT_TEMP_DIR no ambiente, o --target-dir do cargo vai para um
+    # caminho curto. Sem a variável, o comportamento original é mantido.
+    if (DEFINED ENV{CARGOKIT_TEMP_DIR} AND NOT "$ENV{CARGOKIT_TEMP_DIR}" STREQUAL "")
+        file(TO_CMAKE_PATH "$ENV{CARGOKIT_TEMP_DIR}/${lib_name}" CARGOKIT_TEMP_DIR)
+    else()
+        set(CARGOKIT_TEMP_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargokit_build")
+    endif()
 
     if (FLUTTER_TARGET_PLATFORM)
         set(CARGOKIT_TARGET_PLATFORM "${FLUTTER_TARGET_PLATFORM}")
