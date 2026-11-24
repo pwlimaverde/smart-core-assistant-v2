@@ -300,10 +300,11 @@ fn remetente_deve_ser_ignorado(resposta_whitelist: Option<bool>) -> bool {
     resposta_whitelist.unwrap_or(false)
 }
 
-/// Interpreta `WEBHOOK_RATE_LIMIT_ENFORCE` (N7.3). Default `true` — o bloqueio 429
-/// já era o comportamento vigente desde a N4.4 e desligá-lo por omissão abriria a
-/// ingestão a rajadas; a flag existe para calibrar `MAX` numa janela de observação.
-/// Só o literal `"false"` (case-insensitive) desliga o enforce.
+/// Interpreta `WEBHOOK_RATE_LIMIT_ENFORCE` (N7.3). Default `false`: só registra e
+/// audita. Motivo (2026-11-24): recusar mensagem com 429 não protege nada útil.
+/// A Evolution reentrega 4 vezes e desiste, e a mensagem real se perde em silêncio
+/// (em dev, 1227 entregas falharam assim). A proteção continua pela auditoria da
+/// travessia do teto e pelo QuotaGuard. Só `"true"` (case-insensitive) liga o 429.
 /// Esta requisição barrada merece uma linha na trilha de auditoria?
 ///
 /// Só a **travessia** do teto: a primeira requisição que passou do limite dentro
@@ -319,10 +320,7 @@ fn auditar_rate_limit(total: u64, max: u64) -> bool {
 }
 
 fn enforce_rate_limit_ligado(valor: Option<&str>) -> bool {
-    match valor {
-        Some(v) => !v.eq_ignore_ascii_case("false"),
-        None => true,
-    }
+    valor.is_some_and(|v| v.eq_ignore_ascii_case("true"))
 }
 
 /// Este evento consome a cota de rate limit da instância?
@@ -1296,18 +1294,16 @@ mod tests {
             .with_state(state)
     }
 
-    /// N7.3 — a política log-only ↔ enforce é por flag, mas o default NÃO pode
-    /// abrir a proteção que já existia desde a N4.4: ausência da env var e qualquer
-    /// valor que não seja `"false"` mantêm o bloqueio 429.
+    /// N7.3 — o default é log-only (sem 429). Só `"true"` liga o bloqueio: ausência
+    /// da env var, vazio ou qualquer outro valor deixam a ingestão seguir.
     #[test]
-    fn enforce_rate_limit_default_e_ligado_e_so_false_desliga() {
-        assert!(enforce_rate_limit_ligado(None));
-        assert!(enforce_rate_limit_ligado(Some("true")));
-        assert!(enforce_rate_limit_ligado(Some("")));
-        assert!(enforce_rate_limit_ligado(Some("qualquer-coisa")));
+    fn enforce_rate_limit_default_e_desligado_e_so_true_liga() {
+        assert!(!enforce_rate_limit_ligado(None));
+        assert!(!enforce_rate_limit_ligado(Some("")));
+        assert!(!enforce_rate_limit_ligado(Some("qualquer-coisa")));
         assert!(!enforce_rate_limit_ligado(Some("false")));
-        assert!(!enforce_rate_limit_ligado(Some("FALSE")));
-        assert!(!enforce_rate_limit_ligado(Some("False")));
+        assert!(enforce_rate_limit_ligado(Some("true")));
+        assert!(enforce_rate_limit_ligado(Some("TRUE")));
     }
 
     /// Regressão: recibo, presença e conexão não podem consumir a cota da instância
