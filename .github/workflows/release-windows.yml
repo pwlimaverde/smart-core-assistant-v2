@@ -125,6 +125,10 @@ jobs:
 
       - name: flutter build windows
         working-directory: clients/apps/smart-core-tenant
+        # Build Rust do cargokit em caminho curto: o padrão dentro de
+        # build\windows\... passa do MAX_PATH (260) do link.exe -> LNK1104.
+        env:
+          CARGOKIT_TEMP_DIR: ${{ runner.temp }}\ck
         run: |
           flutter build windows --release `
             --target "lib/main_${{ steps.v.outputs.ambiente }}.dart" `

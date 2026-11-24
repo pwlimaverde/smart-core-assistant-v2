@@ -4,10 +4,17 @@ on:
   push:
     branches: [dev]
 
-# Um único grupo para TODO deploy na VPS (dev, prod, infra, rollback): o host é
-# um só, e dois `compose pull`/`up` simultâneos disputam disco e memória.
+# Grupo próprio da dev. O GitHub guarda só UM run pendente por grupo e cancela
+# o pendente anterior quando chega outro — com o grupo único `deploy-vps`, um
+# push na dev cancelava rollback/deploy de prod à espera de aprovação, e um run
+# de infra parado na aprovação travava a dev. Aqui, um push novo na dev só
+# substitui a beta pendente anterior (a mais nova já contém a anterior).
+# A serialização no host continua: os jobs que tocam a VPS rodam no runner
+# self-hosted `hostinger`, que é único e executa um job por vez (fila, sem
+# cancelamento). Se um dia houver um segundo runner com esse rótulo, isso deixa
+# de valer e é preciso trava no host (flock no deploy.sh).
 concurrency:
-  group: deploy-vps
+  group: deploy-vps-dev
   cancel-in-progress: false
 
 permissions:

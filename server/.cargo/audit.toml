@@ -10,58 +10,29 @@
 # em código que roda se corrige atualizando, não ignorando.
 
 # ---------------------------------------------------------------------------
-# PENDENTE, SEM EXCEÇÃO DE PROPÓSITO — RUSTSEC-2026-0459 (libsqlite3-sys 0.37)
+# CORRIGIDO em 24/11/2026 — RUSTSEC-2026-0459 (libsqlite3-sys 0.37 -> 0.40)
+#                          e RUSTSEC-2026-0592 (url 2.5.8 -> 2.5.9)
 #
-# O que é: o SQLite embutido antes do 3.54.0 pode devolver memória não
-# inicializada do cache de páginas quando abre um banco ao lado de um arquivo
-# `-wal` com tamanho de página diferente. Ataque local: alguém precisa plantar
-# o par de arquivos e o processo precisa abri-los. CVSS 6.8 (médio).
+# 0459: SQLite embutido antes do 3.54.0 podia devolver memória não
+# inicializada ao abrir banco com `-wal` de tamanho de página diferente.
+# Chegava por `local_engine` -> `sqlx` (feature `sqlite`) -> `sqlx-sqlite`.
+# Destravou quando o `sqlx-sqlite 0.9.1` subiu o limite para
+# `libsqlite3-sys < 0.41`. O `sqlx = "=0.9.1"` trava todos os subcrates, então
+# `sqlx-core`/`sqlx-postgres` dos serviços também foram de 0.9.0 para 0.9.1.
 #
-# Por onde chega: `local_engine` -> `sqlx` (feature `sqlite`) -> `sqlx-sqlite
-# 0.9.0` -> `libsqlite3-sys`. Prova de que É compilado (por isso não entra na
-# lista abaixo): `cargo tree -i libsqlite3-sys` mostra o caminho até o
-# `local_engine`, que é membro do workspace e vai no app Flutter pelo
-# `clients/packages/local_engine_ffi`. Nenhum serviço do servidor abre banco
-# SQLite (o código deles só fala Postgres); o build `--workspace` compila o
-# `sqlx` com a feature `sqlite` só por unificação de features do cargo.
+# 0592: `Url::origin()` estourava a pilha com `blob:` aninhado. Nenhum código
+# do workspace chama `Url::origin()`; corrigido mesmo assim por caber no lock.
 #
-# Por que não foi corrigido em 10/11/2026: a correção está no
-# `libsqlite3-sys >= 0.39.0`, e o `sqlx-sqlite 0.9.0` (último publicado) exige
-# `libsqlite3-sys < 0.38.0`. O sqlx já subiu o limite para `< 0.40.0` no
-# `main` (launchbadge/sqlx, PR #4502, 08/11/2026), mas ainda não publicou
-# versão com isso.
+# O que mudou: só `server/Cargo.lock` e
+# `clients/packages/local_engine_ffi/rust/Cargo.lock` (`cargo update -p url
+# -p sqlx -p libsqlite3-sys`). No lock do FFI o `sqlx-postgres 0.9.1` exigiu
+# `web-sys >= 0.3.77`, o que levou a família `wasm-bindgen` de 0.2.92 para
+# 0.2.130; ela só entra no alvo wasm (`cargo tree --target
+# x86_64-pc-windows-msvc -i wasm-bindgen` responde "nothing to print"), mas o
+# instalador deve ser ensaiado em `ci/release-windows-*` antes de um `win-v*`.
 #
-# Reconferido em 13/11/2026, no crates.io: o `sqlx-sqlite 0.9.0` (21/05/2026)
-# continua sendo o último publicado e continua exigindo
-# `libsqlite3-sys >=0.30.1, <0.38.0`. Nada mudou; o job de advisories segue
-# vermelho por este item, de propósito, e não bloqueia o pipeline
-# (`continue-on-error` no `ci.yml`).
-#
-# Dono: dono do produto (mantenedor do repositório). Próxima revisão:
-# 11/12/2026, ou antes, no dia em que sair versão nova do `sqlx`.
-#
-# As saídas avaliadas e descartadas:
-#   - `[patch.crates-io]` com o sqlx do git: troca também o `sqlx-core` e o
-#     driver Postgres de TODOS os serviços por um commit não publicado;
-#   - cópia local do `sqlx-sqlite` com o limite alterado: o `cargo chef cook`
-#     da imagem do servidor (docker/server/Dockerfile) troca o código de
-#     dependência por caminho por um esqueleto vazio, e o `sqlx` do registro
-#     não compila contra ele — quebraria o deploy;
-#   - trocar o `sqlx` do `local_engine` por outra biblioteca: reescrita do
-#     índice e da fila offline do app, sem ganho que a justifique.
-#
-# Risco aceito enquanto isso: o `local_engine` só abre o banco que ele mesmo
-# cria na pasta de dados do app. Para explorar, o atacante já precisa escrever
-# nessa pasta com o usuário do Windows — e aí já lê o banco inteiro sem o bug.
-#
-# Caminho da correção, quando sair o sqlx com o PR #4502 (0.9.1 ou seguinte):
-#   1. em `server/`: `cargo update -p sqlx-sqlite -p libsqlite3-sys`
-#      (conferir no lock `libsqlite3-sys >= 0.39.1`);
-#   2. o mesmo em `clients/packages/local_engine_ffi/rust/`, que tem lock
-#      próprio e é o que vai no instalador;
-#   3. CI da branch (testes do `local_engine`) e um ensaio do instalador em
-#      branch `ci/release-windows-*` antes de qualquer tag `win-v*`;
-#   4. apagar este bloco.
+# Dono: dono do produto. Este bloco é só registro; pode ser apagado na
+# próxima revisão (11/12/2026).
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------

@@ -26,7 +26,12 @@ feature/* ──PR──▶ dev ──push──▶ deploy-dev.yml ──▶ vX.
 | `rollback-prod.yml` | manual (da `main`) | `prod` | `rollback.sh prod vX.Y.Z` com portão de migração |
 | `deploy-infra.yml` | push na `main` em `docker/{edge,observability,evolution}` ou manual | `prod` | `deploy-infra.sh <componente>` (bundle, validação, smoke, retorno automático) |
 
-Todos usam `concurrency: deploy-vps` — um deploy por vez na VPS.
+Cada tipo de run tem o seu grupo de `concurrency`: `deploy-vps-dev`,
+`deploy-vps-prod-<tag>`, `deploy-vps-rollback-prod` e `deploy-vps-infra`. O GitHub
+guarda só um run pendente por grupo e cancela o anterior; com grupos separados,
+um deploy de um tipo não cancela nem trava o de outro. Um deploy por vez na VPS
+continua garantido pelo runner self-hosted `hostinger`, que é único e roda um job
+por vez.
 
 ## 2. Layout no servidor
 

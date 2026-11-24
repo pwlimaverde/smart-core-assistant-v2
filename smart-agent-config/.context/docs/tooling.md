@@ -103,8 +103,10 @@ status — o `statusLine` só faz `cat`, sem Python) e `catalogo.json` (cache po
 **Contrato do gancho** (para portar sem mudar o resto): stdin = JSON do Claude Code
 (`prompt`, `session_id`); stdout = `hookSpecificOutput.additionalContext` ou nada;
 efeitos = uma linha no JSONL e o `status.txt`. Registrado no `settings.json` em
-*exec form* (`py -3 ${CLAUDE_PROJECT_DIR}/.claude/hooks/roteador.py`) — nunca
-`python3`, que nesta máquina é o alias da Microsoft Store.
+*exec form*, no `~/.claude/settings.json` global de cada máquina: no Windows
+`py -3 ${CLAUDE_PROJECT_DIR}/.claude/hooks/roteador.py` — nunca `python3`, que lá é o
+alias da Microsoft Store; no VPS (Linux, sem `py`) `python3` com o mesmo argumento. O
+comando `/roteador` escolhe sozinho: `py -3` se existir, senão `python3`.
 
 **Calibração**: `py -3 .claude/hooks/avaliar_roteador.py` roda os casos de
 `avaliar_casos.json` em modo seco e imprime a matriz de nível, o acerto de skill, a
