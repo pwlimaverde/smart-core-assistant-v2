@@ -300,11 +300,6 @@ fn remetente_deve_ser_ignorado(resposta_whitelist: Option<bool>) -> bool {
     resposta_whitelist.unwrap_or(false)
 }
 
-/// Interpreta `WEBHOOK_RATE_LIMIT_ENFORCE` (N7.3). Default `false`: só registra e
-/// audita. Motivo (2026-11-24): recusar mensagem com 429 não protege nada útil.
-/// A Evolution reentrega 4 vezes e desiste, e a mensagem real se perde em silêncio
-/// (em dev, 1227 entregas falharam assim). A proteção continua pela auditoria da
-/// travessia do teto e pelo QuotaGuard. Só `"true"` (case-insensitive) liga o 429.
 /// Esta requisição barrada merece uma linha na trilha de auditoria?
 ///
 /// Só a **travessia** do teto: a primeira requisição que passou do limite dentro
@@ -319,6 +314,11 @@ fn auditar_rate_limit(total: u64, max: u64) -> bool {
     total == max + 1
 }
 
+/// Interpreta `WEBHOOK_RATE_LIMIT_ENFORCE` (N7.3). Default `false`: só registra e
+/// audita. Motivo (2026-11-24): recusar mensagem com 429 não protege nada útil.
+/// A Evolution reentrega 4 vezes e desiste, e a mensagem real se perde em silêncio
+/// (em dev, 1227 entregas falharam assim). A proteção continua pela auditoria da
+/// travessia do teto e pelo QuotaGuard. Só `"true"` (case-insensitive) liga o 429.
 fn enforce_rate_limit_ligado(valor: Option<&str>) -> bool {
     valor.is_some_and(|v| v.eq_ignore_ascii_case("true"))
 }

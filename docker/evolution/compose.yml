@@ -89,6 +89,10 @@ services:
       # prod: ingress publicado na ponte do host (ver prod.override.yml).
       PROVIDER_EDGE_DESTINOS: ${PROVIDER_EDGE_DESTINOS:-dev=http://webhook_ingress:9200,prod=http://172.17.0.1:9211}
       RUST_LOG: ${PROVIDER_EDGE_RUST_LOG:-info}
+      # Sem rota para o otel-collector (só está na evolution_net): com o OTLP
+      # ligado, o exportador tentaria localhost:4317 e encheria o log de erro de
+      # exportação. Os logs JSON do stdout continuam indo para o Loki (promtail).
+      OTEL_SDK_DISABLED: ${PROVIDER_EDGE_OTEL_SDK_DISABLED:-true}
     networks:
       - evolution_net
     healthcheck:

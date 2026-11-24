@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use axum::{
     body::Bytes,
     extract::{DefaultBodyLimit, State},
-    http::{HeaderMap, StatusCode, Uri},
+    http::{header::CONTENT_TYPE, HeaderMap, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{get, post},
     Router,
@@ -123,6 +123,9 @@ async fn encaminhar(
     match pedido.await {
         Ok(resposta) => {
             let status = resposta.status();
+            // O content-type do ingress segue junto: sem ele, um erro em JSON
+            // chegaria ao provedor como application/octet-stream.
+            let tipo = resposta.headers().get(CONTENT_TYPE).cloned();
             let corpo_resposta = resposta.bytes().await.unwrap_or_default();
             tracing::info!(
                 ambiente,
@@ -130,7 +133,11 @@ async fn encaminhar(
                 tempo_ms = inicio.elapsed().as_millis() as u64,
                 "webhook repassado"
             );
-            (status, corpo_resposta).into_response()
+            let mut saida = (status, corpo_resposta).into_response();
+            if let Some(tipo) = tipo {
+                saida.headers_mut().insert(CONTENT_TYPE, tipo);
+            }
+            saida
         }
         Err(erro) => {
             // 504 ou 502: o provedor reentrega. Não registra o corpo (dado do cliente).
@@ -297,6 +304,118 @@ mod tests {
                     .body(Body::from("{}"))
                     .unwrap(),
             )
+            .await
+            .unwrap();
+        assert_eq!(resposta.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// Sobe um ingress falso em 127.0.0.1 (porta efêmera) que devolve, no corpo,
+    /// o caminho, a query e a apikey recebidos, com o status 202 que o ingress real
+    /// usa. Em `/lento/...` demora mais que o timeout do cliente de teste.
+    async fn ingress_falso(nome: &'static str) -> String {
+        async fn eco(
+            uri: Uri,
+            cabecalhos: HeaderMap,
+            corpo: Bytes,
+            nome: &'static str,
+        ) -> Response {
+            if uri.path().starts_with("/lento") {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+            let apikey = cabecalhos
+                .get("apikey")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("-");
+            let texto = format!(
+                "{nome}|{}|{}|{apikey}|{}",
+                uri.path(),
+                uri.query().unwrap_or(""),
+                String::from_utf8_lossy(&corpo)
+            );
+            (StatusCode::ACCEPTED, texto).into_response()
+        }
+        let app = Router::new().route(
+            "/{*caminho}",
+            post(move |uri: Uri, cab: HeaderMap, corpo: Bytes| eco(uri, cab, corpo, nome)),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endereco = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{endereco}")
+    }
+
+    async fn corpo_texto(resposta: Response) -> String {
+        let bytes = axum::body::to_bytes(resposta.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        String::from_utf8(bytes.to_vec()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn repassa_ao_ambiente_do_caminho_com_status_corpo_query_e_apikey() {
+        let mut destinos = BTreeMap::new();
+        destinos.insert("dev".to_string(), ingress_falso("dev").await);
+        destinos.insert("prod".to_string(), ingress_falso("prod").await);
+        let app = construir_app(Estado {
+            destinos: Arc::new(destinos),
+            cliente: reqwest::Client::new(),
+        });
+
+        for ambiente in ["dev", "prod"] {
+            let resposta = app
+                .clone()
+                .oneshot(
+                    Request::post(format!("/{ambiente}/webhook/evolution/t-1/181?x=1"))
+                        .header("apikey", "chave-da-instancia")
+                        .body(Body::from("{\"evento\":1}"))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            // Status do ingress chega intacto ao provedor (202, não 200).
+            assert_eq!(resposta.status(), StatusCode::ACCEPTED);
+            // O content-type do ingress (texto, no falso) também chega intacto.
+            assert!(resposta.headers()[CONTENT_TYPE]
+                .to_str()
+                .unwrap()
+                .starts_with("text/plain"));
+            // Só o ambiente do caminho recebe; o prefixo sai; query, apikey e corpo seguem.
+            assert_eq!(
+                corpo_texto(resposta).await,
+                format!(
+                    "{ambiente}|/webhook/evolution/t-1/181|x=1|chave-da-instancia|{{\"evento\":1}}"
+                )
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn destino_lento_responde_504_para_o_provedor_reentregar() {
+        let mut destinos = BTreeMap::new();
+        destinos.insert("dev".to_string(), ingress_falso("dev").await);
+        let app = construir_app(Estado {
+            destinos: Arc::new(destinos),
+            // Timeout curto só no teste: o de produção (10 s) deixaria a suíte lenta.
+            cliente: reqwest::Client::builder()
+                .timeout(Duration::from_millis(200))
+                .build()
+                .unwrap(),
+        });
+        let resposta = app
+            .oneshot(
+                Request::post("/dev/lento/webhook")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resposta.status(), StatusCode::GATEWAY_TIMEOUT);
+    }
+
+    #[tokio::test]
+    async fn caminho_sem_ambiente_responde_404() {
+        let resposta = construir_app(estado_de_teste())
+            .oneshot(Request::post("/dev").body(Body::from("{}")).unwrap())
             .await
             .unwrap();
         assert_eq!(resposta.status(), StatusCode::NOT_FOUND);
