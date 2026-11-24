@@ -30,7 +30,7 @@
 | MinIO | Só na dev (`dev.override.yml`); a prod usa R2 |
 | Socket do Docker | Montado em 3 pontos: `watchdog` da dev, `watchdog` da prod (`docker-compose.base.yml:609`) e `docker-socket-proxy` da observabilidade |
 | Backup | Só local (`pg_backup` no mesmo disco); sem cópia externa |
-| Restos | Volumes anônimos, redes órfãs, cron de `caddy reload`, `renew-ssl.sh` da v1, dois crons de `prune` |
+| Restos | **Limpos em 24/11 (D24)**: 5 volumes sem uso, redes `smartcore_v2_network` e `smart-core-site_default`, cron de `caddy reload`, `cargo clean` em caminho inexistente, `renew-ssl.sh` da v1 e o prune diário de 24 h (fica o semanal de 168 h). Backup e lista em `/root/backups/2026-11-24-limpeza-d24/`. A rede `compose_agritech-backends` é de outro sistema e foi mantida |
 | Acesso remoto | `claude-rc` (systemd) como root, `--permission-mode bypassPermissions`, `IS_SANDBOX=1`, checkout `/opt/smartcore/ops/smart-core-assistant-v2` espelho da `dev` |
 
 ### R3.2 Afirmações da revisão 2 que não valem mais
@@ -47,10 +47,10 @@
 | Deploy de prod sem validar chaves; `pg_dump` fixo (L1, L6) | `required-keys.prod`; `deploy.sh` lê usuário e banco do env | Resolvidos |
 | `mcp_server`, `web`, `web-tenant` fora do smoke (L7) | `infra/deploy/smoke.sh` cobre | Resolvido |
 | Deploy de prod recria a observabilidade (L9) | Não recria; infra só pelo `deploy-infra.yml` | Resolvido |
-| `restore-postgres.sh` assume usuário e banco inexistentes (L11) | Continua quebrado por outro motivo: aponta para `docker/<env>/compose.yml`, que foi removido | L11 mantido, com a causa nova |
+| `restore-postgres.sh` assume usuário e banco inexistentes (L11) | Apontava para `docker/<env>/compose.yml`, removido | **Resolvido em 24/11**: usa o bundle `current` e o env do ambiente pela `infra/deploy/lib.sh`; listagem e ensaio conferidos na dev |
 | Soma dos tetos de prod ≈ 9,5 GB; D1 recomenda 16 GB | VM de 7,8 GiB, tetos somam ≈ 13 GiB, uso real ≈ 1,5 GiB; D1 decidida (mesma VPS, tetos + `oom_score_adj`) | 5.3, 7 e 8.1 atualizados; enxugar os tetos entra na F2B |
 | Topologia proposta com `smart-core-v2-releases` implantado pelo `deploy-prod.yml` e borda pelo `deploy-prod.yml` (5.2) | Projeto real chama `releases-stack`; borda pertence ao `deploy-infra.yml` | 5.2 reescrita: releases entra no `deploy-infra.yml` |
-| Observabilidade sem `mem_limit` (M7) | Observabilidade com teto e `oom_score_adj` 300; Evolution ainda sem `mem_limit` | M7 reduzido ao Evolution e ao releases |
+| Observabilidade sem `mem_limit` (M7) | Teto e `oom_score_adj` 300 **no repositório** (`d2bb8e8e`, já na `main`), mas **não aplicados no servidor** em 24/11: os containers seguem com `oom_score_adj` 0 e sem teto, porque o `deploy-infra.yml` que os aplica (run `45091567804`) espera a aprovação do environment `prod` desde 23/11. Evolution ainda sem `mem_limit` | M7 reduzido ao Evolution e ao releases; aprovar o run pendente (ou novo dispatch da `main`) |
 | RUSTSEC-2026-0459 pendente (M4) | Corrigido (`e76adaf2`, `libsqlite3-sys` 0.40) | M4 reduzido à auditoria bloqueante |
 | D8 recomenda sessão root só na dev | O dono decidiu sessão root com permissão total no VPS que hospeda a prod | D8 registrada como decidida, com o risco |
 | Webhook da prod "saindo da rede da prod" não existia no plano | `prod.override.yml` tira o `webhook_ingress` da prod da `evolution_net` (incidente do primeiro deploy, 250 eventos da dev entregues na prod) | Registrado em C2 |
@@ -229,7 +229,7 @@ Todos com `restart: unless-stopped`, rotação de log (`:20-24`) e `mem_limit`.
 | L8 | **[Resolvido: `deploy-infra.yml`]** A imagem da borda só é construída no deploy da **dev**: mudança no Caddyfile chega à produção por push na `dev`, sem CI nem aprovação | `deploy-dev.yml:242-263` |
 | L9 | **[Resolvido]** O deploy de produção recria a observabilidade inteira e não confere o Evolution | `deploy-prod.yml:349-351` |
 | L10 | Migrações no boot do `data_postgres`, só para frente (53 arquivos, nenhum `down`); sem ensaio antes de trocar a versão | `server/crates/infrastructure_postgres/migrations/` |
-| L11 | **[Aberto, causa nova: aponta para `docker/<env>/compose.yml`, removido]** `infra/restore-postgres.sh` assume usuário `postgres` e banco `smartcore`, que não existem; falha **depois** de parar os serviços | `infra/restore-postgres.sh:81`, `:89` |
+| L11 | **[Resolvido em 24/11: bundle `current` + env do ambiente via `lib.sh`; serviços ficam parados com instrução se a restauração falhar]** `infra/restore-postgres.sh` assumia usuário `postgres` e banco `smartcore` e apontava para `docker/<env>/compose.yml` | `infra/restore-postgres.sh` |
 | L12 | Site e servidor de releases fora de qualquer deploy, sem imagem versionada (2.6, 2.7) | — |
 | L13 | Canal estável do app Windows sem portão e com falha de upload tratada como aviso (2.5) | `release-windows.yml:28-38`, `:383-391` |
 | L14 | O `control_plane` recusa o canal `stable`: em produção não há como emitir link do instalador | `control_plane/src/releases.rs:43-51` |
@@ -517,7 +517,7 @@ Fora de proposta: Kubernetes/Swarm, réplica de banco e várias réplicas de ser
   8. CORS fechado (M1), ambiente do trace por variável (M9), revisão de dados pessoais em log (M10).
 - **Risco:** médio (mexe na dev em uso). Mitigação: validar em branch `ci/` antes da `dev`, um item por vez.
 - **Conclusão:** CI verde; dev no ar após cada item; de um container da dev só resolvem nomes da dev; WhatsApp da dev funcionando após a regravação.
-- **Estado (24/11/2026): quase toda feita** pelo plano `servidor-reestruturacao-dev-prod`. Feitos: itens 1 (C1), 3 (C3, A4), 4 (L1, L6; conferir L2/L3 contra `required-keys.prod`), 5 (L4, L7) e a parte de observabilidade do item 7. A parte do item 2 que é C2 foi feita de outro jeito: a prod registra `http://172.17.0.1:9211` e o `webhook_ingress` dela saiu da `evolution_net`. Abertos: prefixo de instância (A3), item 6 inteiro (L11 agora quebra por apontar para `docker/<env>/compose.yml`, removido; C4; M8), limites do Evolution (M7), métricas de host (A8, ver Fase 2B), item 8 (M1, M9 — os 9 serviços Rust ainda chamam `init_telemetry(..., "production")` —, M10).
+- **Estado (24/11/2026): quase toda feita** pelo plano `servidor-reestruturacao-dev-prod`. Feitos: itens 1 (C1), 3 (C3, A4), 4 (L1, L6; conferir L2/L3 contra `required-keys.prod`), 5 (L4, L7) e a parte de observabilidade do item 7. A parte do item 2 que é C2 foi feita de outro jeito: a prod registra `http://172.17.0.1:9211` e o `webhook_ingress` dela saiu da `evolution_net`. Abertos: prefixo de instância (A3), item 6 menos o L11 (resolvido em 24/11; seguem C4 e M8), limites do Evolution (M7), métricas de host (A8, ver Fase 2B), item 8 (M1, M9 — os 9 serviços Rust ainda chamam `init_telemetry(..., "production")` —, M10).
 - **Observabilidade & Auditoria:** (a) evento `whatsapp.webhook.regravado` em nível `info` com `tenant_id`, `instance_id`, `env`; erro com `error_code`. (b) `audit_log`: `whatsapp.instance.webhook_update` por instância regravada, sem o token. (c) Token da instância e chave global seguem em `SecretString`; nenhum telefone completo em log.
 
 ### Fase 2B — Simplificação do servidor (cenário B)
@@ -534,7 +534,7 @@ exceção é o item 2, que só aplica a decisão já tomada de manter a web fech
   3. **Alloy no lugar do promtail (D22).** O Promtail está em fim de vida desde 02/03/2026, sem correções nem atualizações, e a Grafana indica o Alloy como substituto, com conversor da configuração (`info_aux`, seção "Revisão 3"). O Alloy também traz exportadores de host e de containers embutidos, o que cobre A8 sem subir `node_exporter` e `cAdvisor` à parte.
   4. **Socket do Docker em um só ponto (D23).** Um único `docker-socket-proxy`, com permissões mínimas por cliente; os dois `watchdog` e o coletor de logs passam a falar com ele. Fecha M2.
   5. **Tetos coerentes com a RAM.** Recalcular os `MEM_*` da dev para que prod + observabilidade + dev caibam em ≈ 7 GiB, mantendo os `oom_score_adj` de D1; alerta de memória do host acima de 85 %.
-  6. **Limpeza dos restos (D24):** volumes anônimos e redes órfãs, cron de `caddy reload`, `renew-ssl.sh` da v1 (a borda já renova o certificado sozinha) e um dos dois crons de `prune`. Cada remoção com backup em `/root/backups/` e lista do que foi apagado.
+  6. **Limpeza dos restos (D24) — feita em 24/11:** volumes anônimos e redes órfãs, cron de `caddy reload`, `renew-ssl.sh` da v1 (a borda já renova o certificado sozinha) e o prune diário. Backup e lista em `/root/backups/2026-11-24-limpeza-d24/`.
   7. **Site e releases com projeto compose e deploy** (antecipa parte das Fases 3 e 8): sem container solto fora de projeto.
 - **Risco:** médio para a dev (troca de storage e de coletor de logs). Mitigação: um item por vez, validado em branch `ci/` antes da `dev`; prod só por `deploy-infra.yml` ou tag.
 - **Conclusão:** ≈ 46 containers; soma dos tetos ≤ RAM da VM; uma montagem do socket; nenhum container fora de projeto compose; nenhum resto da v1 no `crontab`.
@@ -693,10 +693,10 @@ Nenhuma bloqueia as Fases 0 a 3. D11 tem prazo externo: decidir cedo.
 | D18 | Abertura da web e dos botões do site | **Adiada.** Só com aprovação escrita, após a Fase 11 aprovada e com a Fase A executada |
 | D19 | Distribuição do instalador aos primeiros clientes | Link com ticket, gerado pelo dono no admin a cada cliente (vale 5 minutos), ou envio do arquivo com o SHA-256. Botão público de download só na Fase A |
 | D20 | Transcrição de áudio e quotas no dia 1 | Transcrição desligada e ligada por tenant; quotas em modo log por duas semanas |
-| D21 | MinIO na dev (Fase 2B) | **Pendente.** Recomendação: tirar e usar bucket R2 de dev, para a dev testar o mesmo storage da prod |
+| D21 | MinIO na dev (Fase 2B) | **Adiada pelo dono (24/11):** sem gasto novo agora; o MinIO da dev fica como está. Retomar com bucket R2 de dev quando houver orçamento |
 | D22 | Alloy no lugar do promtail (Fase 2B) | **Pendente.** Recomendação: trocar, pelo fim de vida do Promtail e para cobrir métricas de host (A8) no mesmo coletor |
 | D23 | Socket do Docker em um só ponto (Fase 2B) | **Pendente.** Recomendação: um `docker-socket-proxy` com permissão mínima por cliente |
-| D24 | Limpeza dos restos do servidor (Fase 2B) | **Pendente.** Recomendação: remover com backup e lista do que saiu |
+| D24 | Limpeza dos restos do servidor (Fase 2B) | **Feita em 24/11**, com backup e lista em `/root/backups/2026-11-24-limpeza-d24/` (ver R3.1, "Restos"). Ficou o prune semanal de 168 h, para o rollback achar a imagem anterior no disco |
 
 Decisões do dono já tomadas, registradas na revisão 3: site junto com o admin na
 stack de prod; web fechada (D18 adiada); canal estável do app com portões (C6);
@@ -739,7 +739,7 @@ D11); D1; D8.
 7. Não usar `:latest` nem `:dev` em produção, incluindo releases, site e borda.
 8. Não exibir valor de segredo em comando, log ou conversa.
 9. Não rodar testes na máquina local; não fazer teste de carga contra o Evolution compartilhado.
-10. Não restaurar backup em produção sem ensaio e sem corrigir o `restore-postgres.sh`.
+10. Não restaurar backup em produção sem ensaio em dev (o `restore-postgres.sh` foi corrigido em 24/11, mas a restauração real ainda não foi ensaiada).
 11. Não aplicar SQL direto em produção para configuração de tenant sem invalidar `core:settings:invalidate`.
 12. **Não publicar a web admin/tenant nem ativar os botões do site** sem a decisão D18.
 13. **Não criar tag `win-vX.Y.Z` (estável) antes dos portões da Fase 10.**

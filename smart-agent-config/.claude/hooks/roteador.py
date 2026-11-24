@@ -579,18 +579,36 @@ def decisao_de_falha(config: dict, motivo: str, skill_forcada: str | None, fase_
 
 
 # ------------------------------------------------------------- contexto
+# Regra fixa do dono, injetada em toda mensagem dos modos `on` e `skills` (na
+# sessão local e na do servidor). Não muda a decisão do roteador: só o
+# comportamento esperado de quem executa.
+REGRA_AUTONOMIA = (
+    "[regra do dono] Autonomia e conclusão: não faça perguntas de decisão ao usuário. "
+    "Diante de dúvida técnica, dispare um subagente de pesquisa (general-purpose), adote a "
+    "opção mais robusta e profissional e registre o motivo em uma linha. Se um subagente "
+    "devolver pergunta, resolva-a com outro subagente de pesquisa em vez de repassá-la. "
+    "Ao receber planejamento ou tarefa, só conclua depois de executar tudo, conferir o "
+    "resultado e fazer um review (skill code-review) do que mudou, corrigindo os achados "
+    "verificados. Continuam valendo as proibições vigentes: não disparar deploy de produção "
+    "nem aprovar o environment `prod`, não apagar dados de produção, não contratar recurso pago."
+)
+
+
 def contexto_para_claude(modo: str, d: dict, ja_indicada: bool) -> str:
     skill = d.get("skill")
     caminho = f".context/skills/{skill}/SKILL.md" if skill else None
     if modo == "skills":
         if not skill:
-            return ""
+            return REGRA_AUTONOMIA
         if ja_indicada:
-            return f"[seletor de skill] A skill `{skill}` já foi indicada nesta sessão; continue seguindo-a."
+            return (
+                f"[seletor de skill] A skill `{skill}` já foi indicada nesta sessão; continue "
+                f"seguindo-a.\n{REGRA_AUTONOMIA}"
+            )
         return (
             f"[seletor de skill] Skill indicada: `{skill}`. Leia e siga `{caminho}` antes de "
             "responder. Skills citadas por ela ficam em `.context/skills/<slug>/SKILL.md` "
-            "(ou via MCP dotcontext `skill getContent`)."
+            f"(ou via MCP dotcontext `skill getContent`).\n{REGRA_AUTONOMIA}"
         )
     linhas = [
         "[roteador] Decisão para esta mensagem:",
@@ -605,7 +623,8 @@ def contexto_para_claude(modo: str, d: dict, ja_indicada: bool) -> str:
         f"Delegue ao subagente `{d.get('especialista')}` com `model: {d.get('modelo')}`. Passe a "
         "mensagem do usuário LITERAL (sem os atalhos `#nivel`/`$skill`) e o contexto necessário "
         "(arquivos citados, decisões recentes e regras de memória relevantes: gitflow, sem testes "
-        "na máquina local, comentários pt-br, commits sem auto-referência)."
+        "na máquina local, comentários pt-br, commits sem auto-referência, e a regra do dono "
+        "abaixo, de autonomia por pesquisa e conclusão só depois de conferir e revisar)."
     )
     if skill:
         linhas.append(
@@ -622,6 +641,7 @@ def contexto_para_claude(modo: str, d: dict, ja_indicada: bool) -> str:
         "não entregar após 2 cobranças, redespache no sonnet e avise. Se ele parar por limite de "
         "sessão da API, avise e retome com SendMessage depois."
     )
+    linhas.append(REGRA_AUTONOMIA)
     return "\n".join(linhas)
 
 
@@ -734,7 +754,7 @@ def processar(entrada: dict, config: dict, *, seco: bool = False) -> tuple[dict,
     registro = base | {"atalho": atalho, "fase": fase, "jev_ms": jev_ms} | d
     registro["injetado"] = (
         "caminho" if d.get("skill") and not ja else "ja_indicada" if ja else "nada"
-    )
+    ) + "+regra"
     contexto = contexto_para_claude(modo, d, ja)
     if modo == "on":
         registro["injetado"] = "delegacao+" + registro["injetado"]
