@@ -535,6 +535,9 @@ services:
       # o nome do serviço na `evolution_net`, que resolve para dev E prod (rede
       # compartilhada) — a prod sobrescreve no prod.override.yml.
       WEBHOOK_INGRESS_URL: ${WEBHOOK_INGRESS_URL:-http://webhook_ingress:9200}
+      # Prefixo do nome de instâncias NOVAS no gateway compartilhado (dev.vars:
+      # `dev-`; prod sem prefixo). Instâncias existentes não mudam de nome.
+      SMARTCORE_WHATSAPP_PREFIXO_INSTANCIA: ${WHATSAPP_PREFIXO_INSTANCIA:-}
     networks: [internal, observability, evolution_net]
     depends_on:
       redis: { condition: service_healthy }

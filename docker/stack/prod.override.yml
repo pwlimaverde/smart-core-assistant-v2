@@ -33,7 +33,9 @@ services:
   # linha abaixo por:
   #   WEBHOOK_INGRESS_URL: http://provider_edge:8088/prod
   # A porta própria da prod na ponte continua publicada: é o destino `prod` que
-  # o provider_edge usa (PROVIDER_EDGE_DESTINOS).
+  # o provider_edge usa (PROVIDER_EDGE_DESTINOS). O deploy.sh (passo 3b) recusa
+  # o deploy com essa URL enquanto o provider_edge não estiver healthy e
+  # atendendo `/prod`.
   data_whatsapp:
     environment:
       WEBHOOK_INGRESS_URL: http://${HOST_BRIDGE_IP:-172.17.0.1}:${WEBHOOK_INGRESS_PORT:?WEBHOOK_INGRESS_PORT ausente (prod.vars)}

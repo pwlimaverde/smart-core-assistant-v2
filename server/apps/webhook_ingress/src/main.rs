@@ -66,6 +66,13 @@ async fn main() -> anyhow::Result<()> {
     // funcionalidade some sem deixar rastro. O hook garante o registro estruturado.
     observability::instalar_hook_de_panic("webhook_ingress");
 
+    if enforce_rate_limit_pedido(env::var("WEBHOOK_RATE_LIMIT_ENFORCE").ok().as_deref()) {
+        tracing::warn!(
+            "WEBHOOK_RATE_LIMIT_ENFORCE=true ignorado: o rate limit do webhook é sempre \
+             log-only (o 429 perderia mensagem autenticada). Remova a chave do env."
+        );
+    }
+
     let redis_url =
         env::var("REDIS_BUS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
 
@@ -314,12 +321,17 @@ fn auditar_rate_limit(total: u64, max: u64) -> bool {
     total == max + 1
 }
 
-/// Interpreta `WEBHOOK_RATE_LIMIT_ENFORCE` (N7.3). Default `false`: só registra e
-/// audita. Motivo (2026-11-24): recusar mensagem com 429 não protege nada útil.
-/// A Evolution reentrega 4 vezes e desiste, e a mensagem real se perde em silêncio
-/// (em dev, 1227 entregas falharam assim). A proteção continua pela auditoria da
-/// travessia do teto e pelo QuotaGuard. Só `"true"` (case-insensitive) liga o 429.
-fn enforce_rate_limit_ligado(valor: Option<&str>) -> bool {
+/// O operador pediu o bloqueio por `WEBHOOK_RATE_LIMIT_ENFORCE=true`?
+///
+/// O pedido é só AVISADO no boot, nunca atendido: o rate limit do webhook é
+/// sempre log-only. Motivo: a cota vem depois da validação do token da instância
+/// e só conta mensagens, então toda requisição que um 429 recusaria é uma
+/// mensagem real, autenticada, do próprio provedor. A Evolution reentrega 4 vezes
+/// e desiste, e a mensagem se perde em silêncio (dev, 2026-11-24: 1227 entregas).
+/// Como o secret de prod ainda tem `true`, deixar a flag valer faria a próxima
+/// release de prod voltar a perder mensagens. A proteção segue pela auditoria da
+/// travessia do teto, pelo QuotaGuard e pela idempotência.
+fn enforce_rate_limit_pedido(valor: Option<&str>) -> bool {
     valor.is_some_and(|v| v.eq_ignore_ascii_case("true"))
 }
 
@@ -486,10 +498,8 @@ async fn handle_webhook(
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(60);
-        // Política log-only ↔ enforce por flag (N7.3), como no resto do
-        // endurecimento — ver `enforce_rate_limit_ligado` para o default.
-        let enforce =
-            enforce_rate_limit_ligado(env::var("WEBHOOK_RATE_LIMIT_ENFORCE").ok().as_deref());
+        // Sempre log-only: excesso é medido e auditado, a mensagem segue. Ver
+        // `enforce_rate_limit_pedido` para o motivo de não haver 429 aqui.
         let id = format!("{}:{}", params.tenant_id, params.instance_id);
         match registrar_rate_limit_unificado(&state.redis_client, "webhook", &id, window_s).await {
             Ok(total) if total > max => {
@@ -508,25 +518,22 @@ async fn handle_webhook(
                     instance_id = params.instance_id,
                     attempts = total,
                     max,
-                    enforce,
-                    "Rate limit do webhook excedido"
+                    "Rate limit do webhook excedido (log-only; ingestão seguiu)"
                 );
                 if auditar_rate_limit(total, max) {
                     state.audit_logger.warn(
                         params.tenant_id,
                         "webhook.rejected",
-                        if enforce {
-                            "Rate limit do webhook excedido"
-                        } else {
-                            "Rate limit do webhook excedido (log-only; ingestão seguiu)"
-                        },
+                        "Rate limit do webhook excedido (log-only; ingestão seguiu)",
                         serde_json::json!({
                             "provider": params.provider,
                             "instance_id": params.instance_id,
                             "reason": "rate_limited",
                             "attempts": total,
                             "max": max,
-                            "enforce": enforce,
+                            // Mantido na trilha para quem consulta pelo campo:
+                            // o rate limit do webhook nunca recusa.
+                            "enforce": false,
                             // Deixa explícito para quem lê a trilha que esta linha
                             // representa a janela inteira, não uma requisição.
                             "janela_s": window_s,
@@ -536,9 +543,6 @@ async fn handle_webhook(
                         None,
                         None,
                     );
-                }
-                if enforce {
-                    return Err(StatusCode::TOO_MANY_REQUESTS);
                 }
             }
             Ok(_) => {}
@@ -1294,16 +1298,16 @@ mod tests {
             .with_state(state)
     }
 
-    /// N7.3 — o default é log-only (sem 429). Só `"true"` liga o bloqueio: ausência
-    /// da env var, vazio ou qualquer outro valor deixam a ingestão seguir.
+    /// O pedido de bloqueio só é reconhecido (para o aviso do boot) com `"true"`;
+    /// em nenhum caso a ingestão recusa com 429.
     #[test]
-    fn enforce_rate_limit_default_e_desligado_e_so_true_liga() {
-        assert!(!enforce_rate_limit_ligado(None));
-        assert!(!enforce_rate_limit_ligado(Some("")));
-        assert!(!enforce_rate_limit_ligado(Some("qualquer-coisa")));
-        assert!(!enforce_rate_limit_ligado(Some("false")));
-        assert!(enforce_rate_limit_ligado(Some("true")));
-        assert!(enforce_rate_limit_ligado(Some("TRUE")));
+    fn pedido_de_enforce_so_e_reconhecido_com_true() {
+        assert!(!enforce_rate_limit_pedido(None));
+        assert!(!enforce_rate_limit_pedido(Some("")));
+        assert!(!enforce_rate_limit_pedido(Some("qualquer-coisa")));
+        assert!(!enforce_rate_limit_pedido(Some("false")));
+        assert!(enforce_rate_limit_pedido(Some("true")));
+        assert!(enforce_rate_limit_pedido(Some("TRUE")));
     }
 
     /// Regressão: recibo, presença e conexão não podem consumir a cota da instância

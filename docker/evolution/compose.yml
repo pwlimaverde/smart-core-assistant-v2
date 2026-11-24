@@ -27,7 +27,15 @@ services:
       EVOGO_USERS_DB: evogo_users
     volumes:
       - postgres_evolution_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+      # Caminho ESTÁVEL entre deploys. O deploy-infra.sh copia os scripts para
+      # /opt/smartcore/infra/evolution/init-scripts e exporta a variável. Com
+      # `./init-scripts` a origem do bind mount era `releases/<id>/init-scripts`,
+      # que muda a cada bundle: o config-hash do serviço mudava e o compose
+      # recriava o banco do Evolution em todo deploy de infra (segundos sem banco
+      # para dev e prod). O volume de dados nunca mudou de nome; só o container
+      # era recriado. Os scripts só rodam com o volume vazio (primeira subida).
+      # O padrão `./init-scripts` serve à validação da CI e ao uso local.
+      - ${EVOLUTION_INIT_SCRIPTS_DIR:-./init-scripts}:/docker-entrypoint-initdb.d:ro
     networks:
       - evolution_net
     healthcheck:

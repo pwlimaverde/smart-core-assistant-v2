@@ -294,6 +294,15 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
             )
         }
     };
+    // Nome com o prefixo do ambiente: é ele que vai ao gateway, ao banco e à
+    // resposta (o cliente segue pelo `id`). Ver `nome_no_gateway`.
+    let nome_efetivo = nome_no_gateway(
+        std::env::var("SMARTCORE_WHATSAPP_PREFIXO_INSTANCIA")
+            .ok()
+            .as_deref(),
+        instance_name,
+    );
+    let instance_name = nome_efetivo.as_str();
 
     let provider_name = payload
         .get("provider")
@@ -487,6 +496,27 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
             "provider": provider_name,
         }),
     )
+}
+
+/// Nome com que uma instância NOVA é criada no gateway compartilhado.
+///
+/// O Evolution é um só para dev e prod, e o nome da instância é a chave dele.
+/// Sem separação, um teste na dev ocupa um nome que um cliente da prod poderia
+/// querer (a checagem de nome único recusaria o cliente), e quem olha o gateway
+/// não sabe de qual ambiente é cada instância. O prefixo vem de
+/// `SMARTCORE_WHATSAPP_PREFIXO_INSTANCIA` (por ambiente, no `<env>.vars`); a dev
+/// usa `dev-` e a prod fica sem prefixo, para o cliente ver o nome que digitou.
+///
+/// Só vale na criação: instâncias existentes mantêm o nome (é com ele que o banco
+/// as encontra no gateway). Nome que já começa com o prefixo não é prefixado de
+/// novo.
+fn nome_no_gateway(prefixo: Option<&str>, nome: &str) -> String {
+    let prefixo = prefixo.map(str::trim).unwrap_or_default();
+    if prefixo.is_empty() || nome.starts_with(prefixo) {
+        nome.to_string()
+    } else {
+        format!("{prefixo}{nome}")
+    }
 }
 
 #[tracing::instrument(skip_all, fields(rpc = "DeleteWhatsappInstance", tenant_id = %env.tenant_id))]
@@ -2909,6 +2939,18 @@ mod tests {
             "abaixo de um minuto a tela lenta perderia o QR"
         );
         std::env::remove_var("SMARTCORE_WHATSAPP_PAREAMENTO_TTL_S");
+    }
+
+    #[test]
+    fn nome_no_gateway_recebe_o_prefixo_do_ambiente_uma_vez() {
+        // Sem prefixo (prod): o nome digitado vai como está.
+        assert_eq!(nome_no_gateway(None, "loja"), "loja");
+        assert_eq!(nome_no_gateway(Some(""), "loja"), "loja");
+        assert_eq!(nome_no_gateway(Some("   "), "loja"), "loja");
+        // Com prefixo (dev): prefixa uma única vez.
+        assert_eq!(nome_no_gateway(Some("dev-"), "loja"), "dev-loja");
+        assert_eq!(nome_no_gateway(Some(" dev- "), "loja"), "dev-loja");
+        assert_eq!(nome_no_gateway(Some("dev-"), "dev-loja"), "dev-loja");
     }
 
     #[test]
