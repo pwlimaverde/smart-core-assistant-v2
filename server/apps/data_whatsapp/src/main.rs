@@ -3273,6 +3273,13 @@ mod tests {
             .mount(&server)
             .await;
 
+        // Gateway sem nenhuma instância: o nome está livre.
+        Mock::given(method("GET"))
+            .and(path("/instance/all"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&server)
+            .await;
+
         let payload = serde_json::json!({
             "instance_name": "instancia-test",
             "provider": "evolution"
@@ -3294,6 +3301,47 @@ mod tests {
             "success"
         );
         assert_eq!(res_payload.get("id").unwrap().as_i64().unwrap(), 42);
+
+        pg_handle.abort();
+    }
+
+    /// Regressão: nome já existente no gateway compartilhado é recusado ANTES de
+    /// criar. `expect(0)` no POST derruba o teste se a criação for chamada mesmo
+    /// assim, o que sobrescreveria a instância de outro ambiente.
+    #[tokio::test]
+    async fn test_handler_create_whatsapp_instance_nome_repetido_recusa_sem_criar() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("GET"))
+            .and(path("/instance/all"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                { "name": "instancia-test" }
+            ])))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/instance/create"))
+            .respond_with(ResponseTemplate::new(201))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let payload = serde_json::json!({
+            "instance_name": "instancia-test",
+            "provider": "evolution"
+        });
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "CreateWhatsappInstance".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_create_whatsapp_instance(state, env).await;
+        assert_eq!(res.kind, MessageKind::Error as i32);
 
         pg_handle.abort();
     }
