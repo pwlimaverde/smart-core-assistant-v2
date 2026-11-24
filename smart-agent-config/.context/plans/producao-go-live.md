@@ -27,17 +27,17 @@ phases:
     name: "Planning"
     prevc: "P"
     agent: "architect-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-r"
     name: "Review"
     prevc: "R"
     agent: "security-auditor"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution"
     prevc: "E"
     agent: "devops-specialist"
-    status: "pending"
+    status: "in_progress"
     required_sensors: [tests-passing]
     required_artifacts: [handoff-summary]
   - id: "phase-v"
@@ -63,6 +63,10 @@ phases:
 > mudam por `deploy-infra.yml`. Regras do ambiente: `CLAUDE.md`, seção
 > "Ambientes na VPS". **A web admin/tenant não é publicada neste go-live**, mas
 > hoje a borda de produção ainda a roteia (Fase 4 aberta).
+>
+> **Fases PREVC (24/11/2026):** P e R concluídas. O plano está na revisão 3, e a
+> revisão de segurança e as decisões D1, D8 e C6 foram tomadas. E está em andamento:
+> F0 e F9 feitas, F2 quase toda feita. V e C ficam pendentes até o go/no-go.
 
 ## Artefatos detalhados
 - **Plano completo** (verdade técnica): [plano_completo_producao-go-live.md](./producao-go-live/plano_completo_producao-go-live.md)
@@ -85,13 +89,13 @@ phases:
 |---|---|---|---|
 | F0 | Levantamento do servidor (somente leitura) | IA + Dono | **Feita** (inventário de 23–24/11/2026) |
 | F1 | Saneamento de segurança | Dono + IA | Parcial: `environment: prod` com revisor e rulesets feitos; C5, `production-windows` e endurecimento de SSH abertos |
-| F2 | Isolamento dev×produção e correções do servidor | IA | Quase toda feita (C1–C3, A4, L1, L4–L9); abertos C4, L11, M1, M7 (Evolution), M8–M10, A3, A8 |
+| F2 | Isolamento dev×produção e correções do servidor | IA | Quase toda feita (C1–C3, A4, L1, L4–L9, L11); A3 parcial (instâncias novas da dev nascem `dev-<nome>` e o gateway recusa nome repetido, `ac9bc814`/`c4595a6a`; a prod fica sem prefixo); abertos C4, M1, M7 (Evolution), M8–M10, A8 |
 | F2B | Simplificação do servidor (cenário B) | IA + Dono | **Nova**, pendente de D21–D24 |
 | F3 | Site público por versão, na stack de produção | IA | Aberta (decisão do dono tomada) |
 | F4 | Web de produção fechada na borda; admin restrito | IA + Dono | Aberta: `/v2/tenant` e `/v2/admin` roteados; `web-tenant` de pé na prod |
 | F5 | Provisionamento (DNS, R2, `prod.env`, `releases.env`) | Dono + IA | Parcial: `prod.env` materializado de `ENV_FILE_B64`; `releases.env` e bucket de backup abertos |
 | F6 | Banco de produção, backup externo, restauração ensaiada | IA | Parcial: banco no ar com migrações; backup externo e ensaio abertos |
-| F7 | Evolution compartilhado, sem trocar a versão `0.7.2-wa1` | IA + Dono | Parcial: webhook isolado; prefixo de instância (A3) e chave nova (A2) abertos |
+| F7 | Evolution compartilhado, sem trocar a versão `0.7.2-wa1` | IA + Dono | Parcial: webhook isolado; prefixo de instância parcial (A3, ver F2); chave nova (A2) aberta. Intermediário de webhooks `provider_edge` pronto na `dev` (`44d41b86`, ADR `doc_dev/arquitetura/adr-intermediario-webhooks-provedores.md`). Não está ativo: falta levar o código à `main`, aprovar o `deploy-infra` e fazer o cutover |
 | F8 | Servidor de releases em produção, por versão | IA + Dono | Aberta (`releases-stack` à mão, `:latest`) |
 | F9 | Primeiro deploy do servidor por tag | Dono + IA | **Feita** com `v0.2.1`/`v0.2.2`; a versão do go-live público segue D10 |
 | F10 | App Windows: certificado, portões do estável, primeira versão | Dono + IA | Aberta (certificado público decidido; fornecedor em D11) |
