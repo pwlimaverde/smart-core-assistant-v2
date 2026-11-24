@@ -233,9 +233,18 @@ mod tests {
     fn parse_destinos_recusa_configuracao_ruim() {
         assert!(parse_destinos("").is_err(), "vazio");
         assert!(parse_destinos("dev").is_err(), "sem '='");
-        assert!(parse_destinos("Dev=http://a:1").is_err(), "nome em maiúscula");
-        assert!(parse_destinos("dev=webhook_ingress:9200").is_err(), "sem esquema");
-        assert!(parse_destinos("dev=http://a:1,dev=http://b:2").is_err(), "repetido");
+        assert!(
+            parse_destinos("Dev=http://a:1").is_err(),
+            "nome em maiúscula"
+        );
+        assert!(
+            parse_destinos("dev=webhook_ingress:9200").is_err(),
+            "sem esquema"
+        );
+        assert!(
+            parse_destinos("dev=http://a:1,dev=http://b:2").is_err(),
+            "repetido"
+        );
     }
 
     #[test]
