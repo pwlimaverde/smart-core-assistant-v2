@@ -73,7 +73,7 @@ Feito em dev primeiro. Prod só depois de a dev ficar estável.
 
 ## 6. Pendências
 
-1. **Aprovação do primeiro `deploy-infra`** (environment `prod`). Ação humana, prevista na regra R-D1.
+1. **Aprovação do primeiro `deploy-infra`** (environment `prod`). Ação humana, prevista na regra R-D1. Em 24/11 o código do `provider_edge` estava só na `dev`; a `main` estava em `19e1a7fe`, sem ele. O environment `prod` só aceita `main` e tags `v*`, então a release precisa chegar à `main` antes (PR `dev → main`). O push na `main` dispara o `deploy-infra` sozinho, porque toca `server/apps/provider_edge/**`. O run 45091567804, parado na aprovação desde 23/11, é de um sha anterior às correções. **Não aprovar esse run.** O run novo da `main` o substitui (grupo `deploy-vps-infra`), mas também pode ser cancelado antes.
 2. **Cutover** da instância 181 (passos da seção 5).
 3. **`WEBHOOK_RATE_LIMIT_ENFORCE` no secret de prod** (`true`, conferido em 2026-11-24). Resolvido no código: o webhook não tem mais 429 e a chave não tem efeito (só aviso no boot). Limpeza recomendada ao dono: remover a linha do secret `ENV_FILE_B64` do environment `prod`. Não é pré-requisito de nada.
 4. **Nome de instância por ambiente.** Instâncias novas da dev nascem `dev-<nome>`; a prod fica sem prefixo e a checagem de nome único cobre o resto. Renomear instâncias existentes não é necessário.
