@@ -80,6 +80,15 @@ padrão) faz **uma** chamada ao Jev por mensagem e decide em código:
 
 `/roteador status` mostra o modo, se a chave chega ao gancho e a última decisão.
 
+**Regra do dono** (`REGRA_AUTONOMIA` em `roteador.py`): nos modos `skills` e `on`,
+toda mensagem do usuário que passa pelo roteador (todas, menos as que começam com
+`>>` ou `/`) recebe também a regra de autonomia e conclusão: nada de
+pergunta de decisão (dúvida técnica vai a um subagente de pesquisa, que escolhe a
+opção mais robusta, com o motivo registrado em uma linha) e conclusão só depois de
+executar tudo, conferir e revisar. As proibições de produção e de gasto continuam
+valendo. A regra não muda a decisão do roteador. Vale para a sessão local e para a do
+servidor (o gancho é o mesmo arquivo versionado).
+
 **Atalhos** (no início da mensagem): `>>` passa direto; `#rapido`, `#padrao`,
 `#profundo` forçam o nível; `$<slug>` força a skill; `/slug` (stub de comando) usa a
 skill do comando e não roteia.
