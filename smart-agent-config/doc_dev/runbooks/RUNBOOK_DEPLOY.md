@@ -121,6 +121,8 @@ Obrigatório para release com migração (R-D4); opcional nas demais.
 4. Sem beta, o `deploy-prod` constrói o backend na hora; resto igual ao §4.
 5. O job abre **PR `main → dev`** (backport). Mergear com merge commit; conflito se
    resolve no PR, nunca na `main`.
+6. Ensaio do fluxo completo (hotfix → tag → deploy → backport): `v0.2.3`,
+   2026-11-23, junto do ensaio de rollback `v0.2.2 → v0.2.1` (R6).
 
 ## 6. Rollback de produção
 
