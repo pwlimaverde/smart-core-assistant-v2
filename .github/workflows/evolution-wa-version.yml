@@ -1,8 +1,11 @@
-# Constrói e publica no GHCR a Evolution Go 0.7.2 com a versão do WhatsApp Web
+# Constrói e publica no GHCR a Evolution Go 0.7.3 com a versão do WhatsApp Web
 # atual (docker/evolution/wa-version). O compile acontece aqui: se a chamada
 # não compilar contra o whatsmeow da tag, o job falha e nada é publicado.
 #
-# A stack fundacional (docker/evolution) puxa esta imagem no deploy da dev.
+# A stack fundacional (docker/evolution) puxa esta imagem no deploy-infra.yml
+# (infra compartilhada, aprovação de prod). A tag 0.7.2-wa1 continua no GHCR
+# para rollback (padrão do compose de volta + deploy-infra). Republicar a tag
+# não muda o que roda: o compose fixa o digest; ao republicar, atualize-o.
 # Rodar manualmente ou ao mudar o Dockerfile/patch.
 name: Evolution Go (WhatsApp Web atual)
 
@@ -39,6 +42,6 @@ jobs:
         with:
           context: docker/evolution/wa-version
           build-args: |
-            EVOLUTION_REF=0.7.2
+            EVOLUTION_REF=0.7.3
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/evolution-go-wa:0.7.2-wa1
+          tags: ghcr.io/${{ github.repository_owner }}/evolution-go-wa:0.7.3-wa1

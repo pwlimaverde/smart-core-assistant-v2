@@ -239,10 +239,42 @@ VPS de 7,8 GiB + 2 GiB de swap para dev, prod, observabilidade, Evolution e bord
 A `evolution_net` é compartilhada e nela `webhook_ingress` resolve para os dois
 ambientes (incidente de 2026-11-22: webhooks da dev entregues na prod).
 
-- **dev**: `WEBHOOK_INGRESS_URL` padrão, `http://webhook_ingress:9200` (só o
-  ingress da dev está na `evolution_net`).
+- **dev**: `WEBHOOK_INGRESS_URL=http://provider_edge:8088/dev` (`dev.vars`,
+  cutover de 2026-11-25). O `provider_edge` repassa ao `webhook_ingress:9200`
+  da dev (`PROVIDER_EDGE_DESTINOS`). Reverter: comentar a linha no `dev.vars`
+  (volta ao padrão `http://webhook_ingress:9200`), deployar e regravar a URL.
+- **Regravar a URL de uma instância já conectada**: a reconciliação do worker
+  NÃO regrava (instância `connected` só tem o estado carimbado). Quem regrava é
+  o botão Reconectar do painel (`ReconnectWhatsappInstance`), que chama
+  `POST /instance/connect` com o token da instância e `webhookUrl`; com o
+  cliente no ar, o Evolution só atualiza a configuração, sem novo QR. Sem
+  acesso ao painel, a mesma chamada pode ser feita no host (token da instância
+  em `GET /instance/all` com a chave global) e conferida em `/instance/all`.
 - **prod**: `http://172.17.0.1:9211` — a porta da prod (`prod.vars`) publicada na
   ponte do Docker, que só o ingress da prod responde (`prod.override.yml`).
 - Conferir: `docker exec smartcore-evolution wget -qO- http://172.17.0.1:9211/health`.
 - Instância criada antes da v0.2.2 na prod (não havia nenhuma) teria a URL
   antiga gravada no Evolution: reconectar pelo painel regrava o webhook.
+
+### 13.1 Envia mas não recebe (incidente de 2026-11-26)
+
+Sintoma: instância `connected`, envio funciona, nenhuma mensagem recebida; o
+`provider_edge` e o `webhook_ingress` só registram `Connected`/`Disconnected`.
+Não é o webhook: a Evolution nem chega a despachar `Event: Message`.
+
+- Assinatura no log da Evolution: a cada ~50 min
+  `<stream:error><ack class="status" id="<mesmo id>" type="media"/>`, seguido de
+  reconexão e `OfflineSyncPreview` com `Messages:` crescendo; nunca aparece
+  `OfflineSyncCompleted`. Mensagens só chegam em rajada logo após reconectar.
+- Causa: o whatsmeow da imagem `0.7.2-wa1` não trata a stanza `<status>`
+  (stories dos contatos); sem ack, a fila offline do WhatsApp trava atrás dela.
+- Correção: imagem `0.7.3-wa1` (whatsmeow com handler de `<status>`), publicada
+  pelo workflow `evolution-wa-version` e implantada pelo `deploy-infra.yml`
+  (`componente: evolution`, aprovação de prod). A sessão fica no volume.
+- Conferir:
+  ```bash
+  docker logs -t --since 30m smartcore-evolution 2>&1 | grep -E "OfflineSyncCompleted|Event: Message|stream error"
+  docker logs --since 30m smart-core-v2-dev-webhook_ingress-1 2>&1 | grep -c '"event_type":"Message"'
+  ```
+- Rollback: voltar o padrão do `docker/evolution/compose.yml` para `0.7.2-wa1`
+  e rodar o `deploy-infra` (o schema v16 do store é compatível com a 0.7.2).
