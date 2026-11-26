@@ -4,13 +4,14 @@
 #
 # A stack fundacional (docker/evolution) puxa esta imagem no deploy-infra.yml
 # (infra compartilhada, aprovação de prod). A tag 0.7.2-wa1 continua no GHCR
-# para rollback (padrão do compose de volta + deploy-infra).
+# para rollback (padrão do compose de volta + deploy-infra). Republicar a tag
+# não muda o que roda: o compose fixa o digest; ao republicar, atualize-o.
 # Rodar manualmente ou ao mudar o Dockerfile/patch.
 name: Evolution Go (WhatsApp Web atual)
 
 on:
   push:
-    branches: ['feature/evolution-wa-version', 'feature/evolution-073-stanza-status']
+    branches: ['feature/evolution-wa-version']
     paths:
       - 'docker/evolution/wa-version/**'
       - '.github/workflows/evolution-wa-version.yml'

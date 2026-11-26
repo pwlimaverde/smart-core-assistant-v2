@@ -39,10 +39,11 @@ RUN patch -p1 --forward < /tmp/wa-version.patch \
  && grep -q "store.SetWAVersion" pkg/whatsmeow/service/whatsmeow.go
 
 # Trava de regressão: o whatsmeow resolvido pelo go.mod precisa tratar a stanza
-# `<status>`. Sem isso a recepção de mensagens trava (ver cabeçalho).
+# `<status>`. Sem isso a recepção de mensagens trava (ver cabeçalho). Procura em
+# todos os .go do módulo: o mapa nodeHandlers pode mudar de arquivo.
 RUN go mod download go.mau.fi/whatsmeow \
  && WM_DIR="$(go list -m -f '{{.Dir}}' go.mau.fi/whatsmeow)" \
- && grep -qE '"status":[[:space:]]+cli\.handle' "$WM_DIR/client.go" \
+ && grep -qE '"status":[[:space:]]+cli\.handle' "$WM_DIR"/*.go \
  || { echo "whatsmeow sem handler da stanza <status>: a recepção trava" >&2; exit 1; }
 
 RUN CGO_ENABLED=1 go build -ldflags "-X main.version=${EVOLUTION_REF}-wa1" -o server ./cmd/evolution-go
@@ -57,6 +58,13 @@ WORKDIR /app
 COPY --from=build /build/server .
 COPY --from=build /build/manager/dist ./manager/dist
 COPY --from=build /build/VERSION ./VERSION
+
+# O build roda num Alpine mais novo que o final (igual à imagem oficial). Falha
+# aqui se o binário CGO pedir símbolo ou biblioteca que o runtime não tem, em vez
+# de o container entrar em loop de restart no deploy-infra.
+RUN if ldd /app/server 2>&1 | grep -qE "Error relocating|not found"; then \
+      ldd /app/server >&2; echo "binário incompatível com o runtime" >&2; exit 1; \
+    fi
 
 ENV TZ=America/Sao_Paulo
 

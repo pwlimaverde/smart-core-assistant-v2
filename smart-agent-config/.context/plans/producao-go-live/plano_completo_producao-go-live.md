@@ -155,7 +155,7 @@ Todos com `restart: unless-stopped`, rotação de log (`:20-24`) e `mem_limit`.
 
 | Projeto | Serviços | Observações |
 |---|---|---|
-| `smart-core-v2-evolution` | `smartcore-evolution` (`ghcr.io/pwlimaverde/evolution-go-wa:0.7.2-wa1`, `docker/evolution/compose.yml:50`), `smartcore-evolution-postgres` | Porta só em 127.0.0.1. **Sem `mem_limit`, sem rotação de log, sem backup, sem sonda no `evolution`** |
+| `smart-core-v2-evolution` | `smartcore-evolution` (`ghcr.io/pwlimaverde/evolution-go-wa:0.7.3-wa1` fixada por digest, `docker/evolution/compose.yml:68`), `smartcore-evolution-postgres` | Porta só em 127.0.0.1. **Sem `mem_limit`, sem rotação de log, sem backup, sem sonda no `evolution`** |
 | `smart-core-v2-observability` | docker-proxy, otel-collector, loki, tempo, prometheus, grafana, promtail | Imagens fixadas. Loki e Tempo 14 dias, Prometheus 15 dias. **Sem `mem_limit`, sem rotação de log, sem sonda** |
 | `smart-core-v2-edge` | `caddy` (`smartcore-edge:latest`) | Única coisa em 0.0.0.0 (80, 443, 443/udp). Um Caddyfile para dev **e** produção |
 

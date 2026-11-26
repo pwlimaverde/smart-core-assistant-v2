@@ -58,9 +58,13 @@ services:
     #
     # 0.7.3: o whatsmeow da 0.7.2 não dava ack na stanza `<status>` (stories) e
     # a fila do WhatsApp travava — nenhuma mensagem recebida chegava. Rollback:
-    # voltar este padrão para 0.7.2-wa1 e rodar o deploy-infra (o schema v16 do
-    # store é compatível com a 0.7.2).
-    image: ghcr.io/pwlimaverde/evolution-go-wa:${EVOLUTION_IMAGE_TAG:-0.7.3-wa1}
+    # voltar este padrão para 0.7.2-wa1 e rodar o deploy-infra (as migrações
+    # v15/v16 do store só adicionam colunas com default e são marcadas
+    # "compatible with v8+", então a 0.7.2, que vai até a v14, abre o banco).
+    #
+    # Fixada também por digest: a tag no GHCR pode ser republicada pelo
+    # workflow; o digest garante que dev e prod rodam o binário que foi testado.
+    image: ghcr.io/pwlimaverde/evolution-go-wa:${EVOLUTION_IMAGE_TAG:-0.7.3-wa1@sha256:0aeebb8a3732033dfeaca30d79c45014feb46b4076d64e0841333aed1f9f4366}
     container_name: smartcore-evolution
     environment:
       SERVER_PORT: "8080"
