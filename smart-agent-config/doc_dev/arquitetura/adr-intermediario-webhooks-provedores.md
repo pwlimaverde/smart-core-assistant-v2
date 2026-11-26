@@ -1,6 +1,6 @@
 # ADR — Intermediário de webhooks de provedores (Evolution, Instagram, Telegram)
 
-**Status:** Implementado no repositório (código, compose e workflow). **Ainda não ativo:** falta o primeiro `deploy-infra` (aprovação do environment `prod`) e o cutover das instâncias.
+**Status:** Ativo na **dev** desde 2026-11-25 (deploy-infra `45740927602`, imagem `sha-6802ac4`; cutover da instância 181). **Prod:** cutover pendente (seção 5, passo 5).
 **Data:** 2026-11-24
 **Substitui, na parte de entrada de webhooks:** `doc_dev/arquitetura/00-planejamento-adapters-grpc.md` (repo raiz) e `docker/adapters/README.md`.
 **Relaciona-se com:** `doc_dev/planejamento/13-camada-de-abstração-de-mensageria.md`, `doc_dev/planejamento/02-fases-desenvolvimento.md`.
@@ -49,13 +49,13 @@
 | OTLP do `provider_edge` | Desligado (`OTEL_SDK_DISABLED=true`): o serviço só está na `evolution_net`, sem rota para o collector. Os logs JSON do stdout chegam ao Loki pelo promtail. |
 | Compose (`docker/evolution/compose.yml`, serviço `provider_edge`) | **Implementado.** Só sobe com `PROVIDER_EDGE_IMAGE` no env do Evolution. |
 | Workflow `deploy-infra.yml` (job `build-provider-edge`) | **Implementado.** Gera a imagem por sha e a passa ao `deploy-infra.sh evolution`. |
-| Primeiro deploy de infra | **Pendente de aprovação** do environment `prod`. É o único passo que depende de decisão humana. Disparar de novo depois da correção da imagem: um run anterior a ela reprovaria. |
+| Primeiro deploy de infra | **Feito em 2026-11-25** (run `45740927602`, sha `6802ac4c`): `provider_edge` healthy, rotas `/dev` e `/prod`. |
 | `webhook_ingress` por ambiente | Implementado. Normaliza eventos e aplica rate limit. A cota conta só mensagens (`5aceaf21`). **Sempre log-only desde 2026-11-24:** o 429 foi removido do webhook; `WEBHOOK_RATE_LIMIT_ENFORCE=true` só gera aviso no boot. |
 | Gate do cutover (`infra/deploy/deploy.sh`, passo 3b) | **Implementado.** Com `WEBHOOK_INGRESS_URL` apontando para o `provider_edge`, o deploy é recusado antes de tocar o servidor se o container não estiver `healthy` ou não atender o ambiente (HTTP 000/404). Prova ponta a ponta: POST com corpo não-JSON, que o ingress responde 400 sem autenticar nem auditar. |
 | Banco do Evolution recriado a cada deploy de infra | **Corrigido em 2026-11-24.** Causa: o bind mount `./init-scripts` apontava para `releases/<id>/`, e a origem nova mudava o config-hash. Os volumes nunca mudaram de nome (`-p smart-core-v2-evolution` fixo). Agora os scripts ficam em `/opt/smartcore/infra/evolution/init-scripts` (caminho fixo). O primeiro deploy com a correção ainda recria o banco uma última vez. |
 | Nome de instância por ambiente | **Implementado para instâncias novas.** `WHATSAPP_PREFIXO_INSTANCIA=dev-` em `dev.vars`: a dev cria `dev-<nome>`. Prod sem prefixo. Existentes não mudam. |
 | Checagem de nome único no gateway | Implementada em `data_whatsapp`: recusa criação se o nome já existe no Evolution, e falha fechada se a consulta falhar. |
-| Cutover das instâncias para o intermediário | **Pendente.** Depende do primeiro deploy de infra. |
+| Cutover das instâncias para o intermediário | **Dev feito em 2026-11-25:** `dev.vars` ativo (beta `v0.2.4-beta.10`, gate 3b HTTP 400) e instância 181 gravada em `http://provider_edge:8088/dev/...`, sem reiniciar o cliente. Falta a prova com webhook real (passo 4). **Prod pendente.** |
 | Rota da prod a partir do Evolution | Verificada: responde 200 em `172.17.0.1:9211/health`. |
 
 ## 5. Cutover (passos, depois do deploy de infra)
@@ -67,14 +67,15 @@ Feito em dev primeiro. Prod só depois de a dev ficar estável.
    - dev: descomentar `WEBHOOK_INGRESS_URL=http://provider_edge:8088/dev` em `docker/stack/dev.vars` (o `.vars` vence o `.env` e o default do `docker-compose.base.yml`). Sai pelo `deploy-dev` no push da `dev`.
    - prod: trocar o valor **fixo** em `docker/stack/prod.override.yml` por `http://provider_edge:8088/prod` (hoje `172.17.0.1:9211`). Só chega à prod numa tag `v*.*.*` aprovada (`deploy-prod`). Merge na `dev` ou na `main` não muda a prod sozinho.
    - Não ativar nenhuma das duas antes de o passo 1 dar `healthy`: o Evolution chamaria um host inexistente e o ambiente pararia de receber mensagens.
-3. Reconectar a instância 181 pelo fluxo de reconciliação do `data_whatsapp` (`connect` regrava a URL). Conferir no Evolution que a URL passou a ser `http://provider_edge:8088/dev/...`.
+3. Regravar a URL da instância 181. A reconciliação do worker **não** serve: com a instância `connected` ela só carimba o estado. Quem regrava é o botão Reconectar do painel (`ReconnectWhatsappInstance` → `POST /instance/connect` com `webhookUrl`); com o cliente no ar, o Evolution só atualiza a configuração (log `settings updated without restarting client`), sem QR. Sem painel, a mesma chamada no host (RUNBOOK_DEPLOY §13). Conferir em `GET /instance/all` que a URL passou a ser `http://provider_edge:8088/dev/...`.
 4. Verificar um webhook real: `docker logs smart-core-v2-dev-webhook_ingress-1` deve mostrar o evento; `smartcore-provider-edge` deve mostrar `webhook repassado`.
 5. Só então repetir para prod com a instância de prod (quando existir).
 
 ## 6. Pendências
 
 1. **Aprovação do primeiro `deploy-infra`** (environment `prod`). Ação humana, prevista na regra R-D1. Em 24/11 o código do `provider_edge` estava só na `dev`; a `main` estava em `19e1a7fe`, sem ele. O environment `prod` só aceita `main` e tags `v*`, então a release precisa chegar à `main` antes (PR `dev → main`). O push na `main` dispara o `deploy-infra` sozinho, porque toca `server/apps/provider_edge/**`. O run 45091567804, parado na aprovação desde 23/11, é de um sha anterior às correções. **Não aprovar esse run.** O run novo da `main` o substitui (grupo `deploy-vps-infra`), mas também pode ser cancelado antes.
-2. **Cutover** da instância 181 (passos da seção 5).
+   **Resolvido em 2026-11-25** (run `45740927602`).
+2. **Cutover** da instância 181 (passos da seção 5). Dev feito em 2026-11-25; falta a prova com webhook real e, depois, a prod.
 3. **`WEBHOOK_RATE_LIMIT_ENFORCE` no secret de prod** (`true`, conferido em 2026-11-24). Resolvido no código: o webhook não tem mais 429 e a chave não tem efeito (só aviso no boot). Limpeza recomendada ao dono: remover a linha do secret `ENV_FILE_B64` do environment `prod`. Não é pré-requisito de nada.
 4. **Nome de instância por ambiente.** Instâncias novas da dev nascem `dev-<nome>`; a prod fica sem prefixo e a checagem de nome único cobre o resto. Renomear instâncias existentes não é necessário.
 

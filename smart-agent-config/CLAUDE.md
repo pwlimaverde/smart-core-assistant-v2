@@ -87,8 +87,10 @@ workspace do runner. Detalhes: `doc_dev/runbooks/RUNBOOK_DEPLOY.md`.
   `deploy-infra.yml` (push na `main` ou dispatch), com aprovação de prod.
 - Memória (decisão D1): tetos por ambiente nos `.vars`; `oom_score_adj` dev 900,
   observabilidade 300, prod 0 — sob pressão o kernel mata a dev primeiro.
-- Webhook do WhatsApp: dev usa `http://webhook_ingress:9200`; prod usa
-  `http://172.17.0.1:9211` (a `evolution_net` é compartilhada).
+- Webhook do WhatsApp: dev usa `http://provider_edge:8088/dev` (cutover de
+  2026-11-25, `dev.vars`); prod ainda usa `http://172.17.0.1:9211` até o cutover
+  dela (a `evolution_net` é compartilhada). ADR
+  `doc_dev/arquitetura/adr-intermediario-webhooks-provedores.md`.
 - O checkout `/opt/smartcore/ops/smart-core-assistant-v2` é espelho da `dev`
   (`git pull --ff-only origin dev`). Não subir compose de lá.
 - Marcadores de deploy: `/opt/smartcore/{dev,prod,infra}/deploys.log` → painel
