@@ -49,13 +49,18 @@ services:
 
   evolution:
     # Versão FIXA (reprodutibilidade): evita que `:latest` mude e quebre o dev sem
-    # aviso. Imagem própria: a 0.7.2 oficial recusa o pareamento com 405
-    # ClientOutdated, porque grava a versão atual do WhatsApp Web só em
-    # DeviceProps e o handshake segue com a versão embutida no whatsmeow. A nossa
-    # chama store.SetWAVersion com a versão que o próprio Evolution busca na web
+    # aviso. Imagem própria: a oficial recusa o pareamento com 405
+    # ClientOutdated quando a versão embutida no whatsmeow envelhece, porque
+    # grava a versão atual do WhatsApp Web só em DeviceProps. A nossa chama
+    # store.SetWAVersion com a versão que o próprio Evolution busca na web
     # (docker/evolution/wa-version). Para atualizar, trocar a tag e publicar pelo
     # workflow evolution-wa-version.
-    image: ghcr.io/pwlimaverde/evolution-go-wa:${EVOLUTION_IMAGE_TAG:-0.7.2-wa1}
+    #
+    # 0.7.3: o whatsmeow da 0.7.2 não dava ack na stanza `<status>` (stories) e
+    # a fila do WhatsApp travava — nenhuma mensagem recebida chegava. Rollback:
+    # voltar este padrão para 0.7.2-wa1 e rodar o deploy-infra (o schema v16 do
+    # store é compatível com a 0.7.2).
+    image: ghcr.io/pwlimaverde/evolution-go-wa:${EVOLUTION_IMAGE_TAG:-0.7.3-wa1}
     container_name: smartcore-evolution
     environment:
       SERVER_PORT: "8080"
