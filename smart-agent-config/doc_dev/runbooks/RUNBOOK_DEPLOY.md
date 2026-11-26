@@ -239,8 +239,17 @@ VPS de 7,8 GiB + 2 GiB de swap para dev, prod, observabilidade, Evolution e bord
 A `evolution_net` é compartilhada e nela `webhook_ingress` resolve para os dois
 ambientes (incidente de 2026-11-22: webhooks da dev entregues na prod).
 
-- **dev**: `WEBHOOK_INGRESS_URL` padrão, `http://webhook_ingress:9200` (só o
-  ingress da dev está na `evolution_net`).
+- **dev**: `WEBHOOK_INGRESS_URL=http://provider_edge:8088/dev` (`dev.vars`,
+  cutover de 2026-11-25). O `provider_edge` repassa ao `webhook_ingress:9200`
+  da dev (`PROVIDER_EDGE_DESTINOS`). Reverter: comentar a linha no `dev.vars`
+  (volta ao padrão `http://webhook_ingress:9200`), deployar e regravar a URL.
+- **Regravar a URL de uma instância já conectada**: a reconciliação do worker
+  NÃO regrava (instância `connected` só tem o estado carimbado). Quem regrava é
+  o botão Reconectar do painel (`ReconnectWhatsappInstance`), que chama
+  `POST /instance/connect` com o token da instância e `webhookUrl`; com o
+  cliente no ar, o Evolution só atualiza a configuração, sem novo QR. Sem
+  acesso ao painel, a mesma chamada pode ser feita no host (token da instância
+  em `GET /instance/all` com a chave global) e conferida em `/instance/all`.
 - **prod**: `http://172.17.0.1:9211` — a porta da prod (`prod.vars`) publicada na
   ponte do Docker, que só o ingress da prod responde (`prod.override.yml`).
 - Conferir: `docker exec smartcore-evolution wget -qO- http://172.17.0.1:9211/health`.
