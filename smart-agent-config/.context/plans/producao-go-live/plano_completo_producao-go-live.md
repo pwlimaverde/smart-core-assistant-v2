@@ -1,13 +1,67 @@
 # Plano — Conversão do Smart Core Assistant v2 para produção (go-live)
 
-> Revisão 2, de 14/11/2026, sobre a branch `dev` (commit `239e6239`).
+> Revisão 3, de 24/11/2026, sobre a branch `dev` (commit `0af1fd23`), com o
+> inventário real do servidor de 23–24/11/2026. A revisão 2 (14/11/2026,
+> commit `239e6239`) foi escrita **sem acesso ao servidor** e antes do plano
+> `servidor-reestruturacao-dev-prod`; a seção R3 abaixo diz o que dela ficou
+> superado. As seções 2.1 a 2.4 descrevem o desenho de 14/11 e ficam como
+> histórico; o estado vigente é o da seção R3.
 > Plano canônico: `.context/plans/producao-go-live.md`.
 > Documentação auxiliar: `.context/plans/producao-go-live/info_aux_producao-go-live.md`.
-> Fonte: leitura do repositório (compose, workflows, scripts, runbooks, código) e
-> da documentação pública do Velopack e da Microsoft sobre assinatura.
-> **O servidor não foi acessado**: o que depende do estado real da VPS está
-> marcado como "a confirmar na Fase 0". Nada foi executado, alterado em código
-> de produto, publicado ou commitado.
+> Fonte: leitura do repositório (compose, workflows, scripts, runbooks, código),
+> inventário do servidor e documentação pública do Velopack e da Microsoft.
+
+## R3. Estado real em 24/11/2026 e o que mudou desde a revisão 2
+
+### R3.1 Servidor
+
+| Item | Estado |
+|---|---|
+| Produção | `smart-core-v2-prod` **no ar** desde 22/11/2026 (`v0.2.1`), hoje `v0.2.2`, implantada por tag `vX.Y.Z` na `main` com aprovação no environment `prod` |
+| Dev | `smart-core-v2-dev`, `0.2.4-beta.N`, implantada a cada push na `dev` |
+| Composes | `docker/dev` e `docker/prod` **removidos**; as duas stacks saem de `docker/stack/` (`docker-compose.base.yml` + `dev.override.yml`/`prod.override.yml` + `dev.vars`/`prod.vars`), por bundle em `/opt/smartcore/<env>/releases/current` |
+| Env | Secret `ENV_FILE_B64` do environment → `/opt/smartcore/<env>/env/<env>.env`; chaves obrigatórias em `infra/deploy/required-keys.<env>` |
+| Infra compartilhada | Borda, observabilidade e Evolution só mudam por `deploy-infra.yml` (push na `main` ou dispatch, com aprovação de prod) |
+| Servidor de releases | Projeto compose `releases-stack` (`/opt/smartcore/releases-stack`), subido à mão, imagem `:latest`; **fora** do `deploy-infra.yml` |
+| Site | Imagem `smartcore-site:local` construída à mão, container **sem projeto compose** |
+| Containers | 49 no total |
+| Memória | VM de 7,8 GiB; uso real ≈ 1,5 GiB; **soma dos tetos ≈ 13 GiB** (prod ≈ 7,6 GiB, observabilidade ≈ 2,8 GiB, mais a dev). Proteção vigente: `oom_score_adj` dev 900, observabilidade 300, prod 0 (D1) |
+| `web-tenant` | De pé na prod (o `docker-compose.base.yml` não tem perfil para ele), contrariando a web fechada |
+| MinIO | Só na dev (`dev.override.yml`); a prod usa R2 |
+| Socket do Docker | Montado em 3 pontos: `watchdog` da dev, `watchdog` da prod (`docker-compose.base.yml:609`) e `docker-socket-proxy` da observabilidade |
+| Backup | Só local (`pg_backup` no mesmo disco); sem cópia externa |
+| Restos | **Limpos em 24/11 (D24)**: 5 volumes sem uso, redes `smartcore_v2_network` e `smart-core-site_default`, cron de `caddy reload`, `cargo clean` em caminho inexistente, `renew-ssl.sh` da v1 e o prune diário de 24 h (fica o semanal de 168 h). Backup e lista em `/root/backups/2026-11-24-limpeza-d24/`. A rede `compose_agritech-backends` é de outro sistema e foi mantida |
+| Acesso remoto | `claude-rc` (systemd) como root, `--permission-mode bypassPermissions`, `IS_SANDBOX=1`, checkout `/opt/smartcore/ops/smart-core-assistant-v2` espelho da `dev` |
+
+### R3.2 Afirmações da revisão 2 que não valem mais
+
+| Afirmação da revisão 2 | Realidade em 24/11 | Ação nesta revisão |
+|---|---|---|
+| A produção "nunca subiu" (0.2, 2.4) | No ar desde 22/11 (`v0.2.1` → `v0.2.2`) | Corrigido; F9 marcada como feita |
+| "Não subir `docker/prod` como está" (8.2 item 1) | `docker/prod` não existe; prod sai de `docker/stack/` | Item reescrito |
+| O servidor não foi acessado; Fase 0 a fazer | Inventário feito em 23–24/11 | F0 marcada como feita |
+| C1, C2, C3 abertos | Resolvidos (`OBS_NET` por ambiente; `WEBHOOK_INGRESS_URL` com prod em `172.17.0.1:9211` fora da `evolution_net`; portas dev 8095/8099/9210 e prod 8096/8100/9211) | Marcados como resolvidos; a prova com instância `prod-` fica na F7 |
+| A borda de produção muda por push na `dev` (L8, A4, item 18 de 8.2) | Borda só por `deploy-infra.yml`; `caddy validate` na CI e no deploy de infra | L8/A4 resolvidos; item 18 reescrito |
+| Produção em `:latest`; rollback reconstrói tudo (L4, A5) | Prod promove o digest da beta testada; `rollback-prod.yml` por versão | Resolvidos para a stack de aplicação; releases e site seguem em imagem local/`latest` |
+| Tag sai de qualquer branch (L5) | `gate-origem` e ruleset de tags `vX.Y.Z` | Resolvido (para o servidor; o app Windows segue em C6) |
+| Deploy de prod sem validar chaves; `pg_dump` fixo (L1, L6) | `required-keys.prod`; `deploy.sh` lê usuário e banco do env | Resolvidos |
+| `mcp_server`, `web`, `web-tenant` fora do smoke (L7) | `infra/deploy/smoke.sh` cobre | Resolvido |
+| Deploy de prod recria a observabilidade (L9) | Não recria; infra só pelo `deploy-infra.yml` | Resolvido |
+| `restore-postgres.sh` assume usuário e banco inexistentes (L11) | Apontava para `docker/<env>/compose.yml`, removido | **Resolvido em 24/11**: usa o bundle `current` e o env do ambiente pela `infra/deploy/lib.sh`; listagem e ensaio conferidos na dev |
+| Soma dos tetos de prod ≈ 9,5 GB; D1 recomenda 16 GB | VM de 7,8 GiB, tetos somam ≈ 13 GiB, uso real ≈ 1,5 GiB; D1 decidida (mesma VPS, tetos + `oom_score_adj`) | 5.3, 7 e 8.1 atualizados; enxugar os tetos entra na F2B |
+| Topologia proposta com `smart-core-v2-releases` implantado pelo `deploy-prod.yml` e borda pelo `deploy-prod.yml` (5.2) | Projeto real chama `releases-stack`; borda pertence ao `deploy-infra.yml` | 5.2 reescrita: releases entra no `deploy-infra.yml` |
+| Observabilidade sem `mem_limit` (M7) | Teto e `oom_score_adj` 300 **no repositório** (`d2bb8e8e`, já na `main`), mas **não aplicados no servidor** em 24/11: os containers seguem com `oom_score_adj` 0 e sem teto, porque o `deploy-infra.yml` que os aplica (run `45091567804`) espera a aprovação do environment `prod` desde 23/11. Evolution ainda sem `mem_limit` | M7 reduzido ao Evolution e ao releases; aprovar o run pendente (ou novo dispatch da `main`) |
+| RUSTSEC-2026-0459 pendente (M4) | Corrigido (`e76adaf2`, `libsqlite3-sys` 0.40) | M4 reduzido à auditoria bloqueante |
+| D8 recomenda sessão root só na dev | O dono decidiu sessão root com permissão total no VPS que hospeda a prod | D8 registrada como decidida, com o risco |
+| Webhook da prod "saindo da rede da prod" não existia no plano | `prod.override.yml` tira o `webhook_ingress` da prod da `evolution_net` (incidente do primeiro deploy, 250 eventos da dev entregues na prod) | Registrado em C2 |
+
+### R3.3 O que continua aberto (resumo)
+
+C4 (backup externo), C5 (segredos em `settings.local.json`), C6 (portões do
+canal estável), A2/A3 (chave e prefixo do Evolution), A6/A7 (SSH e
+`DOCKER-USER`, a conferir no inventário), A8 (métricas de host), A9 (destino
+de alerta), A11 (certificado), A12 (web roteada na borda), A13 (token por
+canal), L10–L14, M1, M8–M18 e o enxugamento do servidor (Fase 2B).
 
 ## 0. Resumo executivo
 
@@ -15,11 +69,13 @@
    (admin e tenant) **não será publicada agora**: fica fechada na borda até
    decisão do dono. Isso muda a borda de produção, que hoje já tem as rotas
    `/v2/admin` e `/v2/tenant` abertas (`docker/edge/Caddyfile:36-60`).
-2. **A stack de servidor de produção está desenhada e nunca subiu**
-   (`docker/prod/compose.yml`, `deploy-prod.yml`; `docker/edge/Caddyfile:209`).
-3. **Há seis bloqueadores críticos.** Três de isolamento entre dev e produção
-   (nomes de serviço repetidos em redes compartilhadas, portas iguais no host,
-   URL de webhook fixa no código); backup só no disco do banco; segredos
+2. **A stack de servidor de produção está no ar** desde 22/11/2026
+   (`smart-core-v2-prod`, hoje `v0.2.2`), por tag e aprovação, a partir de
+   `docker/stack/` (seção R3). O go-live deste plano é a abertura ao público.
+3. **Havia seis bloqueadores críticos; três seguem abertos.** Os três de
+   isolamento entre dev e produção (nomes de serviço repetidos em redes
+   compartilhadas, portas iguais no host, URL de webhook fixa no código) foram
+   resolvidos pelo plano `servidor-reestruturacao-dev-prod`. Abertos: backup só no disco do banco; segredos
    expostos em arquivo local (confirmados nesta revisão); e **o canal estável do
    app Windows sem nenhum portão**: uma tag `win-vX.Y.Z` de qualquer branch
    publica no feed e todo aplicativo instalado se atualiza sozinho, sem pergunta.
@@ -48,7 +104,13 @@
 
 ---
 
-## 2. Inventário atual
+## 2. Inventário (revisão 2, 14/11/2026)
+
+> **Histórico.** As seções 2.1 a 2.4 descrevem `docker/dev/compose.yml`,
+> `docker/prod/compose.yml` e o `deploy-dev.yml` antigo, que não existem mais
+> nessa forma. Para o estado vigente, ver R3.1 e
+> `doc_dev/runbooks/RUNBOOK_DEPLOY.md`. As seções 2.5 a 2.8 continuam válidas,
+> exceto onde a tabela R3.2 diz o contrário.
 
 ### 2.1 Como a dev sobe
 
@@ -157,17 +219,17 @@ Todos com `restart: unless-stopped`, rotação de log (`:20-24`) e `mem_limit`.
 
 | # | Lacuna | Referência |
 |---|---|---|
-| L1 | `deploy-prod.yml` não valida chaves obrigatórias do `prod.env` (a dev valida) | `deploy-prod.yml:339-340` × `deploy-dev.yml:405-410` |
+| L1 | **[Resolvido: `required-keys.prod`]** `deploy-prod.yml` não valida chaves obrigatórias do `prod.env` (a dev valida) | `deploy-prod.yml:339-340` × `deploy-dev.yml:405-410` |
 | L2 | `docker/prod/.env.example` desatualizado: faltam `MCP_OAUTH_*`, `MCP_SERVICE_SECRET`, `MCP_*_TTL_S`, `MCP_HOST_PORT`, `MCP_OAUTH_HOST_PORT`, `EMAIL_*` (6), `APP_PUBLIC_URL`, `ATENDIMENTO_ATIVO_MAX_DIA`, `RELEASES_*` (3), `MEM_MCP_SERVER`. O compose exige as `MCP_*` (`docker/prod/compose.yml:356-361`) | diff dos dois exemplos |
 | L3 | Em nenhum dos exemplos: `S3_CORS_ALLOWED_ORIGINS`, `IA_ENGINE_JEV_IMAGE`, `MCP_SERVER_IMAGE`, `MEM_IA_ENGINE_JEV`, `SMARTCORE_IA_ENGINE_JEV_ENDPOINT` | só em `.env.example:49` (raiz) |
-| L4 | Produção em `:latest`; o "rollback" documentado (reempurrar a tag) reconstrói tudo e move `latest` | `docker/prod/compose.yml:16`; `deploy-prod.yml:451` |
-| L5 | A tag sai de qualquer branch; o PR `dev → main` só é aberto depois do deploy | `pr-to-main.yml:19-27` |
-| L6 | `pg_dump` prévio com usuário e banco fixos no YAML | `deploy-prod.yml:317` |
-| L7 | `web`/`web-tenant` de produção sem sonda; `mcp_server`, `web`, `web-tenant` fora do teste de fumaça | `docker/prod/compose.yml:444-465`; `deploy-prod.yml:415` |
-| L8 | A imagem da borda só é construída no deploy da **dev**: mudança no Caddyfile chega à produção por push na `dev`, sem CI nem aprovação | `deploy-dev.yml:242-263` |
-| L9 | O deploy de produção recria a observabilidade inteira e não confere o Evolution | `deploy-prod.yml:349-351` |
+| L4 | **[Resolvido na stack de aplicação: digest da beta + `rollback-prod.yml`]** Produção em `:latest`; o "rollback" documentado (reempurrar a tag) reconstrói tudo e move `latest` | `docker/prod/compose.yml:16`; `deploy-prod.yml:451` |
+| L5 | **[Resolvido: `gate-origem` + ruleset]** A tag sai de qualquer branch; o PR `dev → main` só é aberto depois do deploy | `pr-to-main.yml:19-27` |
+| L6 | **[Resolvido: `deploy.sh` lê do env]** `pg_dump` prévio com usuário e banco fixos no YAML | `deploy-prod.yml:317` |
+| L7 | **[Resolvido: `smoke.sh`]** `web`/`web-tenant` de produção sem sonda; `mcp_server`, `web`, `web-tenant` fora do teste de fumaça | `docker/prod/compose.yml:444-465`; `deploy-prod.yml:415` |
+| L8 | **[Resolvido: `deploy-infra.yml`]** A imagem da borda só é construída no deploy da **dev**: mudança no Caddyfile chega à produção por push na `dev`, sem CI nem aprovação | `deploy-dev.yml:242-263` |
+| L9 | **[Resolvido]** O deploy de produção recria a observabilidade inteira e não confere o Evolution | `deploy-prod.yml:349-351` |
 | L10 | Migrações no boot do `data_postgres`, só para frente (53 arquivos, nenhum `down`); sem ensaio antes de trocar a versão | `server/crates/infrastructure_postgres/migrations/` |
-| L11 | `infra/restore-postgres.sh` assume usuário `postgres` e banco `smartcore`, que não existem; falha **depois** de parar os serviços | `infra/restore-postgres.sh:81`, `:89` |
+| L11 | **[Resolvido em 24/11: bundle `current` + env do ambiente via `lib.sh`; serviços ficam parados com instrução se a restauração falhar]** `infra/restore-postgres.sh` assumia usuário `postgres` e banco `smartcore` e apontava para `docker/<env>/compose.yml` | `infra/restore-postgres.sh` |
 | L12 | Site e servidor de releases fora de qualquer deploy, sem imagem versionada (2.6, 2.7) | — |
 | L13 | Canal estável do app Windows sem portão e com falha de upload tratada como aviso (2.5) | `release-windows.yml:28-38`, `:383-391` |
 | L14 | O `control_plane` recusa o canal `stable`: em produção não há como emitir link do instalador | `control_plane/src/releases.rs:43-51` |
@@ -180,9 +242,9 @@ Todos com `restart: unless-stopped`, rotação de log (`:20-24`) e `mem_limit`.
 
 | ID | Achado | Evidência | Correção |
 |---|---|---|---|
-| C1 | **Nomes de serviço repetidos em rede comum a dev e produção.** Os dois composes ligam `data_postgres`, `data_redis`, `data_storage`, `control_plane`, `runtime_api`, `worker`, `ia_engine`, `ia_engine_jev`, `data_whatsapp`, `webhook_ingress` à rede externa `smart_core_v2_observability`. O nome do serviço vira apelido de DNS em cada rede; um container em duas redes resolve o nome nas duas. Com as duas stacks no ar, `tcp://data_postgres:9101` chamado pela produção pode cair na dev. O transporte interno não autentica (`crates/transport/src/codec.rs:92-94`) | `docker/prod/compose.yml:184,217,237,271,292,402,429,473,488` e o equivalente na dev | Rede de telemetria **por ambiente** (`smart_core_v2_telemetria_prod` / `_dev`), com o coletor nas duas. Validar com `getent hosts data_postgres` |
-| C2 | **Webhook do Evolution fixo no código**: `http://webhook_ingress:9200/webhook/...`. Com Evolution compartilhado e os dois `webhook_ingress` na mesma rede, a entrega alterna entre ambientes e o token da instância é recusado no ambiente errado | `server/apps/data_whatsapp/src/main.rs:362-365`, `:673`, `:1028`, `:1111` | Variável `WEBHOOK_INGRESS_URL_INTERNA` + apelido de rede por ambiente; regravar o webhook das instâncias existentes |
-| C3 | **Portas iguais no host**: 8095, 8099 e 9200 têm o mesmo padrão nos dois composes; a borda aponta `auth.`/`mcp.` de dev e produção para a mesma porta | `docker/prod/compose.yml:273,373,490`; `docker/edge/Caddyfile:204,232,245,264`, aviso em `:208-211` | Portas próprias de produção (8096, 8098, 9201) e blocos separados no Caddyfile |
+| C1 | **[Resolvido em 22/11: `OBS_NET` por ambiente]** **Nomes de serviço repetidos em rede comum a dev e produção.** Os dois composes ligam `data_postgres`, `data_redis`, `data_storage`, `control_plane`, `runtime_api`, `worker`, `ia_engine`, `ia_engine_jev`, `data_whatsapp`, `webhook_ingress` à rede externa `smart_core_v2_observability`. O nome do serviço vira apelido de DNS em cada rede; um container em duas redes resolve o nome nas duas. Com as duas stacks no ar, `tcp://data_postgres:9101` chamado pela produção pode cair na dev. O transporte interno não autentica (`crates/transport/src/codec.rs:92-94`) | `docker/prod/compose.yml:184,217,237,271,292,402,429,473,488` e o equivalente na dev | Rede de telemetria **por ambiente** (`smart_core_v2_telemetria_prod` / `_dev`), com o coletor nas duas. Validar com `getent hosts data_postgres` |
+| C2 | **[Resolvido em 22/11: `WEBHOOK_INGRESS_URL`; prod em `172.17.0.1:9211`, fora da `evolution_net`]** **Webhook do Evolution fixo no código**: `http://webhook_ingress:9200/webhook/...`. Com Evolution compartilhado e os dois `webhook_ingress` na mesma rede, a entrega alterna entre ambientes e o token da instância é recusado no ambiente errado | `server/apps/data_whatsapp/src/main.rs:362-365`, `:673`, `:1028`, `:1111` | Variável `WEBHOOK_INGRESS_URL_INTERNA` + apelido de rede por ambiente; regravar o webhook das instâncias existentes |
+| C3 | **[Resolvido em 22/11: dev 8095/8099/9210, prod 8096/8100/9211]** **Portas iguais no host**: 8095, 8099 e 9200 têm o mesmo padrão nos dois composes; a borda aponta `auth.`/`mcp.` de dev e produção para a mesma porta | `docker/prod/compose.yml:273,373,490`; `docker/edge/Caddyfile:204,232,245,264`, aviso em `:208-211` | Portas próprias de produção (8096, 8098, 9201) e blocos separados no Caddyfile |
 | C4 | **Backup só no disco do banco.** Vale também para o banco do Evolution e para os artefatos de release | `infra/RUNBOOK_ROBUSTEZ.md:131-135` | Cópia externa (bucket R2 próprio, credencial só de escrita) e restauração ensaiada |
 | C5 | **Segredos em texto puro em `smart-agent-config/.claude/settings.local.json`** (confirmado por busca de padrão, sem exibir valores): URLs de banco com senha embutida nas linhas 66, 72, 105 e 106; um token do GitHub (`GH_TOKEN`) na linha 155; um cabeçalho `Authorization: Bearer` na linha 156. Não há chave chamada "password"/"senha": a senha está dentro das URLs. O arquivo é ignorado só pelo gitignore **global da máquina** (`~/.config/git/ignore:3`), não pelo do repositório. A `TYPESAFE_API_KEY` **não** aparece nesse arquivo; a exposição dela foi em saída de comando | busca por padrão no arquivo | Dono: revogar o token do GitHub e trocar as senhas de banco e a chave TypeSafe. IA: remover as regras e incluir `**/.claude/settings.local.json` no `.gitignore` do repositório |
 | C6 | **Canal estável do app Windows sem portão.** Qualquer tag `win-vX.Y.Z`, de qualquer branch, sem CI verde e sem aprovação, publica no feed estável; todo aplicativo instalado baixa, aplica e reinicia sozinho na próxima abertura. Um build ruim ou malicioso chega a todos os clientes | `release-windows.yml:28-38`; `auto_update_native.dart:36-43` | Ambiente `production-windows` com revisor obrigatório, exigência de CI verde, tag só a partir de `main`, token de upload do estável só nesse ambiente, falha de upload reprova o job |
@@ -191,18 +253,18 @@ Todos com `restart: unless-stopped`, rotação de log (`:20-24`) e `mem_limit`.
 
 | ID | Achado | Evidência | Correção |
 |---|---|---|---|
-| A1 | Runner self-hosted único, `gh-runner` no grupo `docker` (equivale a root), mesma workspace para dev e produção; `prod.env` legível pelo mesmo usuário | `infra/server-setup.sh:59`, `:74` | Revisor obrigatório no ambiente `production`, tags protegidas, conferir se o repositório é privado; depois, runner próprio (D3) |
+| A1 | **[Parcial: revisor no environment `prod`, ruleset de tags e bundle por ambiente fora da workspace; runner segue único e no grupo `docker`]** Runner self-hosted único, `gh-runner` no grupo `docker` (equivale a root), mesma workspace para dev e produção; `prod.env` legível pelo mesmo usuário | `infra/server-setup.sh:59`, `:74` | Revisor obrigatório no ambiente `production`, tags protegidas, conferir se o repositório é privado; depois, runner próprio (D3) |
 | A2 | Chave global do Evolution compartilhada: a dev consegue apagar ou usar instâncias de produção | `docker/evolution/compose.yml:55` | Chave nova no go-live, prefixo por ambiente, alerta de instância removida |
 | A3 | Nome de instância vem do usuário e o Evolution é um só: colisão entre ambientes | `runtime_api/src/grpc_web.rs:3916` | Prefixo `prod-`/`dev-` aplicado no `data_whatsapp` |
-| A4 | Borda única e sem gate (L8); um Caddyfile inválido já derrubou tudo em 28/07/2026 (`deploy-dev.yml:497-501`) | — | `caddy validate` na CI; borda de produção só troca por tag |
-| A5 | Imagens de produção em `:latest` (servidor, releases, borda) e bases por tag móvel | `docker/server/Dockerfile:5,34`; composes | Versão exata em produção; bases por digest |
+| A4 | **[Resolvido: `caddy validate` na CI e borda só por `deploy-infra.yml`]** Borda única e sem gate (L8); um Caddyfile inválido já derrubou tudo em 28/07/2026 (`deploy-dev.yml:497-501`) | — | `caddy validate` na CI; borda de produção só troca por tag |
+| A5 | **[Parcial: servidor por versão; releases e site ainda não]** Imagens de produção em `:latest` (servidor, releases, borda) e bases por tag móvel | `docker/server/Dockerfile:5,34`; composes | Versão exata em produção; bases por digest |
 | A6 | SSH como `root`, com campo de senha previsto; sem `fail2ban` nem atualização automática | `infra/.env.deploy.example:11-13`; `infra/server-setup.sh` | Só chave, `PermitRootLogin prohibit-password`, `fail2ban`, `unattended-upgrades` |
 | A7 | O Docker publica portas por cima do UFW; cadeia `DOCKER-USER` vazia em 11/09/2026 | `docker/dev/compose.yml:54-57` | Regras na `DOCKER-USER` e inventário de portas |
 | A8 | Sem métricas de host (CPU, memória, disco) | `infra/RUNBOOK_ROBUSTEZ.md:208-210` | `node_exporter` + `cAdvisor` + alertas |
 | A9 | Alertas sem destino real | `docker/observability/compose.yml:126-127` | Canal definido pelo dono; alerta de teste |
-| A10 | Sessão do Claude Code como root no VPS (`claude-rc`) | memória do projeto | D8 |
+| A10 | Sessão do Claude Code como root no VPS (`claude-rc`), com `bypassPermissions` e `IS_SANDBOX=1`, no mesmo servidor da prod e com acesso ao `prod.env` | `/etc/systemd/system/claude-rc.service` | **Aceito pelo dono (D8).** Mitigação mínima: nenhum segredo em conversa, backup em `/root/backups/` antes de editar config, nada de `compose` fora do deploy |
 | A11 | **Instalador assinado com certificado auto-assinado.** O SmartScreen mostra "editor desconhecido" e o Defender pode classificar o `Setup.exe` como ameaça; o usuário relatou exatamente isso. Pedir ao cliente que importe o certificado de desenvolvimento como raiz confiável **não é saída**: daria a esse certificado poder de validar qualquer coisa na máquina dele | `infra/windows/README.md`; `release-windows.yml:10-14` | Certificado de autoridade pública em HSM de nuvem + mudança do passo de assinatura (seção 5.4, Fase 10) |
-| A12 | **Web de produção já roteada ao público** (`/v2/admin`, `/v2/tenant`, gRPC-Web). Contraria a decisão de não publicar a web agora | `docker/edge/Caddyfile:36-67` | `/v2/tenant` não roteado; `/v2/admin` e gRPC-Web só por lista de IP ou VPN (Fase 4) |
+| A12 | **[Aberto; além da rota, o `web-tenant` da prod está de pé]** **Web de produção já roteada ao público** (`/v2/admin`, `/v2/tenant`, gRPC-Web). Contraria a decisão de não publicar a web agora | `docker/edge/Caddyfile:36-67` | `/v2/tenant` não roteado; `/v2/admin` e gRPC-Web só por lista de IP ou VPN (Fase 4) |
 | A13 | Um só token de upload para beta e estável; o pipeline de beta (build de dev) tem credencial para publicar no feed de produção | `releases_server/src/lib.rs:121-126` | Token por canal; o do estável só no ambiente protegido |
 
 ### 3.3 Médio
@@ -210,12 +272,12 @@ Todos com `restart: unless-stopped`, rotação de log (`:20-24`) e `mem_limit`.
 | ID | Achado | Evidência | Correção |
 |---|---|---|---|
 | M1 | CORS do gRPC-Web espelha qualquer origem | `runtime_api/src/grpc_web.rs:11655-11657` | Lista fechada por ambiente |
-| M2 | `watchdog` como root com o socket do Docker | `docker/prod/compose.yml:516,526` | Via `docker-socket-proxy` |
+| M2 | `watchdog` como root com o socket do Docker (dev e prod; com o proxy da observabilidade são 3 montagens do socket no servidor) | `docker/stack/docker-compose.base.yml:609` | Via `docker-socket-proxy` |
 | M3 | Redis guarda chaves de LLM decifradas (decisão consciente) | `security.md:40-43` | Sem porta no host; RDB/AOF tratados como credencial |
-| M4 | RUSTSEC-2026-0459 pendente; auditoria com `continue-on-error`. O 0459 atinge justamente o **app Windows** (`local_engine` → `sqlx` → sqlite) | `server/.cargo/audit.toml:13-41`; `ci.yml:244` | Auditoria bloqueante com exceção datada; corrigir quando o `sqlx` publicar |
+| M4 | **[0459 corrigido em `e76adaf2`; resta a auditoria bloqueante]** RUSTSEC-2026-0459 pendente; auditoria com `continue-on-error`. O 0459 atinge justamente o **app Windows** (`local_engine` → `sqlx` → sqlite) | `server/.cargo/audit.toml:13-41`; `ci.yml:244` | Auditoria bloqueante com exceção datada; corrigir quando o `sqlx` publicar |
 | M5 | Avisos 0386 (tokio), 0486 (rustix), `chacha20`, `spin` | `audit.toml:87-118` | `cargo update` no pós-go-live |
 | M6 | Sem varredura de imagem nem de dependência Python/Dart; ações do GitHub por tag móvel | workflows | `trivy`, `pip-audit`, ações por SHA |
-| M7 | Evolution, observabilidade e releases sem limite de memória e/ou rotação de log | composes | `mem_limit` e `logging` |
+| M7 | **[Observabilidade resolvida (teto + `oom_score_adj` 300); restam Evolution e releases]** Evolution, observabilidade e releases sem limite de memória e/ou rotação de log | composes | `mem_limit` e `logging` |
 | M8 | Banco do Evolution sem backup | `docker/evolution/compose.yml:78-81` | `pg_dump` periódico + cópia do volume |
 | M9 | Serviços Rust iniciam a telemetria com ambiente fixo `"production"` também na dev | `data_whatsapp/src/main.rs:27` | Ler `SMARTCORE_ENV` |
 | M10 | Dados pessoais em log: busca simples não achou telefone/CPF/CNPJ em macros de uma linha, mas não cobre macros de várias linhas | — | Revisão dirigida + teste |
@@ -342,12 +404,18 @@ O ponto fraco é de operação: tudo em uma máquina, dev e produção lado a la
 
 | Projeto compose | Conteúdo | Quem implanta |
 |---|---|---|
-| `smart-core-v2-prod` | Serviços de aplicação + **`site`** (decisão do dono: junto com o servidor admin) + `web` (admin, restrito) | `deploy-prod.yml`, tag `vX.Y.Z` |
-| `smart-core-v2-releases` | `releases_server`, dados em `/opt/smartcore/releases-data` | `deploy-prod.yml` (mesma tag), sem recriar se a imagem não mudou |
-| `smart-core-v2-edge` | Caddy | `deploy-prod.yml`; a dev deixa de trocar a borda de produção |
-| `smart-core-v2-evolution` | Evolution + banco dele | Fluxo atual; a produção só confere |
-| `smart-core-v2-observability` | LGTM + métricas de host | Qualquer deploy, com recriação só se a configuração mudou |
-| `smart-core-v2-dev` | Dev | `deploy-dev.yml` |
+Revisada em 24/11/2026 para o fluxo que já existe (`docker/stack/` + bundle +
+`deploy-infra.yml`, decisão R-D1 do plano `servidor-reestruturacao-dev-prod`:
+infra compartilhada só pelo fluxo de prod).
+
+| Projeto compose | Conteúdo | Quem implanta | Estado |
+|---|---|---|---|
+| `smart-core-v2-prod` | Serviços de aplicação + **`site`** (decisão do dono: junto com o admin) + `web` (admin, restrito); **sem `web-tenant`** enquanto a web estiver fechada | `deploy-prod.yml`, tag `vX.Y.Z` | No ar sem o site e com `web-tenant` |
+| `releases-stack` (nome real; a revisão 2 o chamava `smart-core-v2-releases`) | `releases_server`, dados em `/opt/smartcore/releases-data` | `deploy-infra.yml`, componente novo `releases` (serve beta e estável: é infra compartilhada) | Subido à mão, `:latest` |
+| `smart-core-v2-edge` | Caddy | `deploy-infra.yml` | Feito |
+| `smart-core-v2-evolution` | Evolution + banco dele | `deploy-infra.yml`; o deploy de prod só confere | Feito |
+| `smart-core-v2-observability` | LGTM + métricas de host | `deploy-infra.yml` | Feito (sem métricas de host) |
+| `smart-core-v2-dev` | Dev | `deploy-dev.yml` | Feito |
 
 Sobre o site dentro da stack de produção: atende ao pedido e ganha versão, sonda e teste de fumaça de graça. O custo é o site cair se alguém derrubar a stack inteira (`compose down`). Mitigação: `up -d` só recria o que mudou, a imagem do site tem tag por conteúdo (não muda a cada release) e a regra "nunca `down` em produção" entra na seção 8.
 
@@ -364,7 +432,7 @@ Sobre o site dentro da stack de produção: atende ao pedido e ganha versão, so
 | Servidor de releases | App instalado segue funcionando, mas **nenhuma correção chega ao cliente**; instalador indisponível | Sem backup, sem alerta | Backup externo, sonda externa em `/health`, GitHub Release como segunda cópia dos artefatos |
 | Certificado de assinatura | Sem ele não sai versão; se a chave vazar, alguém assina como a empresa | PFX em secret do GitHub | Chave em HSM de nuvem; revogação documentada |
 | Feed estável | Uma versão ruim chega a todos, sem volta automática (o Velopack não rebaixa versão) | Sem portão | C6 + beta antes do estável + procedimento de correção para frente |
-| Memória da VPS | A soma dos tetos de produção é ≈ 9,5 GB; a dev tem outro tanto. Em 8 GB não cabe | A confirmar | D1 |
+| Memória da VPS | VM de 7,8 GiB; soma dos tetos ≈ 13 GiB (prod ≈ 7,6, observabilidade ≈ 2,8, mais a dev); uso real ≈ 1,5 GiB. Tetos não reservam memória: um pico conjunto ainda leva o kernel ao OOM | D1 decidida: mesma VPS, `oom_score_adj` dev 900 / obs 300 / prod 0 (a dev morre primeiro) | Fase 2B: enxugar os tetos da dev para a soma caber na RAM, alerta de memória do host (A8) |
 
 ### 5.4 O aviso de vírus no instalador: causa e caminho
 
@@ -423,13 +491,15 @@ Fora de proposta: Kubernetes/Swarm, réplica de banco e várias réplicas de ser
 - **Dono sugerido:** IA (leitura, com autorização para a sessão SSH) + Dono (GitHub e Hostinger).
 - **Risco:** baixo.
 - **Conclusão:** relatório entregue; D1 decidida com os números de memória e disco.
+- **Estado (24/11/2026): feita.** Inventário de 23–24/11 resumido em R3.1; D1 decidida. Se o inventário não trouxe `sshd -T`, `iptables -S DOCKER-USER` e a lista de environments/secrets do GitHub, esses três entram no início da Fase 1.
 - **Observabilidade & Auditoria:** sem evento de auditoria (só leitura). O relatório lista nomes de chave, nunca valores.
 
 ### Fase 1 — Saneamento de segurança
 
 - **Entregáveis:**
-  - Dono: revogar o token do GitHub e trocar as senhas de banco que estão em `settings.local.json`; trocar a `TYPESAFE_API_KEY`; revisor obrigatório nos ambientes `production` e `production-windows`; tags `v*` e `win-v*` protegidas; snapshot da VPS.
-  - IA: remover as regras com segredo; `.gitignore` do repositório cobrindo `settings.local.json`; trocar o IP por apelido em `settings.json`; SSH só por chave, `fail2ban`, `unattended-upgrades`, regras `DOCKER-USER` (script novo, sem `ufw reset`); D8 aplicada.
+  - Dono: revogar o token do GitHub e trocar as senhas de banco que estão em `settings.local.json`; trocar a `TYPESAFE_API_KEY`; revisor obrigatório no ambiente `production-windows` (o `prod` já tem); tags `win-v*` protegidas (as `vX.Y.Z` já têm ruleset); snapshot da VPS.
+  - IA: remover as regras com segredo; `.gitignore` do repositório cobrindo `settings.local.json`; trocar o IP por apelido em `settings.json`; SSH só por chave, `fail2ban`, `unattended-upgrades`, regras `DOCKER-USER` (script novo, sem `ufw reset`).
+- **Estado (24/11/2026): parcial.** Feito pelo plano irmão: `environment: prod` com revisor, rulesets de `main`, `dev` e tags `vX.Y.Z`. D8 decidida pelo dono no sentido oposto à recomendação (sessão root com permissão total; ver seção 7). Abertos: C5 (o `settings.local.json` local ainda tem 4 URLs de banco com senha, token do GitHub e um `Bearer`; o arquivo segue fora do `.gitignore` do repositório), `production-windows`, endurecimento de SSH e `DOCKER-USER`.
 - **Risco:** médio (trancar o acesso). Mitigação: sessão aberta, segunda conexão testada, console da Hostinger.
 - **Conclusão:** login por senha recusado; só 22/80/443 respondem de fora; credenciais antigas invalidadas e comprovadamente sem efeito.
 - **Observabilidade & Auditoria:** log do `sshd` e do `fail2ban` recolhido pelo promtail; alerta de tentativa de login em excesso. Sem evento em `audit_log` (não é ação de aplicação). Nenhum valor de segredo em comando ou saída.
@@ -447,17 +517,38 @@ Fora de proposta: Kubernetes/Swarm, réplica de banco e várias réplicas de ser
   8. CORS fechado (M1), ambiente do trace por variável (M9), revisão de dados pessoais em log (M10).
 - **Risco:** médio (mexe na dev em uso). Mitigação: validar em branch `ci/` antes da `dev`, um item por vez.
 - **Conclusão:** CI verde; dev no ar após cada item; de um container da dev só resolvem nomes da dev; WhatsApp da dev funcionando após a regravação.
+- **Estado (24/11/2026): quase toda feita** pelo plano `servidor-reestruturacao-dev-prod`. Feitos: itens 1 (C1), 3 (C3, A4), 4 (L1, L6; conferir L2/L3 contra `required-keys.prod`), 5 (L4, L7) e a parte de observabilidade do item 7. A parte do item 2 que é C2 foi feita de outro jeito: a prod registra `http://172.17.0.1:9211` e o `webhook_ingress` dela saiu da `evolution_net`. Abertos: prefixo de instância (A3), item 6 menos o L11 (resolvido em 24/11; seguem C4 e M8), limites do Evolution (M7), métricas de host (A8, ver Fase 2B), item 8 (M1, M9 — os 9 serviços Rust ainda chamam `init_telemetry(..., "production")` —, M10).
 - **Observabilidade & Auditoria:** (a) evento `whatsapp.webhook.regravado` em nível `info` com `tenant_id`, `instance_id`, `env`; erro com `error_code`. (b) `audit_log`: `whatsapp.instance.webhook_update` por instância regravada, sem o token. (c) Token da instância e chave global seguem em `SecretString`; nenhum telefone completo em log.
+
+### Fase 2B — Simplificação do servidor (cenário B)
+
+Origem: inventário de 23–24/11/2026. Hoje são 49 containers, tetos que somam
+≈ 13 GiB numa VM de 7,8 GiB, três montagens do socket do Docker e restos da v1.
+O cenário B leva a ≈ 46 containers sem perder função. **Nenhum item desta fase
+foi decidido pelo dono**: cada um depende da decisão indicada (seção 7). A
+exceção é o item 2, que só aplica a decisão já tomada de manter a web fechada.
+
+- **Entregáveis (IA, após a decisão de cada item):**
+  1. **MinIO fora da dev (D21).** A prod já usa R2; a dev passa a usar um bucket R2 próprio de dev, com token restrito a ele. Remove `minio` e `minio-setup` do `dev.override.yml`, `MINIO_ROOT_PASSWORD` do `required-keys.dev` e o volume `minio_data` depois de copiar o que for preciso.
+  2. **`web-tenant` fora da prod** (aplica a web fechada, A12/Fase 4): perfil `web-publica` no `docker-compose.base.yml`, ligado só na dev; a borda deixa de rotear `/v2/tenant` na prod.
+  3. **Alloy no lugar do promtail (D22).** O Promtail está em fim de vida desde 02/03/2026, sem correções nem atualizações, e a Grafana indica o Alloy como substituto, com conversor da configuração (`info_aux`, seção "Revisão 3"). O Alloy também traz exportadores de host e de containers embutidos, o que cobre A8 sem subir `node_exporter` e `cAdvisor` à parte.
+  4. **Socket do Docker em um só ponto (D23).** Um único `docker-socket-proxy`, com permissões mínimas por cliente; os dois `watchdog` e o coletor de logs passam a falar com ele. Fecha M2.
+  5. **Tetos coerentes com a RAM.** Recalcular os `MEM_*` da dev para que prod + observabilidade + dev caibam em ≈ 7 GiB, mantendo os `oom_score_adj` de D1; alerta de memória do host acima de 85 %.
+  6. **Limpeza dos restos (D24) — feita em 24/11:** volumes anônimos e redes órfãs, cron de `caddy reload`, `renew-ssl.sh` da v1 (a borda já renova o certificado sozinha) e o prune diário. Backup e lista em `/root/backups/2026-11-24-limpeza-d24/`.
+  7. **Site e releases com projeto compose e deploy** (antecipa parte das Fases 3 e 8): sem container solto fora de projeto.
+- **Risco:** médio para a dev (troca de storage e de coletor de logs). Mitigação: um item por vez, validado em branch `ci/` antes da `dev`; prod só por `deploy-infra.yml` ou tag.
+- **Conclusão:** ≈ 46 containers; soma dos tetos ≤ RAM da VM; uma montagem do socket; nenhum container fora de projeto compose; nenhum resto da v1 no `crontab`.
+- **Observabilidade & Auditoria:** (a) após a troca do coletor, conferir no Loki que todos os serviços de dev e prod seguem com `service` e `env`; métricas de host no Prometheus com alerta de memória e disco. (b) Sem evento de auditoria (mudança de infraestrutura, não de aplicação). (c) O proxy do socket fica só leitura para o coletor; credenciais do bucket R2 da dev só no secret `ENV_FILE_B64` do environment `dev`.
 
 ### Fase 3 — Site público por versão, no deploy de produção
 
 - **Entregáveis (IA):**
   1. Job de build do site na CI: imagem `ghcr.io/…/smartcore-site`, com tag de versão e tag pelo hash do conteúdo de `docker/site/`; a origem continua sendo `docker/site/publico/`.
-  2. Serviço `site` em `docker/prod/compose.yml` (porta 172.17.0.1:8085, `mem_limit`, rotação de log, sonda `wget` na página inicial); `SITE_IMAGE` no `prod.env`.
+  2. Serviço `site` no `prod.override.yml` (porta 172.17.0.1:8085, `mem_limit`, `oom_score_adj` da prod, rotação de log, sonda `wget` na página inicial); a tag da imagem vai no `images.env` do bundle, como as demais (`SITE_TAG`), e não no `prod.env`. *(Revisão 3: `docker/prod/compose.yml` não existe mais.)*
   3. Inclusão do `site` no teste de fumaça do deploy; conferência do conteúdo (título da página) pelo domínio.
   4. CSP do site no bloco da borda; cabeçalhos mantidos; fontes hospedadas junto ou liberadas na CSP (B8).
   5. Teste na CI que **falha** se algum botão de acesso perder `data-acesso-desativado`.
-  6. Troca do container `smart-core-site-site-1` (construído à mão) pelo serviço novo, na mesma porta, com o antigo removido só depois do teste de fumaça.
+  6. Troca do container atual do site (imagem `smartcore-site:local`, construído à mão e hoje sem projeto compose) pelo serviço novo, na mesma porta, com o antigo removido só depois do teste de fumaça.
 - **Dono:** aprovar qualquer mudança de texto do site; a página não muda de conteúdo nesta fase.
 - **Risco:** baixo; a troca na porta 8085 tem alguns segundos sem site. Fazer fora do horário comercial.
 - **Conclusão:** site servido por imagem versionada do GHCR, implantado pelo `deploy-prod.yml`; botões "Entrar" e "Criar conta" inativos; `smartcore-site:local` removida do servidor.
@@ -504,7 +595,7 @@ Fora de proposta: Kubernetes/Swarm, réplica de banco e várias réplicas de ser
 
 - **Entregáveis (IA):**
   1. Imagem `…-releases:<versão>` construída quando `server/apps/releases_server/**` ou `docker/releases/**` mudam, e não a cada tag do app.
-  2. Projeto compose `smart-core-v2-releases`, implantado pelo `deploy-prod.yml`: `pull` por versão, `up -d`, sonda, teste de fumaça em `/health` e em `/api/installers/stable`; `releases.env` em `/opt/smartcore/releases/env/`; rotação de log.
+  2. Projeto compose `releases-stack` (nome atual no servidor), implantado pelo `deploy-infra.yml` como componente `releases` (é infra compartilhada: serve o beta e o estável; regra R-D1): `pull` por versão, `up -d`, sonda, teste de fumaça em `/health` e em `/api/installers/stable`; `releases.env` em `/opt/smartcore/releases/env/`; rotação de log.
   3. Token de upload por canal (A13); `control_plane` aceitando `stable` (L14); `RELEASES_INTERNAL_URL` apontando para o serviço.
   4. Armazenamento: disco local mantido, com cópia para bucket R2 após cada publicação e retenção das N últimas versões por canal (M16). GitHub Release segue como segunda cópia.
   5. Reescrita de `RUNBOOK_RELEASES.md` com o que o código faz (M17): publicar, correção para frente, troca de segredo (recriar os dois lados juntos, sem chave antiga), restauração do diretório.
@@ -516,7 +607,8 @@ Fora de proposta: Kubernetes/Swarm, réplica de banco e várias réplicas de ser
 
 ### Fase 9 — Primeiro deploy do servidor por tag
 
-- **Entregáveis:** tag `v1.0.0` em commit de `main` com CI verde; aprovação no ambiente `production`; stack no ar com site, admin restrito e releases; superusuário criado; configurações gerais e chaves de LLM gravadas pelo painel.
+- **Entregáveis:** tag `v1.0.0` em commit de `main` com CI verde; aprovação no ambiente `prod`; stack no ar com site, admin restrito e releases; superusuário criado; configurações gerais e chaves de LLM gravadas pelo painel.
+- **Estado (24/11/2026): mecanismo feito, versão do go-live pendente.** A prod subiu por tag com aprovação em 22/11 (`v0.2.1`, 64 s) e está em `v0.2.2` (86 s); marcadores de deploy no Grafana já existem. Faltam: hotfix `v0.2.3` ainda sem tag, ensaio de rollback `v0.2.2 → v0.2.1` (plano irmão, R6) e, para o go-live público, o site, o admin restrito e o releases por versão. O número da versão do go-live (`v1.0.0` ou seguir em `0.x`) fica em D10.
 - **Dono:** aprovar; criar o superusuário; parear o primeiro número.
 - **Risco:** médio. Falha no teste de fumaça interrompe o deploy; a dev não depende da produção.
 - **Conclusão:** todos os serviços com sonda saudáveis; site no domínio; `/v2/admin` só para o dono; `/v2/tenant` fechado; `releases.` respondendo; nenhum alerta aberto.
@@ -581,14 +673,14 @@ Nenhuma bloqueia as Fases 0 a 3. D11 tem prazo externo: decidir cedo.
 
 | # | Decisão | Recomendação |
 |---|---|---|
-| D1 | Mesma VPS da dev ou VPS própria | Mesma VPS, **desde que** a Fase 0 mostre pelo menos 16 GB de RAM; com 8 GB, subir o plano antes |
+| D1 | Mesma VPS da dev ou VPS própria | **Decidida (22/11/2026):** mesma VPS (7,8 GiB), tetos por ambiente nos `.vars` e `oom_score_adj` dev 900 / observabilidade 300 / prod 0. A recomendação original (16 GB) foi superada; a soma dos tetos (≈ 13 GiB) acima da RAM vai para a Fase 2B |
 | D2 | Domínio | Manter `smartcoreassistant.com.br` (já embutido nos builds) |
 | D3 | Runner de produção | O mesmo agora, com as proteções da Fase 1; próprio depois do go-live |
 | D4 | Banco limpo ou ETL da v1 | Banco limpo se a v1 já estiver desligada; a Fase 0 confirma |
 | D5 | Backup | Dump a cada 6 h; 30 dias locais; cópia externa por 90 dias, credencial só de escrita; restauração mensal |
 | D6 | Retenção de logs, traces e mídia | 14 dias para logs e traces; auditoria no banco sem expiração; mídia 90 dias |
 | D7 | Canal de alerta | Webhook em canal lido no celular + sonda externa no domínio e no `releases.` |
-| D8 | Sessão do Claude Code como root no VPS | Só para a dev; em produção, usuário sem `prod.env` e sem grupo `docker` |
+| D8 | Sessão do Claude Code como root no VPS | **Decidida pelo dono, diferente da recomendação:** sessão `claude-rc` como root, por Remote Control, com `--permission-mode bypassPermissions` e `IS_SANDBOX=1`, sem nenhuma regra `ask`, no mesmo VPS da prod. **Divergência registrada:** a recomendação era usuário sem `prod.env` e sem grupo `docker`. Com a decisão, a sessão lê o `prod.env`, controla os containers da prod e não pede confirmação; o controle passa a ser só a conta do Claude do dono e a disciplina de operação (CLAUDE.md, backups em `/root/backups/`, deploy só pelos workflows) |
 | D9 | Risco do Evolution compartilhado | Aceitar agora, com prefixo e backup; rever com mais de um cliente pagante |
 | D10 | Versões e política de release | Servidor `v1.0.0` e app `win-v1.0.0`, ambos a partir de `main`; toda versão estável do app fica antes no beta por 3 dias úteis |
 | D11 | Certificado de assinatura | Conferir primeiro a elegibilidade no serviço da Microsoft (Artifact Signing); se a empresa brasileira não for aceita, certificado OV com assinatura em nuvem. Não comprar EV |
@@ -601,6 +693,15 @@ Nenhuma bloqueia as Fases 0 a 3. D11 tem prazo externo: decidir cedo.
 | D18 | Abertura da web e dos botões do site | **Adiada.** Só com aprovação escrita, após a Fase 11 aprovada e com a Fase A executada |
 | D19 | Distribuição do instalador aos primeiros clientes | Link com ticket, gerado pelo dono no admin a cada cliente (vale 5 minutos), ou envio do arquivo com o SHA-256. Botão público de download só na Fase A |
 | D20 | Transcrição de áudio e quotas no dia 1 | Transcrição desligada e ligada por tenant; quotas em modo log por duas semanas |
+| D21 | MinIO na dev (Fase 2B) | **Adiada pelo dono (24/11):** sem gasto novo agora; o MinIO da dev fica como está. Retomar com bucket R2 de dev quando houver orçamento |
+| D22 | Alloy no lugar do promtail (Fase 2B) | **Pendente.** Recomendação: trocar, pelo fim de vida do Promtail e para cobrir métricas de host (A8) no mesmo coletor |
+| D23 | Socket do Docker em um só ponto (Fase 2B) | **Pendente.** Recomendação: um `docker-socket-proxy` com permissão mínima por cliente |
+| D24 | Limpeza dos restos do servidor (Fase 2B) | **Feita em 24/11**, com backup e lista em `/root/backups/2026-11-24-limpeza-d24/` (ver R3.1, "Restos"). Ficou o prune semanal de 168 h, para o rollback achar a imagem anterior no disco |
+
+Decisões do dono já tomadas, registradas na revisão 3: site junto com o admin na
+stack de prod; web fechada (D18 adiada); canal estável do app com portões (C6);
+app Windows com certificado de autoridade pública (A11; o fornecedor segue em
+D11); D1; D8.
 
 ---
 
@@ -616,7 +717,9 @@ Nenhuma bloqueia as Fases 0 a 3. D11 tem prazo externo: decidir cedo.
 | Instalador bloqueado pelo Windows no cliente | Alta hoje | Alto (cliente não instala) | Fase 10; piloto acompanhado; envio para análise |
 | Certificado demora ou a empresa não é aceita | Média | Alto (atrasa o go-live público) | Iniciar na Fase 1; piloto com aviso aceito por escrito |
 | Web publicada sem querer | Média | Alto | Fase 4; teste negativo no deploy; critério de no-go |
-| Falta de memória derrubando os dois ambientes | Média a alta em 8 GB | Alto | Fase 0 + D1 |
+| Falta de memória derrubando os dois ambientes | Média (uso real ≈ 1,5 GiB, mas tetos somam ≈ 13 GiB em 7,8 GiB) | Alto | D1 (`oom_score_adj`) + Fase 2B (tetos e alerta de host) |
+| Sessão root com permissão total no servidor da prod (D8) | Baixa | Crítico (lê `prod.env`, para containers, apaga volumes sem confirmação) | Disciplina de operação: deploy só por workflow, backup antes de editar, nada de `compose` fora do bundle |
+| Push na `dev` implanta sozinho, sem esperar a CI | Média | Médio (dev quebrada) | Validar mudanças arriscadas em branch `ci/`; Fase 12 (deploy da dev atrás da CI) |
 | Perda da VPS sem cópia externa | Baixa | Catastrófico | C4 |
 | Perda da `ENCRYPTION_KEY` | Baixa | Alto | Cópia fora do servidor |
 | Migração quebrada no boot | Média | Alto | Ensaio em banco descartável |
@@ -627,7 +730,7 @@ Nenhuma bloqueia as Fases 0 a 3. D11 tem prazo externo: decidir cedo.
 
 ### 8.2 O que NÃO fazer
 
-1. Não subir `docker/prod` como está hoje ao lado da dev.
+1. Não subir compose de produção fora do bundle (`/opt/smartcore/prod/releases/current`) nem a partir do checkout `/opt/smartcore/ops/...`; prod só por tag (`deploy-prod.yml`) ou `rollback-prod.yml`. *(Revisão 3: substitui "não subir `docker/prod`", pasta que não existe mais.)*
 2. Não editar `docker/*/.env` à mão; a fonte é `/opt/smartcore/*/env/`.
 3. Não colocar `COMPOSE_PROJECT_NAME` em `dev.env` nem em `prod.env`.
 4. Não trocar, recriar nem apagar volumes do Evolution; nenhuma versão além da `0.7.2-wa1`.
@@ -636,7 +739,7 @@ Nenhuma bloqueia as Fases 0 a 3. D11 tem prazo externo: decidir cedo.
 7. Não usar `:latest` nem `:dev` em produção, incluindo releases, site e borda.
 8. Não exibir valor de segredo em comando, log ou conversa.
 9. Não rodar testes na máquina local; não fazer teste de carga contra o Evolution compartilhado.
-10. Não restaurar backup em produção sem ensaio e sem corrigir o `restore-postgres.sh`.
+10. Não restaurar backup em produção sem ensaio em dev (o `restore-postgres.sh` foi corrigido em 24/11, mas a restauração real ainda não foi ensaiada).
 11. Não aplicar SQL direto em produção para configuração de tenant sem invalidar `core:settings:invalidate`.
 12. **Não publicar a web admin/tenant nem ativar os botões do site** sem a decisão D18.
 13. **Não criar tag `win-vX.Y.Z` (estável) antes dos portões da Fase 10.**
@@ -644,7 +747,7 @@ Nenhuma bloqueia as Fases 0 a 3. D11 tem prazo externo: decidir cedo.
 15. **Não trocar de certificado ou de nome de editor entre versões** sem necessidade: zera a reputação.
 16. Não republicar uma versão do app com o mesmo número; correção é sempre número maior.
 17. Não dar `compose down` na stack de produção (leva o site junto); usar `up -d` e reinício por serviço.
-18. Não dar push na `dev` com mudança no Caddyfile antes do gate da Fase 2.
+18. Não mudar borda, observabilidade, Evolution ou releases por outro caminho que não o `deploy-infra.yml`. *(Revisão 3: o push na `dev` já não troca a borda.)*
 19. Não exportar o contexto do dotcontext sem reverter `.context/agents/`.
 
 ---
@@ -678,6 +781,20 @@ Nenhuma bloqueia as Fases 0 a 3. D11 tem prazo externo: decidir cedo.
 | 11 | Runbook de releases marcado como divergente do código | Descreve rollback por git e troca de segredo com chave antiga, que não existem | `doc_dev/runbooks/RUNBOOK_RELEASES.md` × `releases_server/src` |
 | 12 | Cada fase ganhou a subseção "Observabilidade & Auditoria" | Exigência da skill `plan-restructuring` | `.context/skills/plan-restructuring/SKILL.md` |
 | 13 | Contagem de migrações corrigida para 53 | A pasta tem 53 arquivos `.sql` e um `README.md` | `server/crates/infrastructure_postgres/migrations/` |
+
+### Revisão 3 (24/11/2026)
+
+| # | O que mudou | Por quê | Fonte |
+|---|---|---|---|
+| 14 | Nova seção R3 com o estado real e a tabela do que ficou superado; seções 2.1–2.4 marcadas como histórico | A revisão 2 foi escrita sem acesso ao servidor e antes da reestruturação dev/prod | Inventário de 23–24/11; `docker/stack/`; plano `servidor-reestruturacao-dev-prod` |
+| 15 | Produção registrada como no ar (`v0.2.1` em 22/11, `v0.2.2` hoje); F0 e F9 marcadas como feitas | A revisão 2 dizia que a prod nunca subiu | `servidor-reestruturacao-dev-prod.md` (R6); servidor |
+| 16 | C1, C2, C3, L1, L4–L9, A4 marcados como resolvidos; A5, M4, M7 como parciais | Resolvidos pela stack base + overlays, bundle, `deploy-infra.yml` e `e76adaf2` | `docker/stack/*.vars`, `prod.override.yml`, `infra/deploy/`, `.github/workflows/deploy-infra.yml` |
+| 17 | L11 mantido com causa nova | `restore-postgres.sh` aponta para `docker/<env>/compose.yml`, removido | `infra/restore-postgres.sh:28-32` |
+| 18 | Topologia 5.2 alinhada: releases como componente do `deploy-infra.yml`, projeto real `releases-stack`; borda e Evolution pelo `deploy-infra.yml` | Regra R-D1 e `CLAUDE.md` ("infra compartilhada só por `deploy-infra.yml`") | `CLAUDE.md`, seção "Ambientes na VPS" |
+| 19 | Números de memória corrigidos (7,8 GiB, tetos ≈ 13 GiB, uso ≈ 1,5 GiB) e D1 marcada como decidida | Inventário | Servidor; `docker/stack/*.vars`; `docker/observability/compose.yml` |
+| 20 | Nova Fase 2B (cenário B: MinIO fora da dev, `web-tenant` fora da prod, Alloy, socket em um ponto, tetos, restos) e decisões pendentes D21–D24 | Princípio de simplificação do inventário; sem decisão do dono, ficam pendentes | Inventário de 23–24/11 |
+| 21 | Decisões do dono registradas: site com o admin na stack de prod, web fechada, canal estável com portões, certificado público, D8 com permissão total (divergência e risco anotados) | Decisões tomadas na conversa de 23–24/11 | Dono |
+| 22 | Referências a `docker/prod/compose.yml`, `environment: production` e `smart-core-v2-releases` trocadas pelo que existe | Nomes antigos | Repositório na `dev` `0af1fd23` |
 
 ## Fontes externas
 

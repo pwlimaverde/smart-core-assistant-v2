@@ -285,7 +285,13 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
         Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
     };
 
-    let instance_name = match payload.get("instance_name").and_then(|v| v.as_str()) {
+    // Vazio ou só espaço é recusado: com o prefixo da dev, viraria a instância
+    // literal `dev-` no gateway.
+    let instance_name = match payload
+        .get("instance_name")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+    {
         Some(s) => s,
         None => {
             return erro(
@@ -294,6 +300,15 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
             )
         }
     };
+    // Nome com o prefixo do ambiente: é ele que vai ao gateway, ao banco e à
+    // resposta (o cliente segue pelo `id`). Ver `nome_no_gateway`.
+    let nome_efetivo = nome_no_gateway(
+        std::env::var("SMARTCORE_WHATSAPP_PREFIXO_INSTANCIA")
+            .ok()
+            .as_deref(),
+        instance_name,
+    );
+    let instance_name = nome_efetivo.as_str();
 
     let provider_name = payload
         .get("provider")
@@ -309,6 +324,31 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
         Ok(prov) => prov,
         Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
     };
+
+    // 0b. Nome único no gateway compartilhado. O Evolution é um só para dev e
+    // prod: criar com um nome já existente sobrescreveria a URL de webhook e o
+    // pareamento da instância que já está lá. Nome repetido é recusado com erro
+    // claro. Falha na consulta também recusa (fail-closed): criar às cegas é o
+    // que causa a colisão.
+    match p.list_all_instances().await {
+        Ok(nomes) if nomes.iter().any(|n| n == instance_name) => {
+            return erro(
+                error_core::AppError::Validation(
+                    "nome já em uso no gateway de WhatsApp; escolha outro nome".into(),
+                ),
+                &env,
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            return erro(
+                error_core::AppError::Internal(format!(
+                    "Falha ao verificar nomes no provedor: {e}"
+                )),
+                &env,
+            )
+        }
+    }
 
     // 1. Cria a instância no provedor
     let result = match p.create_instance(instance_name, None).await {
@@ -462,6 +502,27 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
             "provider": provider_name,
         }),
     )
+}
+
+/// Nome com que uma instância NOVA é criada no gateway compartilhado.
+///
+/// O Evolution é um só para dev e prod, e o nome da instância é a chave dele.
+/// Sem separação, um teste na dev ocupa um nome que um cliente da prod poderia
+/// querer (a checagem de nome único recusaria o cliente), e quem olha o gateway
+/// não sabe de qual ambiente é cada instância. O prefixo vem de
+/// `SMARTCORE_WHATSAPP_PREFIXO_INSTANCIA` (por ambiente, no `<env>.vars`); a dev
+/// usa `dev-` e a prod fica sem prefixo, para o cliente ver o nome que digitou.
+///
+/// Só vale na criação: instâncias existentes mantêm o nome (é com ele que o banco
+/// as encontra no gateway). Nome que já começa com o prefixo não é prefixado de
+/// novo.
+fn nome_no_gateway(prefixo: Option<&str>, nome: &str) -> String {
+    let prefixo = prefixo.map(str::trim).unwrap_or_default();
+    if prefixo.is_empty() || nome.starts_with(prefixo) {
+        nome.to_string()
+    } else {
+        format!("{prefixo}{nome}")
+    }
 }
 
 #[tracing::instrument(skip_all, fields(rpc = "DeleteWhatsappInstance", tenant_id = %env.tenant_id))]
@@ -2887,6 +2948,18 @@ mod tests {
     }
 
     #[test]
+    fn nome_no_gateway_recebe_o_prefixo_do_ambiente_uma_vez() {
+        // Sem prefixo (prod): o nome digitado vai como está.
+        assert_eq!(nome_no_gateway(None, "loja"), "loja");
+        assert_eq!(nome_no_gateway(Some(""), "loja"), "loja");
+        assert_eq!(nome_no_gateway(Some("   "), "loja"), "loja");
+        // Com prefixo (dev): prefixa uma única vez.
+        assert_eq!(nome_no_gateway(Some("dev-"), "loja"), "dev-loja");
+        assert_eq!(nome_no_gateway(Some(" dev- "), "loja"), "dev-loja");
+        assert_eq!(nome_no_gateway(Some("dev-"), "dev-loja"), "dev-loja");
+    }
+
+    #[test]
     fn base_do_webhook_e_configuravel_por_ambiente() {
         assert_eq!(montar_base_webhook(None), "http://webhook_ingress:9200");
         assert_eq!(montar_base_webhook(Some("")), "http://webhook_ingress:9200");
@@ -3248,6 +3321,13 @@ mod tests {
             .mount(&server)
             .await;
 
+        // Gateway sem nenhuma instância: o nome está livre.
+        Mock::given(method("GET"))
+            .and(path("/instance/all"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&server)
+            .await;
+
         let payload = serde_json::json!({
             "instance_name": "instancia-test",
             "provider": "evolution"
@@ -3269,6 +3349,47 @@ mod tests {
             "success"
         );
         assert_eq!(res_payload.get("id").unwrap().as_i64().unwrap(), 42);
+
+        pg_handle.abort();
+    }
+
+    /// Regressão: nome já existente no gateway compartilhado é recusado ANTES de
+    /// criar. `expect(0)` no POST derruba o teste se a criação for chamada mesmo
+    /// assim, o que sobrescreveria a instância de outro ambiente.
+    #[tokio::test]
+    async fn test_handler_create_whatsapp_instance_nome_repetido_recusa_sem_criar() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("GET"))
+            .and(path("/instance/all"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                { "name": "instancia-test" }
+            ])))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/instance/create"))
+            .respond_with(ResponseTemplate::new(201))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let payload = serde_json::json!({
+            "instance_name": "instancia-test",
+            "provider": "evolution"
+        });
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "CreateWhatsappInstance".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_create_whatsapp_instance(state, env).await;
+        assert_eq!(res.kind, MessageKind::Error as i32);
 
         pg_handle.abort();
     }

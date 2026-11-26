@@ -47,7 +47,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "in_progress"
-lastUpdated: "2026-11-22T23:00:00.000Z"
+lastUpdated: "2026-11-24T23:30:00.000Z"
 ---
 
 # Reestruturação dev/prod — dois ambientes, deploy por merge e por tag
@@ -55,6 +55,12 @@ lastUpdated: "2026-11-22T23:00:00.000Z"
 > **Execução 2026-11-21:** R1–R5 e R7 aplicadas; dev rodando por bundle
 > (`v0.2.0-beta.N`). R6 (primeira release de prod) bloqueada por pré-requisitos
 > do dono — ver "Execution History".
+>
+> **Conferência 2026-11-24:** tudo o que cabe à IA está feito e comprovado (DoD
+> abaixo, com evidência). Falta só a validação de prod da R6, que depende do
+> dono: tag `v0.2.3` do hotfix, ensaio de rollback medido e ensaio da recusa de
+> tag fora da `main`. Por isso a fase V segue aberta e o workflow não foi
+> concluído.
 
 ## Artefatos detalhados
 - **Plano completo** (verdade técnica): [plano_completo_servidor-reestruturacao-dev-prod.md](./servidor-reestruturacao-dev-prod/plano_completo_servidor-reestruturacao-dev-prod.md)
@@ -91,24 +97,35 @@ obrigatório com migração · R-D5 arquivar scripts locais · R-D6 migrações
 expand/contract. Bloqueante externo: **D1 do go-live (memória da VPS)**.
 
 ## Definition of Done
-- [ ] Nenhum túnel, script ou porta de ambiente local; docs atualizadas.
-- [ ] Push na `dev` implanta só a stack dev; borda/observabilidade/Evolution intocadas.
-- [ ] Tag fora da `main` recusada; tag na `main` pede aprovação e implanta `X.Y.Z` exato.
-- [ ] Dev e prod rodam de `/opt/smartcore/<env>/releases/current`, não da workspace.
-- [ ] `.env` dos dois ambientes vindo de secret de environment, validado por chave.
-- [ ] Rollback de prod por `rollback-prod.yml` medido (< 5 min) e hotfix ensaiado com backport.
-- [ ] Marcadores de deploy dos dois ambientes visíveis no Grafana.
-- [ ] `RUNBOOK_DEPLOY.md` publicado; `CLAUDE.md` e docs sem regra antiga.
+- [x] Nenhum túnel, script ou porta de ambiente local; docs atualizadas. (R4)
+- [x] Push na `dev` implanta só a stack dev; borda/observabilidade/Evolution intocadas. (`deploys.log` da dev: `v0.2.3-beta.2` a `v0.2.4-beta.9` em 24/11; o de infra não mudou desde 22/11)
+- [ ] Tag fora da `main` recusada; tag na `main` pede aprovação e implanta `X.Y.Z` exato. (segunda parte provada: `v0.2.1` run 45030509181 e `v0.2.2` run 45079119957, ambas com aprovação; a recusa do `gate-origem` está no workflow, mas nunca foi ensaiada)
+- [x] Dev e prod rodam de `/opt/smartcore/<env>/releases/current`, não da workspace. (24/11: dev → `v0.2.4-beta.9`, prod → `v0.2.2`)
+- [x] `.env` dos dois ambientes vindo de secret de environment, validado por chave. (R3; `infra/deploy/required-keys.<env>`)
+- [ ] Rollback de prod por `rollback-prod.yml` medido (< 5 min) e hotfix ensaiado com backport. **Do dono**: rollback run 45091628193 cancelado; hotfix mesclado e trazido para a `dev` (PR #2, PR #5), falta a tag `v0.2.3`
+- [x] Marcadores de deploy dos dois ambientes visíveis no Grafana. (R6: job `deploy_markers` + painel *Deploys*)
+- [x] `RUNBOOK_DEPLOY.md` publicado; `CLAUDE.md` e docs sem regra antiga. (R7)
 
 ## Estado do workflow PREVC
-`workflow-init` **não** foi executado: o `prevc.json` está ligado ao plano
-`windows-releases-v01-beta` (fase C em andamento) e seria sobrescrito. Rodar
-`workflow-init({ name: "servidor-reestruturacao-dev-prod", scale: "MEDIUM" })` +
-`plan({ action: "link" })` depois de fechar ou arquivar aquele workflow.
+Workflow criado e plano vinculado (`workflow-init` + `link` em 2026-11-21) **no
+checkout do VPS** (`/opt/smartcore/ops/smart-core-assistant-v2`). O runtime do
+dotcontext (`.context/runtime/`) é ignorado pelo git, então cada máquina tem o seu.
+O do VPS tem `primary: servidor-reestruturacao-dev-prod`. O da máquina Windows ainda
+aponta para `vinculo-contatos-clientes`, que já está concluído (5/5 fases).
+
+Estado no VPS em 2026-11-24:
+- tracking do plano: P, R, E e C concluídas; V em andamento (decisão `dec-1795515017915`);
+- `prevc.json`: fase atual R, `plan_approved: false`. O gate R→E pede `approvePlan`.
+
+Decisão da conferência de 24/11: **não avançar nem forçar o workflow.** A fase V
+só fecha com ações de prod que são do dono (tag `v0.2.3` e ensaio de rollback).
+Avançar agora registraria uma validação que não houve. Depois dessas duas ações, quem
+estiver no VPS roda `approvePlan` e `workflow-advance` até C, com os runs como
+evidência.
 
 ## Execution History
 
-> Last updated: 2026-11-22 | Progress: 90% (ensaios de rollback/hotfix aguardam aprovação do dono)
+> Last updated: 2026-11-24 | Progress: 90% (ensaios de rollback/hotfix aguardam o dono)
 
 | Fase | Estado | Evidência |
 |---|---|---|
@@ -117,5 +134,5 @@ expand/contract. Bloqueante externo: **D1 do go-live (memória da VPS)**.
 | R3 | ✅ | `infra/deploy/{lib,bundle,deploy,smoke,rollback,promove-imagens,deploy-infra}.sh`; `ENV_FILE_B64` no env `dev`; layout `/opt/smartcore/<env>/{env,releases,backups-deploy,deploys.log}`; legado systemd em `/opt/smartcore/_legado/` |
 | R4 | ✅ | `test_support` sem túnel; `.ps1` locais em `infra/_legado/`; sensores → `node infra/ci-verde.mjs`; docs sem ambiente local; banco/redis sem porta no host |
 | R5 | ✅ | `deploy-dev` (beta.N, promoção, bundle, tag), `deploy-prod` (gate, promoção do digest da beta, main ff), `rollback-prod`, `deploy-infra`; concurrency por tipo de run (`deploy-vps-{dev,infra,rollback-prod}`, `deploy-vps-prod-<tag>`; PR #3 — o grupo único cancelava runs pendentes de outro tipo); job `infra` na CI |
-| R6 | ⏳ | Prod no ar: `v0.2.1` (2026-11-22, 64 s). **D1 decidida** (tetos por ambiente nos `.vars`, soma da prod ~7,6 GiB; `oom_score_adj` dev 900 / obs 300 / prod 0; obs com teto, ~2,8 GiB). **C2 resolvido no código** (`WEBHOOK_INGRESS_URL`; prod em `http://172.17.0.1:9211`). Marcadores no Grafana (job `deploy_markers` + painel *Deploys*). RC sem deploy (`release-candidate.yml`). `v0.2.2-beta.1` na dev (116 s) e `v0.2.2` em prod (2026-11-23, 86 s). Hotfix `v0.2.3`: PR #2 mesclado na `main` e trazido para a `dev` na consolidação pré-prod (VERSION da dev → 0.2.4); falta a tag `v0.2.3`; ensaio de rollback (`v0.2.2 → v0.2.1`) ainda não feito (a 1ª tentativa foi cancelada pela concorrência antiga) |
+| R6 | ⏳ | Prod no ar: `v0.2.1` (2026-11-22, 64 s). **D1 decidida** (tetos por ambiente nos `.vars`, soma da prod ~7,6 GiB; `oom_score_adj` dev 900 / obs 300 / prod 0; obs com teto, ~2,8 GiB). **C2 resolvido no código** (`WEBHOOK_INGRESS_URL`; prod em `http://172.17.0.1:9211`). Marcadores no Grafana (job `deploy_markers` + painel *Deploys*). RC sem deploy (`release-candidate.yml`). `v0.2.2-beta.1` na dev (116 s) e `v0.2.2` em prod (2026-11-23, 86 s). Hotfix `v0.2.3`: PR #2 mesclado na `main` e trazido para a `dev` na consolidação pré-prod (VERSION da dev → 0.2.4); falta a tag `v0.2.3`; ensaio de rollback (`v0.2.2 → v0.2.1`) ainda não feito (a 1ª tentativa foi cancelada pela concorrência antiga). **24/11:** release `v0.2.4` mesclada na `main` (PR #7, `19e1a7fe`), sem tag, então prod segue em `v0.2.2`; dev em `v0.2.4-beta.9` (`44d41b86`, CI 45482883640 e deploy 45482883977 verdes). Run de `deploy-infra` 45091567804 parado na aprovação desde 23/11, com um sha anterior às correções do `provider_edge` |
 | R7 | ✅ | `doc_dev/runbooks/RUNBOOK_DEPLOY.md` (+ §4.1 RC, §12 memória, §13 webhook); architecture/development-workflow/testing-strategy/tooling/security; `docker/{dev,prod}/compose.yml` removidos. `CLAUDE.md` do projeto (seção de ambientes) e global do VPS atualizados em 2026-11-22 |

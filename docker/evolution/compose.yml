@@ -27,7 +27,15 @@ services:
       EVOGO_USERS_DB: evogo_users
     volumes:
       - postgres_evolution_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+      # Caminho ESTÁVEL entre deploys. O deploy-infra.sh copia os scripts para
+      # /opt/smartcore/infra/evolution/init-scripts e exporta a variável. Com
+      # `./init-scripts` a origem do bind mount era `releases/<id>/init-scripts`,
+      # que muda a cada bundle: o config-hash do serviço mudava e o compose
+      # recriava o banco do Evolution em todo deploy de infra (segundos sem banco
+      # para dev e prod). O volume de dados nunca mudou de nome; só o container
+      # era recriado. Os scripts só rodam com o volume vazio (primeira subida).
+      # O padrão `./init-scripts` serve à validação da CI e ao uso local.
+      - ${EVOLUTION_INIT_SCRIPTS_DIR:-./init-scripts}:/docker-entrypoint-initdb.d:ro
     networks:
       - evolution_net
     healthcheck:
@@ -73,6 +81,35 @@ services:
     depends_on:
       postgres_evolution:
         condition: service_healthy
+    restart: unless-stopped
+
+  # Intermediário de webhooks de provedores (ADR adr-intermediario-webhooks-provedores.md).
+  # Recebe o webhook do Evolution em `/{ambiente}/webhook/...` e repassa ao
+  # webhook_ingress daquele ambiente. Sem porta publicada: só a rede evolution_net
+  # alcança este serviço. Imagem fixa por sha, gravada pelo deploy-infra.sh.
+  provider_edge:
+    image: ${PROVIDER_EDGE_IMAGE:?PROVIDER_EDGE_IMAGE ausente (evolution.env)}
+    container_name: smartcore-provider-edge
+    command: ["provider_edge"]
+    environment:
+      PROVIDER_EDGE_PORT: "8088"
+      # ambiente=destino, separados por vírgula. dev: ingress na evolution_net;
+      # prod: ingress publicado na ponte do host (ver prod.override.yml).
+      PROVIDER_EDGE_DESTINOS: ${PROVIDER_EDGE_DESTINOS:-dev=http://webhook_ingress:9200,prod=http://172.17.0.1:9211}
+      RUST_LOG: ${PROVIDER_EDGE_RUST_LOG:-info}
+      # Sem rota para o otel-collector (só está na evolution_net): com o OTLP
+      # ligado, o exportador tentaria localhost:4317 e encheria o log de erro de
+      # exportação. Os logs JSON do stdout continuam indo para o Loki (promtail).
+      OTEL_SDK_DISABLED: ${PROVIDER_EDGE_OTEL_SDK_DISABLED:-true}
+    networks:
+      - evolution_net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "http://127.0.0.1:8088/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 128m
     restart: unless-stopped
 
 volumes:

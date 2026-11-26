@@ -63,6 +63,34 @@ if [ "$COMP" = edge ]; then
   [ -n "${EDGE_IMAGE:-}" ] || erro "EDGE_IMAGE não informado"
   ( umask 077; printf 'EDGE_IMAGE=%s\n' "$EDGE_IMAGE" > "$ARQ_ENV" )
 fi
+if [ "$COMP" = evolution ]; then
+  # Imagem do intermediário (provider_edge) vem do build do próprio run, não do
+  # secret: troca a cada deploy. Substitui a linha anterior, se houver.
+  [ -n "${PROVIDER_EDGE_IMAGE:-}" ] || erro "PROVIDER_EDGE_IMAGE não informado"
+  [ -f "$ARQ_ENV" ] || erro "$ARQ_ENV inexistente e sem secret para materializar"
+  ( umask 077; sed -i '/^PROVIDER_EDGE_IMAGE=/d' "$ARQ_ENV"
+    printf 'PROVIDER_EDGE_IMAGE=%s\n' "$PROVIDER_EDGE_IMAGE" >> "$ARQ_ENV" )
+
+  # Init-scripts do banco do Evolution num caminho FIXO, fora do bundle. Montados
+  # de `releases/<id>/`, a origem do bind mount mudava a cada deploy e o compose
+  # recriava o postgres_evolution (segundos sem banco para dev e prod). Os nomes
+  # de volume nunca mudaram (`-p` fixo): só o container era recriado. Os scripts
+  # só rodam com volume vazio, então atualizar o conteúdo no lugar não afeta o
+  # banco no ar. Só reescreve se o conteúdo mudou.
+  INIT_ESTAVEL="$BASE_COMP/init-scripts"
+  if ! diff -rq "$REPO/docker/evolution/init-scripts" "$INIT_ESTAVEL" >/dev/null 2>&1; then
+    mkdir -p "$INIT_ESTAVEL"
+    find "$INIT_ESTAVEL" -mindepth 1 -delete
+    cp -r "$REPO/docker/evolution/init-scripts/." "$INIT_ESTAVEL/"
+    info "init-scripts do Evolution atualizados em $INIT_ESTAVEL"
+  fi
+  chmod -R u+rwX,go+rX,go-w "$INIT_ESTAVEL"
+  # Gravado no evolution.env (não só exportado): um `compose up` manual no bundle
+  # também enxerga o caminho fixo e não recria o banco por engano.
+  ( umask 077; sed -i '/^EVOLUTION_INIT_SCRIPTS_DIR=/d' "$ARQ_ENV"
+    printf 'EVOLUTION_INIT_SCRIPTS_DIR=%s\n' "$INIT_ESTAVEL" >> "$ARQ_ENV" )
+  export EVOLUTION_INIT_SCRIPTS_DIR="$INIT_ESTAVEL"
+fi
 [ -f "$ARQ_ENV" ] || erro "$ARQ_ENV inexistente e sem secret para materializar"
 
 # --- bundle --------------------------------------------------------------------
