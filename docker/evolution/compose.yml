@@ -64,7 +64,7 @@ services:
     #
     # Fixada também por digest: a tag no GHCR pode ser republicada pelo
     # workflow; o digest garante que dev e prod rodam o binário que foi testado.
-    image: ghcr.io/pwlimaverde/evolution-go-wa:${EVOLUTION_IMAGE_TAG:-0.7.3-wa1@sha256:0aeebb8a3732033dfeaca30d79c45014feb46b4076d64e0841333aed1f9f4366}
+    image: ghcr.io/pwlimaverde/evolution-go-wa:${EVOLUTION_IMAGE_TAG:-0.7.3-wa1@sha256:b0e6c38d58e2ce09105f9b1fcb4c35829e47b3d35731acd11bdd68392996a843}
     container_name: smartcore-evolution
     environment:
       SERVER_PORT: "8080"
