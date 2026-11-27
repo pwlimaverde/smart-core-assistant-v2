@@ -885,7 +885,8 @@ impl MessagingProvider for EvolutionProvider {
             provider: "evolution".into(),
             kind: ChannelKind::Whatsapp,
             nome: "WhatsApp (QR code)".into(),
-            descricao: "Conecta um número de WhatsApp lendo o QR code no celular,                         como no WhatsApp Web. Usa o gateway Evolution Go do servidor."
+            descricao: "Conecta um número de WhatsApp lendo o QR code no celular, como no \
+                        WhatsApp Web. Usa o gateway Evolution Go do servidor."
                 .into(),
             estagio: Estagio::Estavel,
             connection_mode: ConnectionMode::QrPairing,

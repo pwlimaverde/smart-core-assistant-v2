@@ -24,6 +24,16 @@ COMMENT ON COLUMN whatsapp_instance.channel_kind IS
 COMMENT ON COLUMN whatsapp_instance.provider_config IS
     'Configuração não secreta do provedor; segredos ficam em api_key (cifrado)';
 
+-- Id externo único só entre conexões VIVAS, como o nome desde a 0045. A
+-- exclusão é lógica (`excluido_em`) e deixava o `instance_id` ocupado para
+-- sempre: um número da Cloud API removido (ex.: para trocar um token vencido)
+-- nunca mais podia ser conectado, por nenhum tenant. Linhas vivas continuam
+-- sem repetição; o índice parcial é criado antes de largar a constraint, então
+-- não há instante sem garantia.
+CREATE UNIQUE INDEX IF NOT EXISTS whatsapp_instance_instance_id_viva
+    ON whatsapp_instance (instance_id) WHERE excluido_em IS NULL;
+ALTER TABLE whatsapp_instance DROP CONSTRAINT IF EXISTS whatsapp_instance_instance_id_key;
+
 -- Roteamento por id externo dentro do provedor (webhook da Meta).
 CREATE INDEX IF NOT EXISTS whatsapp_instance_provider_instance_id
     ON whatsapp_instance (provider, instance_id);

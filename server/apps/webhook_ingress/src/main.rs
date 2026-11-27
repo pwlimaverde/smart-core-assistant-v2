@@ -748,7 +748,10 @@ async fn processar_evento(
             }
         }
 
-        // 4. Verificação de Idempotência
+        // 4. Verificação de Idempotência. A chave gravada aqui é desfeita se a
+        // publicação falhar (passo 5): senão a reentrega do provedor, que é o
+        // que recupera a mensagem, seria descartada como duplicada.
+        let mut chave_de_idempotencia: Option<String> = None;
         if is_msg_event {
             if let Some(msg_id) = extrair_message_id(event_type, raw) {
                 let key = format!("webhook:idempotency:{}:{}", params.tenant_id, msg_id);
@@ -763,6 +766,9 @@ async fn processar_evento(
 
                 match set_res {
                     Ok(inserted) => {
+                        if inserted {
+                            chave_de_idempotencia = Some(key.clone());
+                        }
                         if !inserted {
                             state.audit_logger.info(
                                 params.tenant_id,
@@ -798,12 +804,19 @@ async fn processar_evento(
             envelope
         };
 
-        bus::publicar_evento(&mut state.redis, &envelope)
-            .await
-            .map_err(|e| {
-                tracing::error!("Falha ao publicar evento no barramento: {:?}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+        if let Err(e) = bus::publicar_evento(&mut state.redis, &envelope).await {
+            tracing::error!("Falha ao publicar evento no barramento: {:?}", e);
+            if let Some(chave) = chave_de_idempotencia {
+                let desfeita: Result<i64, _> = redis::cmd("DEL")
+                    .arg(&chave)
+                    .query_async(&mut state.redis)
+                    .await;
+                if let Err(e) = desfeita {
+                    tracing::error!("chave de idempotência não desfeita: {:?}", e);
+                }
+            }
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
         tracing::info!(topico = topic, "Evento normalizado publicado no barramento");
 
         if is_msg_event {

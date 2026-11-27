@@ -255,7 +255,16 @@ pub fn traduzir_mensagem(
                 .unwrap_or("");
             serde_json::json!({ "conversation": texto })
         }
-        outro => serde_json::json!({ format!("{outro}Message"): {} }),
+        // `unsupported`, `system` (troca de número), `order`, `request_welcome`…
+        // não têm conteúdo que o atendimento interprete; publicar um objeto
+        // vazio abriria conversa e faria o bot responder ao nada.
+        outro => {
+            tracing::info!(
+                tipo = outro,
+                "tipo de mensagem da Meta sem tradução; descartado"
+            );
+            return None;
+        }
     };
 
     let mut data = serde_json::json!({
@@ -419,11 +428,18 @@ pub async fn handle_webhook(
             tenant_id: conexao.1,
             instance_id: conexao.0,
         };
-        if processar_evento(&mut state, &params, ev.evento, &ev.raw)
-            .await
-            .is_err()
-        {
-            falhou = true;
+        match processar_evento(&mut state, &params, ev.evento, &ev.raw).await {
+            Ok(_) => {}
+            // Só falha transitória (barramento, RPC) pede reentrega. Recusa de
+            // um tenant (402 por inadimplência) é decisão tomada: devolver 500
+            // faria a Meta reentregar o lote de todos os tenants sem fim, e
+            // ela acaba desativando o webhook do app inteiro.
+            Err(status) if status.is_server_error() => falhou = true,
+            Err(status) => tracing::info!(
+                status = status.as_u16(),
+                instance_id = params.instance_id,
+                "evento da Meta recusado para o tenant; não reentregar"
+            ),
         }
     }
 
@@ -574,6 +590,19 @@ mod tests {
         assert_eq!(ev[0].evento, EVENTO_STATUS);
         assert_eq!(ev[0].raw["data"]["status"], "delivered");
         assert_eq!(ev[1].raw["data"]["ids"], json!(["wamid.B"]));
+    }
+
+    #[test]
+    fn tipo_sem_traducao_nao_vira_mensagem_vazia() {
+        let corpo = corpo_meta(
+            json!([
+                { "from": "55", "id": "wamid.S", "timestamp": "1", "type": "system",
+                  "system": { "body": "trocou de número" } },
+                { "from": "55", "id": "wamid.U", "timestamp": "1", "type": "unsupported" }
+            ]),
+            json!([]),
+        );
+        assert!(extrair_eventos(&corpo).is_empty());
     }
 
     #[test]

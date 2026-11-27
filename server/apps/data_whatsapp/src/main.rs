@@ -604,7 +604,9 @@ async fn handler_delete_whatsapp_instance(mut state: AppState, env: Envelope) ->
         Err(e) => return erro(e, &env),
     };
 
-    let name = match endereco_no_provedor(&state, &instance) {
+    // O nome da conexão (o que o tenant vê) vai para a trilha; o endereço no
+    // provedor só para a chamada ao provedor.
+    let name = match instance.get("name").and_then(|v| v.as_str()) {
         Some(s) if !s.is_empty() => s,
         _ => {
             return erro(
@@ -625,12 +627,22 @@ async fn handler_delete_whatsapp_instance(mut state: AppState, env: Envelope) ->
         Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
     };
 
-    // 2. Remove do provedor
-    if let Err(e) = p.delete_instance(name).await {
-        tracing::warn!(
-            "Erro ao deletar instância no provedor (continuando remoção do banco): {:?}",
-            e
-        );
+    // 2. Remove do provedor. Sem endereço (conexão por credenciais que não
+    // chegou a gravar o id externo) não há o que remover lá — e isso não pode
+    // impedir a remoção do banco, senão a linha ficaria presa contando na cota.
+    match endereco_no_provedor(&state, &instance) {
+        Some(endereco) => {
+            if let Err(e) = p.delete_instance(endereco).await {
+                tracing::warn!(
+                    "Erro ao deletar instância no provedor (continuando remoção do banco): {:?}",
+                    e
+                );
+            }
+        }
+        None => tracing::warn!(
+            instance_id = db_id,
+            "conexão sem endereço no provedor; removendo só do banco"
+        ),
     }
 
     // 3. Remove do banco
@@ -1923,6 +1935,9 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
     };
 
     let mut count = 0;
+    // Conexões sem sessão (Cloud API): não desconectam por logout; vão citadas
+    // no retorno e na trilha para o administrador decidir removê-las.
+    let mut sem_sessao: Vec<i64> = Vec::new();
     for inst in insts {
         let name = inst.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let api_key = inst.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
@@ -1941,7 +1956,17 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
             Ok(prov) => prov,
             Err(_) => continue,
         };
+        // Sem sessão de aparelho (Cloud API) não há logout: cortar o número é
+        // remover a conexão, decisão destrutiva que fica explícita para o
+        // administrador. A conexão é contada e citada no retorno, nunca
+        // pulada em silêncio.
         if !descritor_efetivo(p.as_ref()).suporta(Capacidade::Desconectar) {
+            tracing::warn!(
+                instance_id = id,
+                provider = provider_name,
+                "corte em massa: conexão sem sessão não é desconectada; remova-a para cortar"
+            );
+            sem_sessao.push(id);
             continue;
         }
 
@@ -1977,7 +2002,11 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
         trace_id: Some(env.traceparent.clone()),
         event: "whatsapp.admin.bulk_disconnect".to_string(),
         message: format!("Desconexão em massa de {count} instância(s) WhatsApp ({escopo})"),
-        context: serde_json::json!({ "count": count, "scope": escopo }),
+        context: serde_json::json!({
+            "count": count,
+            "scope": escopo,
+            "sem_sessao_nao_desconectadas": sem_sessao,
+        }),
         user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
         ip_address: None,
         user_agent: user_agent_do_envelope(&env),
@@ -1995,7 +2024,8 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
         "AdminBulkDisconnectInstancesReply",
         serde_json::json!({
             "count": count,
-            "scope": tenant_id_opt.map(|t| t.to_string()).unwrap_or_else(|| "global".to_string())
+            "scope": tenant_id_opt.map(|t| t.to_string()).unwrap_or_else(|| "global".to_string()),
+            "sem_sessao_nao_desconectadas": sem_sessao,
         }),
     )
 }
@@ -2946,6 +2976,14 @@ async fn handler_list_channel_providers(state: AppState, env: Envelope) -> Envel
     )
 }
 
+/// A falha do `AtualizarInstanciaProviderId` é a unicidade do id externo
+/// (número já em outra conexão viva) — e não queda ou timeout do banco, que
+/// têm de chegar à tela como são.
+fn id_externo_duplicado(erro: &str) -> bool {
+    let e = erro.to_ascii_lowercase();
+    e.contains("duplicate key") || e.contains("unique") || e.contains("instance_id_viva")
+}
+
 /// URL pública que o app da Meta do ambiente chama. Vai na resposta da
 /// conexão para a tela mostrar onde configurar; vazia quando o ambiente não a
 /// declarou (`META_WEBHOOK_URL_PUBLICA`).
@@ -3076,18 +3114,30 @@ async fn handler_connect_channel(mut state: AppState, env: Envelope) -> Envelope
     )
     .await
     {
-        let _ = chamar_data_postgres(
+        if let Err(falha) = chamar_data_postgres(
             "AdminDeletarInstancia",
             &env.tenant_id,
             serde_json::json!({ "id": db_id }),
             &env,
         )
-        .await;
-        tracing::warn!(erro = %e, "id externo recusado; registro desfeito");
+        .await
+        {
+            tracing::error!(
+                instance_id = db_id,
+                erro = %falha,
+                "desfazer o registro falhou: conexão sem id externo ficou no banco (removível pela tela)"
+            );
+        }
+        let duplicado = id_externo_duplicado(&e.to_string());
+        tracing::warn!(erro = %e, duplicado, "id externo recusado; registro desfeito");
         return erro(
-            error_core::AppError::Validation(
-                "este número já está conectado em outra conexão".into(),
-            ),
+            if duplicado {
+                error_core::AppError::Validation(
+                    "este número já está conectado em outra conexão".into(),
+                )
+            } else {
+                e
+            },
             &env,
         );
     }

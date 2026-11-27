@@ -10,6 +10,7 @@ import 'package:tenant_module/src/features/conexoes/data/datasources/conexoes_da
 import 'package:tenant_module/src/features/conexoes/data/repositories/conexoes_repositories.dart';
 import 'package:tenant_module/src/features/conexoes/domain/usecases/conexoes_usecases.dart';
 import 'package:tenant_module/src/features/conexoes/presentation/controllers/conexoes_controllers.dart';
+import 'package:tenant_module/src/features/conexoes/presentation/controllers/integracoes_controller.dart';
 import 'package:tenant_module/src/features/conexoes/presentation/pages/conexoes_page.dart';
 import 'package:tenant_module/src/features/equipe/data/datasources/equipe_datasources.dart';
 import 'package:tenant_module/src/features/fluxos/data/datasources/fluxos_datasources.dart';
@@ -40,6 +41,7 @@ void main() {
     registerFallbackValue(proto.CreateMyAtendenteRequest());
     registerFallbackValue(proto.UpdateMyAtendenteRequest());
     registerFallbackValue(proto.MyAtendenteIdRequest());
+    registerFallbackValue(proto.ListMyChannelProvidersRequest());
   });
 
   setUp(() => client = _MockAdminClient());
@@ -223,13 +225,51 @@ void main() {
     testWidgets('nova conexão pede o nome antes de criar', (tester) async {
       // Sem este caminho, o tenant que remove a última conexão fica sem saída:
       // o roteiro inicial, que criava a primeira, só roda uma vez.
+      //
+      // Desde o contrato de canal, "Nova conexão" abre as Integrações e o
+      // provedor de QR devolve o fluxo para esta página, que pede o nome.
       respondeCom('connected');
       registrar();
+      when(() => client.listMyChannelProviders(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ListMyChannelProvidersResponse(
+            provedores: [
+              proto.ProvedorDeCanal(
+                id: 'evolution',
+                tipoCanal: 'whatsapp',
+                nome: 'WhatsApp (QR code)',
+                descricao: 'Lê o QR no celular.',
+                modoConexao: 'qr_pairing',
+                estagio: 'estavel',
+                habilitado: true,
+              ),
+            ],
+          ),
+        ),
+      );
+      getIt.registerSingleton<IntegracoesController>(
+        IntegracoesController(
+          listar: ListarProvedoresUsecase(
+            repository: ListarProvedoresRepository(
+              datasource: ListarProvedoresDatasource(client: client),
+            ),
+          ),
+          conectar: ConectarCanalUsecase(
+            repository: ConectarCanalRepository(
+              datasource: ConectarCanalDatasource(client: client),
+            ),
+          ),
+        ),
+      );
 
       await montar(tester, const ConexoesPage());
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Nova conexão'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Integrações'), findsOneWidget);
+      await tester.tap(find.text('Conectar com QR code'));
       await tester.pumpAndSettle();
 
       expect(find.text('Nova conexão'), findsWidgets);
