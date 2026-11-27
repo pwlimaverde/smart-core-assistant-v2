@@ -3394,7 +3394,10 @@ mod tests {
 
     #[test]
     fn webhook_da_instancia_aponta_para_o_ingress_do_tenant() {
-        let w = webhook_da_instancia("evolution", "t-1", 181);
+        // Os eventos agora vêm do descritor da Evolution; a lista tem de ser
+        // a mesma de antes (é o que a 181 da dev assina).
+        let evolution = EvolutionProvider::new("http://x", SecretString::from("k".to_string()));
+        let w = webhook_da_instancia(&evolution, "evolution", "t-1", 181);
         assert_eq!(
             w.url,
             "http://webhook_ingress:9200/webhook/evolution/t-1/181"
