@@ -740,7 +740,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       data_primeira_resposta, bot_pode_atender,
                       sentimento_nota, sentimento_label
                FROM oraculo_atendimento
-               WHERE tenant_id = $1 AND contato_id = $2
+               WHERE tenant_id = $1 AND contato_id = $2 AND excluido_em IS NULL
                  AND status NOT IN ('resolvido', 'cancelado', 'arquivado')
                ORDER BY data_inicio DESC
                LIMIT 1"#,
@@ -1085,8 +1085,7 @@ pub async fn listar_ativos_do_tenant(
 /// Regra da v1 (doc `00-planejamento-inicial` §10.1/§10.2): só se reaproveita
 /// atendimento ATIVO (`fila`, `em_atendimento`, `pendencia`). Encerrado
 /// (`resolvido`, `cancelado`, `arquivado`) nunca recebe mensagem nova — quem volta
-/// a escrever abre atendimento NOVO, que a política do worker põe na fila. A
-/// resposta da pesquisa de satisfação é tratada à parte, pelo worker.
+/// a escrever abre atendimento NOVO, que a política do worker põe na fila.
 ///
 /// Não existe mais reabertura de arquivado: ela trocava só o status para `fila` e
 /// deixava o cartão na coluna de finalização, onde a conversa seguia recebendo
@@ -1097,6 +1096,13 @@ pub async fn atendimento_para_mensagem_do_contato(
     ctx: &RequestContext,
     contato_id: i32,
 ) -> Result<(Atendimento, bool), DbError> {
+    // Trava por contato até o fim da transação: duas mensagens simultâneas do
+    // mesmo contato encerrado não podem, cada uma, não achar ativo e criar o seu.
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))")
+        .bind(ctx.tenant_id)
+        .bind(contato_id)
+        .execute(&mut **tx)
+        .await?;
     let repo = PostgresAtendimentoRepository;
     if let Some(ativo) = repo.buscar_ativo_por_contato(tx, ctx, contato_id).await? {
         return Ok((ativo, false));

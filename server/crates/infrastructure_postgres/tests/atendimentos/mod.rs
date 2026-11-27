@@ -746,6 +746,34 @@ async fn mensagem_nova_em_fila_continua_no_mesmo_atendimento() {
     tx.rollback().await.unwrap();
 }
 
+/// Contrato da ingestão: atendimento ativo mas excluído (soft delete) não é
+/// reaproveitado — a mensagem nova abre outro, visível no quadro.
+#[tokio::test]
+async fn mensagem_nova_nao_cai_em_atendimento_excluido() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Politica Excluido").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let (contato_id, anterior_id) =
+        contato_com_atendimento_em(&mut tx, &ctx, "5511955554430", "fila").await;
+    sqlx::query("UPDATE oraculo_atendimento SET excluido_em = NOW() WHERE id = $1")
+        .bind(anterior_id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+    let (atendimento, novo) = atendimento_para_mensagem_do_contato(&mut tx, &ctx, contato_id)
+        .await
+        .unwrap();
+    assert!(novo, "excluído não pode receber mensagem nova");
+    assert_ne!(atendimento.id, anterior_id);
+
+    tx.rollback().await.unwrap();
+}
+
 /// Exclusão definitiva (doc 39): some de todo lugar, não volta, libera o
 /// telefone para um contato novo e fica visível só na lista de excluídos.
 ///
