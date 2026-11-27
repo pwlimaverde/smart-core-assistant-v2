@@ -56,6 +56,9 @@ services:
     # (docker/evolution/wa-version). Para atualizar, trocar a tag e publicar pelo
     # workflow evolution-wa-version.
     #
+    # wa2: patch do panic no evento Archive (docker/evolution/wa-version).
+    # Rollback do wa2: 0.7.3-wa1@sha256:b0e6c38d58e2ce09105f9b1fcb4c35829e47b3d35731acd11bdd68392996a843.
+    #
     # 0.7.3: o whatsmeow da 0.7.2 não dava ack na stanza `<status>` (stories) e
     # a fila do WhatsApp travava — nenhuma mensagem recebida chegava. Rollback:
     # voltar este padrão para 0.7.2-wa1 e rodar o deploy-infra (as migrações
@@ -64,7 +67,7 @@ services:
     #
     # Fixada também por digest: a tag no GHCR pode ser republicada pelo
     # workflow; o digest garante que dev e prod rodam o binário que foi testado.
-    image: ghcr.io/pwlimaverde/evolution-go-wa:${EVOLUTION_IMAGE_TAG:-0.7.3-wa1@sha256:b0e6c38d58e2ce09105f9b1fcb4c35829e47b3d35731acd11bdd68392996a843}
+    image: ghcr.io/pwlimaverde/evolution-go-wa:${EVOLUTION_IMAGE_TAG:-0.7.3-wa2@sha256:545ce101d9a6b29531d661a345df8a8e1ac9b429aa352d1631ef8a9e77b39f64}
     container_name: smartcore-evolution
     environment:
       SERVER_PORT: "8080"
