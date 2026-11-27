@@ -966,7 +966,7 @@ mod tests {
     /// capacidades opcionais batem com os traits implementados.
     #[test]
     fn descritor_da_evolution_preserva_o_comportamento_atual() {
-        let p = EvolutionProvider::new("http://x".into(), SecretString::from("k".to_string()));
+        let p = EvolutionProvider::new("http://x", SecretString::from("k".to_string()));
         let d = infrastructure_messaging::descritor_efetivo(&p);
         assert_eq!(d.provider, "evolution");
         assert_eq!(

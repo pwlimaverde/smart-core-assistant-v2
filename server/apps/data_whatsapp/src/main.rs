@@ -1607,20 +1607,19 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
                             tracing::warn!(instance_id = db_id, erro = %e, "falha ao preparar a instância para o QR");
                         }
                     }
-                } else if let Some(Ok(qr)) = match p.qr_pairing() {
-                    Some(q) => Some(q.get_qr_code(name, &api_key_sec).await),
-                    None => None,
-                } {
-                    // `EX` e nao `PX`: a granularidade de segundos basta, e o
-                    // valor fica legivel no `redis-cli TTL`.
-                    let _: Result<(), _> = redis::cmd("SET")
-                        .arg(&chave)
-                        .arg(&qr)
-                        .arg("EX")
-                        .arg(qr_ttl_s())
-                        .query_async(&mut redis)
-                        .await;
-                    qr_code = Some(qr);
+                } else if let Some(q) = p.qr_pairing() {
+                    if let Ok(qr) = q.get_qr_code(name, &api_key_sec).await {
+                        // `EX` e nao `PX`: a granularidade de segundos basta, e o
+                        // valor fica legivel no `redis-cli TTL`.
+                        let _: Result<(), _> = redis::cmd("SET")
+                            .arg(&chave)
+                            .arg(&qr)
+                            .arg("EX")
+                            .arg(qr_ttl_s())
+                            .query_async(&mut redis)
+                            .await;
+                        qr_code = Some(qr);
+                    }
                 }
             }
         }
