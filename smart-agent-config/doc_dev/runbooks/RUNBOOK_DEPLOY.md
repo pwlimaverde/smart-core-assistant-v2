@@ -276,5 +276,9 @@ Não é o webhook: a Evolution nem chega a despachar `Event: Message`.
   docker logs -t --since 30m smartcore-evolution 2>&1 | grep -E "OfflineSyncCompleted|Event: Message|stream error"
   docker logs --since 30m smart-core-v2-dev-webhook_ingress-1 2>&1 | grep -c '"event_type":"Message"'
   ```
-- Rollback: voltar o padrão do `docker/evolution/compose.yml` para `0.7.2-wa1`
-  e rodar o `deploy-infra` (o schema v16 do store é compatível com a 0.7.2).
+- Rollback: voltar o padrão do `docker/evolution/compose.yml` para `0.7.3-wa1`
+  por digest e rodar o `deploy-infra`. A `0.7.2-wa1` só em último caso: o
+  banco aceita (schema v16 compatível), mas a recepção volta a travar.
+- Imagem atual: `0.7.3-wa2` (2026-11-27), com o patch do panic no evento
+  `Archive` (`Event handler panicked while handling a *events.Archive`), que
+  disparava em rajada na sincronização de app state.
