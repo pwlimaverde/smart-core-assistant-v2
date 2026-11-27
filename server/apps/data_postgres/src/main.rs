@@ -532,6 +532,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_atualizar_estado_instancia = state_clone.clone();
     let state_for_atualizar_instancia_provider_id = state_clone.clone();
     let state_for_verify_whatsapp_instance_token = state_clone.clone();
+    let state_for_gravar_config_do_canal = state_clone.clone();
+    let state_for_resolver_canal_por_id_externo = state_clone.clone();
     let state_for_is_phone_whitelisted = state_clone.clone();
     let state_for_listar_numeros_ignorados = state_clone.clone();
     let state_for_criar_numero_ignorado = state_clone.clone();
@@ -1776,6 +1778,18 @@ async fn main() -> anyhow::Result<()> {
                     env,
                 )
                 .await
+            })
+        })
+        .route("GravarConfigDoCanal", move |env| {
+            let state = state_for_gravar_config_do_canal.clone();
+            Box::pin(
+                async move { handler_gravar_config_do_canal(state.whatsapp.as_ref(), env).await },
+            )
+        })
+        .route("ResolverCanalPorIdExterno", move |env| {
+            let state = state_for_resolver_canal_por_id_externo.clone();
+            Box::pin(async move {
+                handler_resolver_canal_por_id_externo(state.whatsapp.as_ref(), env).await
             })
         })
         .route("VerifyWhatsappInstanceToken", move |env| {
@@ -12259,6 +12273,98 @@ async fn handler_atualizar_instancia_provider_id(
     }
 }
 
+/// Contrato de canal — tipo do canal e configuração não secreta do provedor.
+async fn handler_gravar_config_do_canal(
+    store: &dyn ports::WhatsappStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(id) = payload.get("id").and_then(|v| v.as_i64()) else {
+        return erro(error_core::AppError::Validation("id ausente".into()), &env);
+    };
+    let kind = payload
+        .get("channel_kind")
+        .and_then(|v| v.as_str())
+        .unwrap_or("whatsapp");
+    // Vocabulário curto e fechado: a coluna é VARCHAR(30) e o valor vem de um
+    // enum serializado; qualquer outra coisa é erro de contrato.
+    if kind.is_empty()
+        || kind.len() > 30
+        || !kind.chars().all(|c| c.is_ascii_lowercase() || c == '_')
+    {
+        return erro(
+            error_core::AppError::Validation("channel_kind inválido".into()),
+            &env,
+        );
+    }
+    let config = payload
+        .get("provider_config")
+        .cloned()
+        .filter(|v| v.is_object())
+        .unwrap_or_else(|| serde_json::json!({}));
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .gravar_config_do_canal(&ctx, id as i32, kind, config)
+        .await
+    {
+        Ok(true) => ok_reply(
+            &env,
+            "GravarConfigDoCanalReply",
+            serde_json::json!({ "status": "success" }),
+        ),
+        Ok(false) => erro(
+            error_core::AppError::Database("não encontrado: conexão não encontrada".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Contrato de canal — conexão ativa pelo id externo (cross-tenant). Só o
+/// `webhook_ingress` chama, depois de validar a assinatura do provedor.
+async fn handler_resolver_canal_por_id_externo(
+    store: &dyn ports::WhatsappStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let (Some(provider), Some(id_externo)) = (
+        payload.get("provider").and_then(|v| v.as_str()),
+        payload
+            .get("id_externo")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty()),
+    ) else {
+        return erro(
+            error_core::AppError::Validation("provider e id_externo são obrigatórios".into()),
+            &env,
+        );
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .admin_resolver_por_id_externo(&ctx, provider, id_externo)
+        .await
+    {
+        Ok(Some((id, tenant_id))) => ok_reply(
+            &env,
+            "ResolverCanalPorIdExternoReply",
+            serde_json::json!({ "encontrado": true, "id": id, "tenant_id": tenant_id }),
+        ),
+        Ok(None) => ok_reply(
+            &env,
+            "ResolverCanalPorIdExternoReply",
+            serde_json::json!({ "encontrado": false }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 async fn handler_verify_whatsapp_instance_token(
     store: &dyn ports::WhatsappStore,
     env: Envelope,
@@ -12291,6 +12397,10 @@ async fn handler_verify_whatsapp_instance_token(
             serde_json::json!({
                 "valid": true,
                 "phone_number": inst.phone_number,
+                // O ingress confere que o provedor do caminho do webhook é o
+                // da conexão: token de uma instância da Evolution não abre a
+                // rota de outro provedor.
+                "provider": inst.provider,
             }),
         ),
         Ok(None) => ok_reply(

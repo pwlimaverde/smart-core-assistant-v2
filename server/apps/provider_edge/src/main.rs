@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use axum::{
     body::Bytes,
     extract::{DefaultBodyLimit, State},
-    http::{header::CONTENT_TYPE, HeaderMap, StatusCode, Uri},
+    http::{header::CONTENT_TYPE, HeaderMap, Method, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{get, post},
     Router,
@@ -83,13 +83,16 @@ async fn main() -> anyhow::Result<()> {
 fn construir_app(estado: Estado) -> Router {
     Router::new()
         .route("/health", get(|| async { "ok" }))
-        .route("/{*caminho}", post(encaminhar))
+        // GET existe para o aperto de mão da Cloud API da Meta (`hub.challenge`
+        // na query); o corpo continua sem ser lido nem alterado.
+        .route("/{*caminho}", post(encaminhar).get(encaminhar))
         .layer(DefaultBodyLimit::max(LIMITE_DO_CORPO))
         .with_state(estado)
 }
 
 async fn encaminhar(
     State(estado): State<Estado>,
+    metodo: Method,
     uri: Uri,
     cabecalhos: HeaderMap,
     corpo: Bytes,
@@ -119,7 +122,7 @@ async fn encaminhar(
     let inicio = Instant::now();
     let pedido = estado
         .cliente
-        .post(&url)
+        .request(metodo, &url)
         .headers(repassados)
         .body(corpo)
         .send();
@@ -339,7 +342,18 @@ mod tests {
         }
         let app = Router::new().route(
             "/{*caminho}",
-            post(move |uri: Uri, cab: HeaderMap, corpo: Bytes| eco(uri, cab, corpo, nome)),
+            post(move |uri: Uri, cab: HeaderMap, corpo: Bytes| eco(uri, cab, corpo, nome)).get(
+                move |uri: Uri| async move {
+                    // GET devolve o `hub.challenge` da query, como o ingress faz
+                    // no aperto de mão da Meta.
+                    let desafio = uri
+                        .query()
+                        .and_then(|q| q.split('&').find_map(|p| p.strip_prefix("hub.challenge=")))
+                        .unwrap_or("")
+                        .to_string();
+                    (StatusCode::OK, format!("{nome}|GET|{desafio}")).into_response()
+                },
+            ),
         );
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endereco = listener.local_addr().unwrap();
@@ -352,6 +366,28 @@ mod tests {
             .await
             .unwrap();
         String::from_utf8(bytes.to_vec()).unwrap()
+    }
+
+    /// O aperto de mão da Cloud API é um GET com o desafio na query: precisa
+    /// chegar ao ingress do ambiente e a resposta voltar intacta.
+    #[tokio::test]
+    async fn repassa_get_do_aperto_de_mao_da_meta() {
+        let mut destinos = BTreeMap::new();
+        destinos.insert("dev".to_string(), ingress_falso("dev").await);
+        let app = construir_app(Estado {
+            destinos: Arc::new(destinos),
+            cliente: reqwest::Client::new(),
+        });
+        let resposta = app
+            .oneshot(
+                Request::get("/dev/webhook/meta/dev?hub.mode=subscribe&hub.challenge=42")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resposta.status(), StatusCode::OK);
+        assert_eq!(corpo_texto(resposta).await, "dev|GET|42");
     }
 
     #[tokio::test]

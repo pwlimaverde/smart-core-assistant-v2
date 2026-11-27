@@ -68,6 +68,27 @@ pub trait WhatsappStore: Send + Sync {
         phone_number: Option<String>,
     ) -> Result<(), DbError>;
 
+    /// Contrato de canal — grava o tipo do canal e a configuração NÃO secreta
+    /// do provedor (`whatsapp_instance.channel_kind`/`provider_config`, 0054).
+    /// `false` = instância inexistente ou de outro tenant.
+    async fn gravar_config_do_canal(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        channel_kind: &str,
+        provider_config: serde_json::Value,
+    ) -> Result<bool, DbError>;
+
+    /// Contrato de canal — acha a conexão ativa pelo id externo do provedor
+    /// (o `phone_number_id` da Cloud API), CROSS-TENANT: o webhook da Meta é
+    /// um por app e não traz o tenant no caminho. Devolve `(id, tenant_id)`.
+    async fn admin_resolver_por_id_externo(
+        &self,
+        ctx: &RequestContext,
+        provider: &str,
+        id_externo: &str,
+    ) -> Result<Option<(i32, uuid::Uuid)>, DbError>;
+
     /// Verifica se a chave de API (token) bate com o configurado para a instância.
     async fn verificar_token(
         &self,
