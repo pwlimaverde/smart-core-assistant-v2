@@ -49,6 +49,11 @@ COPY archive-event.patch /tmp/archive-event.patch
 RUN patch -p1 --forward < /tmp/archive-event.patch \
  && grep -q "a cada arquivamento sincronizado" pkg/whatsmeow/service/whatsmeow.go
 
+# O compose liga CONNECT_ON_STARTUP para religar as instâncias no boot. Se uma
+# versão nova trocar o nome da variável, o build falha aqui em vez de a
+# Evolution subir com o WhatsApp parado sem aviso.
+RUN grep -rq 'CONNECT_ON_STARTUP' pkg/config  || { echo "CONNECT_ON_STARTUP sumiu do pkg/config da evolution-go" >&2; exit 1; }
+
 # Trava de regressão: o whatsmeow resolvido pelo go.mod precisa tratar a stanza
 # `<status>`. Sem isso a recepção de mensagens trava (ver cabeçalho). Procura em
 # todos os .go do módulo: o mapa nodeHandlers pode mudar de arquivo.

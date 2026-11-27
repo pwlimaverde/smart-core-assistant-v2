@@ -199,6 +199,9 @@ O `deploy.sh` recusa env sem as chaves de `infra/deploy/required-keys.<env>` e e
 - **observability**: cria as redes de telemetria da prod se faltarem; o bundle novo
   troca o caminho dos binds e o compose recria só o que mudou.
 - **evolution**: recria a Evolution (a sessão do WhatsApp fica no volume; reconexão de segundos).
+  O religamento no boot depende de `CONNECT_ON_STARTUP: "true"` no compose: sem
+  ele a instância fica `Connected:false` até um `POST /instance/connect`. Conferir
+  depois do deploy: `Found N connected instances` e `Connected to Whatsapp` no log.
 
 ## 11. Checklist de verificação rápida
 

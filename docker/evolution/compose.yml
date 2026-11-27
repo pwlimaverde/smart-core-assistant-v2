@@ -75,6 +75,12 @@ services:
     environment:
       SERVER_PORT: "8080"
       CLIENT_NAME: smartcore
+      # Sem isto a evolution-go sobe com as instâncias paradas (o padrão é
+      # "false"): todo deploy-infra ou reinício deixava o WhatsApp sem receber
+      # até alguém chamar /instance/connect (incidente de 2026-11-26). Com
+      # "true" ela religa no boot as instâncias marcadas connected deste
+      # CLIENT_NAME, usando a sessão do volume — sem QR.
+      CONNECT_ON_STARTUP: "true"
       GLOBAL_API_KEY: ${EVOLUTION_GLOBAL_API_KEY:?defina EVOLUTION_GLOBAL_API_KEY no .env}
       POSTGRES_AUTH_DB: postgresql://${EVOLUTION_POSTGRES_USER:-evolution}:${EVOLUTION_POSTGRES_PASSWORD:?defina EVOLUTION_POSTGRES_PASSWORD no .env}@postgres_evolution:5432/evogo_auth?sslmode=disable
       POSTGRES_USERS_DB: postgresql://${EVOLUTION_POSTGRES_USER:-evolution}:${EVOLUTION_POSTGRES_PASSWORD:?defina EVOLUTION_POSTGRES_PASSWORD no .env}@postgres_evolution:5432/evogo_users?sslmode=disable
