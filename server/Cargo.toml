@@ -20,6 +20,7 @@ members = [
     "apps/control_plane",
     "crates/infrastructure_messaging",
     "crates/infrastructure_evolution",
+    "crates/infrastructure_meta_cloud",
     "crates/infrastructure_email",
     "apps/webhook_ingress",
     "apps/provider_edge",

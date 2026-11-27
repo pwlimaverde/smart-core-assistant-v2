@@ -5,6 +5,7 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/conexoes_errors.dart';
 import '../../domain/model/conexao.dart';
+import '../../domain/model/provedor_canal.dart';
 import '../../domain/parameters/conexoes_parameters.dart';
 
 ConexoesError _traduzir(Object exception, String operacao) {
@@ -128,8 +129,7 @@ final class DetalheDaConexaoRepository
 
 /// P9 — as mensagens que ficaram sem destino.
 final class ListarNaoEntreguesRepository
-    extends
-        RepositoryBase<List<MensagemParada>, NoParams, ConexoesError> {
+    extends RepositoryBase<List<MensagemParada>, NoParams, ConexoesError> {
   const ListarNaoEntreguesRepository({required super.datasource});
 
   @override
@@ -146,4 +146,25 @@ final class ReenviarNaoEntregueRepository
   @override
   ConexoesError mapError(Object e, StackTrace s, ConexaoIdParameters p) =>
       _traduzir(e, 'reenviar não entregue');
+}
+
+/// Contrato de canal — catálogo de provedores.
+final class ListarProvedoresRepository
+    extends RepositoryBase<List<ProvedorCanal>, NoParams, ConexoesError> {
+  const ListarProvedoresRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, NoParams p) =>
+      _traduzir(e, 'listar provedores');
+}
+
+/// Contrato de canal — conexão por credenciais.
+final class ConectarCanalRepository
+    extends
+        RepositoryBase<CanalConectado, ConectarCanalParameters, ConexoesError> {
+  const ConectarCanalRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, ConectarCanalParameters p) =>
+      _traduzir(e, 'conectar por credenciais');
 }

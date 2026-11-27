@@ -4,6 +4,7 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../errors/conexoes_errors.dart';
 import '../model/conexao.dart';
+import '../model/provedor_canal.dart';
 import '../parameters/conexoes_parameters.dart';
 
 ConexoesError _inesperado(String operacao, Object e, StackTrace s) {
@@ -176,7 +177,12 @@ final class DetalheDaConexaoUsecase
   const DetalheDaConexaoUsecase({required super.repository});
 
   @override
-  ProcessData<DetalheConexao, DetalheConexao, ConexaoIdParameters, ConexoesError>
+  ProcessData<
+    DetalheConexao,
+    DetalheConexao,
+    ConexaoIdParameters,
+    ConexoesError
+  >
   get process =>
       (data, _) => Success(data);
 
@@ -235,4 +241,53 @@ final class ReenviarNaoEntregueUsecase
   @override
   ConexoesError onUnexpected(Object e, StackTrace s) =>
       _inesperado('reenviar não entregue', e, s);
+}
+
+/// Contrato de canal — catálogo de provedores.
+final class ListarProvedoresUsecase
+    extends
+        UsecaseBaseCallData<
+          List<ProvedorCanal>,
+          List<ProvedorCanal>,
+          NoParams,
+          ConexoesError
+        > {
+  const ListarProvedoresUsecase({required super.repository});
+
+  @override
+  ProcessData<List<ProvedorCanal>, List<ProvedorCanal>, NoParams, ConexoesError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('listar provedores', e, s);
+}
+
+/// Contrato de canal — conexão por credenciais. Os obrigatórios são
+/// conferidos no formulário (montado pelo descritor) e de novo no servidor,
+/// que valida as credenciais no provedor antes de gravar.
+final class ConectarCanalUsecase
+    extends
+        UsecaseBaseCallData<
+          CanalConectado,
+          CanalConectado,
+          ConectarCanalParameters,
+          ConexoesError
+        > {
+  const ConectarCanalUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    CanalConectado,
+    CanalConectado,
+    ConectarCanalParameters,
+    ConexoesError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('conectar por credenciais', e, s);
 }

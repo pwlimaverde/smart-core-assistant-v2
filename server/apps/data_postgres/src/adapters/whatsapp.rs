@@ -43,6 +43,62 @@ impl PgWhatsappStore {
 
 #[async_trait]
 impl WhatsappStore for PgWhatsappStore {
+    // Consultas do contrato de canal em SQL de tempo de execução (sem macro):
+    // as colunas da 0054 não precisam entrar no cache offline do sqlx.
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, instance_id = id))]
+    async fn gravar_config_do_canal(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        channel_kind: &str,
+        provider_config: serde_json::Value,
+    ) -> Result<bool, DbError> {
+        let tenant_id = ctx.tenant_id;
+        let channel_kind = channel_kind.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let res = sqlx::query(
+                "UPDATE whatsapp_instance SET channel_kind = $1, provider_config = $2 \
+                 WHERE id = $3 AND tenant_id = $4",
+            )
+            .bind(&channel_kind)
+            .bind(&provider_config)
+            .bind(id)
+            .bind(tenant_id)
+            .execute(&mut *tx)
+            .await?;
+            Ok((res.rows_affected() > 0, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(provider = provider))]
+    async fn admin_resolver_por_id_externo(
+        &self,
+        _ctx: &RequestContext,
+        provider: &str,
+        id_externo: &str,
+    ) -> Result<Option<(i32, uuid::Uuid)>, DbError> {
+        // Cross-tenant: exige BYPASSRLS (admin_pool). Sem ele a RLS esconde
+        // tudo e o webhook da Meta é descartado — o aviso denuncia a causa.
+        if self.admin_pool.is_none() {
+            tracing::warn!(
+                "admin_resolver_por_id_externo sem DATABASE_ADMIN_URL: a RLS bloqueará \
+                 a consulta e o webhook não achará a conexão"
+            );
+        }
+        let pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
+        let linha: Option<(i32, uuid::Uuid)> = sqlx::query_as(
+            "SELECT id, tenant_id FROM whatsapp_instance \
+             WHERE provider = $1 AND instance_id = $2 AND active \
+             AND excluido_em IS NULL",
+        )
+        .bind(provider)
+        .bind(id_externo)
+        .fetch_optional(pool)
+        .await?;
+        Ok(linha)
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, instance_name = name))]
     async fn criar_instancia(
         &self,

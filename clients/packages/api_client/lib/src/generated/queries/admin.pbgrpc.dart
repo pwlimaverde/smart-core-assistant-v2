@@ -602,6 +602,24 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// Contrato de canal — catálogo de provedores (descritor por provedor) e a
+  /// conexão por credenciais. O fluxo de QR segue nas duas RPCs acima.
+  $grpc.ResponseFuture<$0.ListMyChannelProvidersResponse>
+      listMyChannelProviders(
+    $0.ListMyChannelProvidersRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyChannelProviders, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ConnectMyChannelResponse> connectMyChannel(
+    $0.ConnectMyChannelRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$connectMyChannel, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.CreateMyDepartamentoResponse> createMyDepartamento(
     $0.CreateMyDepartamentoRequest request, {
     $grpc.CallOptions? options,
@@ -1657,6 +1675,16 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/GetMyWhatsappInstanceStatus',
       ($0.GetMyWhatsappInstanceStatusRequest value) => value.writeToBuffer(),
       $0.GetMyWhatsappInstanceStatusResponse.fromBuffer);
+  static final _$listMyChannelProviders = $grpc.ClientMethod<
+          $0.ListMyChannelProvidersRequest, $0.ListMyChannelProvidersResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyChannelProviders',
+      ($0.ListMyChannelProvidersRequest value) => value.writeToBuffer(),
+      $0.ListMyChannelProvidersResponse.fromBuffer);
+  static final _$connectMyChannel = $grpc.ClientMethod<
+          $0.ConnectMyChannelRequest, $0.ConnectMyChannelResponse>(
+      '/smartcore.contracts.queries.AdminService/ConnectMyChannel',
+      ($0.ConnectMyChannelRequest value) => value.writeToBuffer(),
+      $0.ConnectMyChannelResponse.fromBuffer);
   static final _$createMyDepartamento = $grpc.ClientMethod<
           $0.CreateMyDepartamentoRequest, $0.CreateMyDepartamentoResponse>(
       '/smartcore.contracts.queries.AdminService/CreateMyDepartamento',
@@ -2743,6 +2771,24 @@ abstract class AdminServiceBase extends $grpc.Service {
             $0.GetMyWhatsappInstanceStatusRequest.fromBuffer(value),
         ($0.GetMyWhatsappInstanceStatusResponse value) =>
             value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyChannelProvidersRequest,
+            $0.ListMyChannelProvidersResponse>(
+        'ListMyChannelProviders',
+        listMyChannelProviders_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyChannelProvidersRequest.fromBuffer(value),
+        ($0.ListMyChannelProvidersResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ConnectMyChannelRequest,
+            $0.ConnectMyChannelResponse>(
+        'ConnectMyChannel',
+        connectMyChannel_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ConnectMyChannelRequest.fromBuffer(value),
+        ($0.ConnectMyChannelResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.CreateMyDepartamentoRequest,
             $0.CreateMyDepartamentoResponse>(
         'CreateMyDepartamento',
@@ -4145,6 +4191,24 @@ abstract class AdminServiceBase extends $grpc.Service {
   $async.Future<$0.GetMyWhatsappInstanceStatusResponse>
       getMyWhatsappInstanceStatus($grpc.ServiceCall call,
           $0.GetMyWhatsappInstanceStatusRequest request);
+
+  $async.Future<$0.ListMyChannelProvidersResponse> listMyChannelProviders_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyChannelProvidersRequest> $request) async {
+    return listMyChannelProviders($call, await $request);
+  }
+
+  $async.Future<$0.ListMyChannelProvidersResponse> listMyChannelProviders(
+      $grpc.ServiceCall call, $0.ListMyChannelProvidersRequest request);
+
+  $async.Future<$0.ConnectMyChannelResponse> connectMyChannel_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ConnectMyChannelRequest> $request) async {
+    return connectMyChannel($call, await $request);
+  }
+
+  $async.Future<$0.ConnectMyChannelResponse> connectMyChannel(
+      $grpc.ServiceCall call, $0.ConnectMyChannelRequest request);
 
   $async.Future<$0.CreateMyDepartamentoResponse> createMyDepartamento_Pre(
       $grpc.ServiceCall $call,

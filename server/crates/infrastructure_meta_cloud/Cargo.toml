@@ -1,0 +1,18 @@
+[package]
+name = "infrastructure_meta_cloud"
+version = "0.1.0"
+edition.workspace = true
+
+# Adaptador da WhatsApp Cloud API (Meta) atrás do contrato de canal do
+# `infrastructure_messaging`. Conexão por credenciais (sem QR).
+[dependencies]
+infrastructure_messaging = { path = "../infrastructure_messaging" }
+reqwest     = { version = "0.12", features = ["json"] }
+serde_json  = { workspace = true }
+secrecy     = { workspace = true }
+async-trait = { workspace = true }
+tracing     = { workspace = true }
+
+[dev-dependencies]
+tokio       = { workspace = true, features = ["full"] }
+wiremock    = "0.6"

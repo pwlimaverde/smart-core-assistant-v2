@@ -14,6 +14,7 @@ error_core               = { workspace = true }
 observability            = { workspace = true }
 infrastructure_messaging = { path = "../../crates/infrastructure_messaging" }
 infrastructure_evolution = { path = "../../crates/infrastructure_evolution" }
+infrastructure_meta_cloud = { path = "../../crates/infrastructure_meta_cloud" }
 tokio      = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }

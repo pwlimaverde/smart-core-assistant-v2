@@ -30,6 +30,13 @@ const LIMITE_DO_WEBHOOK: usize = 32 * 1024 * 1024;
 
 pub trait WebhookNormalizer: Send + Sync {
     fn provider_name(&self) -> &'static str;
+    /// Se o provedor entra pela rota com tenant e token no caminho
+    /// (`/webhook/{provider}/{tenant}/{instancia}`, autenticada pelo token da
+    /// instância). A Cloud API da Meta NÃO entra por ali: ela autentica por
+    /// assinatura HMAC do app e roteia pelo `phone_number_id` (ver `meta.rs`).
+    fn aceita_rota_por_token(&self) -> bool {
+        true
+    }
     fn normalize(
         &self,
         event: &str,
@@ -50,6 +57,8 @@ struct AppState {
     /// usada pelo `runtime_api`, via `RegisterRateLimitAttempt`).
     redis_client: Arc<transport::MuxClient>,
 }
+
+mod meta;
 
 #[derive(Deserialize, Debug)]
 struct WebhookPath {
@@ -82,6 +91,8 @@ async fn main() -> anyhow::Result<()> {
     let mut normalizers: HashMap<&'static str, Arc<dyn WebhookNormalizer>> = HashMap::new();
     let evo_norm = Arc::new(EvolutionNormalizer);
     normalizers.insert(evo_norm.provider_name(), evo_norm);
+    let meta_norm = Arc::new(meta::MetaNormalizer);
+    normalizers.insert(meta_norm.provider_name(), meta_norm);
 
     let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await?);
     let redis_client = Arc::new(transport::conectar_cliente("data_redis").await?);
@@ -99,6 +110,12 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/webhook/{provider}/{tenant_id}/{instance_id}",
             post(handle_webhook),
+        )
+        // Cloud API da Meta: um app por ambiente, sem tenant no caminho. GET é
+        // o aperto de mão da assinatura do webhook; POST, os eventos.
+        .route(
+            "/webhook/meta/{app}",
+            axum::routing::get(meta::handle_verificacao).post(meta::handle_webhook),
         )
         // Sonda do container. Este serviço não atende no `transport::Server`
         // (é HTTP puro), então o `healthcheck rpc` não o alcança — e sem
@@ -370,6 +387,18 @@ async fn handle_webhook(
     let event_type = raw.get("event").and_then(|e| e.as_str()).unwrap_or("");
     tracing::Span::current().record("event_type", event_type);
 
+    // 0. Provedor que autentica por outro caminho (assinatura HMAC da Meta)
+    // não é aceito aqui: com o token no corpo, alguém que só conhecesse o token
+    // da conexão injetaria evento sem a assinatura do app.
+    if state
+        .normalizers
+        .get(params.provider.as_str())
+        .is_some_and(|n| !n.aceita_rota_por_token())
+    {
+        tracing::warn!(provider = %params.provider, "provedor não aceita a rota por token");
+        return Err(StatusCode::NOT_FOUND);
+    }
+
     // 1. Extração do Token
     let token = headers
         .get("apikey")
@@ -442,6 +471,29 @@ async fn handle_webhook(
         .get("valid")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    // O provedor do CAMINHO tem de ser o da conexão. Resposta sem o campo
+    // (data_postgres anterior a esta mudança, durante o deploy) não bloqueia.
+    let provedor_confere = provedor_da_conexao_confere(
+        resp_payload.get("provider").and_then(|v| v.as_str()),
+        &params.provider,
+    );
+    if is_valid && !provedor_confere {
+        state.audit_logger.warn(
+            params.tenant_id,
+            "webhook.rejected",
+            "Provedor do webhook diferente do provedor da conexão",
+            serde_json::json!({
+                "provider": params.provider,
+                "instance_id": params.instance_id,
+                "reason": "provider_mismatch"
+            }),
+            None,
+            None,
+            None,
+        );
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
     if !is_valid {
         state.audit_logger.warn(
             params.tenant_id,
@@ -459,6 +511,31 @@ async fn handle_webhook(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
+    processar_evento(&mut state, &params, event_type, &raw).await
+}
+
+/// `true` quando o provedor gravado na conexão é o do caminho do webhook, ou
+/// quando a resposta não o trouxe (compatibilidade durante o deploy).
+fn provedor_da_conexao_confere(da_conexao: Option<&str>, do_caminho: &str) -> bool {
+    match da_conexao {
+        None => true,
+        Some(p) => p.is_empty() || p == do_caminho,
+    }
+}
+
+/// Pipeline comum a todo provedor depois da autenticação: descarte de grupo,
+/// rate limit, normalização, inadimplência, números ignorados, idempotência
+/// pelo id nativo da mensagem e publicação no barramento.
+///
+/// `raw` já está no formato canônico do barramento (o da Evolution/Baileys,
+/// `data.key.remoteJid`…), que é o que o worker interpreta. Provedor com
+/// formato próprio traduz ANTES de chegar aqui (ver `meta::traduzir_mensagem`).
+async fn processar_evento(
+    state: &mut AppState,
+    params: &WebhookPath,
+    event_type: &str,
+    raw: &serde_json::Value,
+) -> Result<StatusCode, StatusCode> {
     // 2b-bis. N8.5/E1 — descarte de evento de grupo.
     //
     // Vem ANTES do rate limit e da idempotência de propósito: grupo não é tráfego
@@ -468,7 +545,7 @@ async fn handle_webhook(
     // Responde 202, nunca erro: devolver erro faz a Evolution reentregar o evento
     // em retry infinito, sem nunca ter sucesso — mesmo raciocínio já aplicado no
     // descarte por whitelist logo abaixo.
-    if evento_de_grupo(&raw) {
+    if evento_de_grupo(raw) {
         // INFO, não WARN: descartar grupo é o comportamento correto e esperado.
         // WARN aqui poluiria o alerta de anomalia com o caso normal.
         tracing::info!(
@@ -556,7 +633,7 @@ async fn handle_webhook(
     }
 
     let normalizado = if let Some(normalizer) = state.normalizers.get(params.provider.as_str()) {
-        normalizer.normalize(event_type, &raw, params.tenant_id, params.instance_id)
+        normalizer.normalize(event_type, raw, params.tenant_id, params.instance_id)
     } else {
         tracing::warn!(provider = %params.provider, "Provedor desconhecido no path do webhook");
         None
@@ -617,7 +694,7 @@ async fn handle_webhook(
         // rejeitado com 403 e nenhuma mensagem entraria no sistema — e os números
         // que deviam ser ignorados seriam os únicos atendidos.
         if is_msg_event {
-            if let Some(phone) = extrair_sender(event_type, &raw) {
+            if let Some(phone) = extrair_sender(event_type, raw) {
                 let wl_payload = serde_json::json!({
                     "phone": phone
                 });
@@ -671,9 +748,12 @@ async fn handle_webhook(
             }
         }
 
-        // 4. Verificação de Idempotência
+        // 4. Verificação de Idempotência. A chave gravada aqui é desfeita se a
+        // publicação falhar (passo 5): senão a reentrega do provedor, que é o
+        // que recupera a mensagem, seria descartada como duplicada.
+        let mut chave_de_idempotencia: Option<String> = None;
         if is_msg_event {
-            if let Some(msg_id) = extrair_message_id(event_type, &raw) {
+            if let Some(msg_id) = extrair_message_id(event_type, raw) {
                 let key = format!("webhook:idempotency:{}:{}", params.tenant_id, msg_id);
                 let set_res: Result<bool, _> = redis::cmd("SET")
                     .arg(&key)
@@ -686,6 +766,9 @@ async fn handle_webhook(
 
                 match set_res {
                     Ok(inserted) => {
+                        if inserted {
+                            chave_de_idempotencia = Some(key.clone());
+                        }
                         if !inserted {
                             state.audit_logger.info(
                                 params.tenant_id,
@@ -721,12 +804,19 @@ async fn handle_webhook(
             envelope
         };
 
-        bus::publicar_evento(&mut state.redis, &envelope)
-            .await
-            .map_err(|e| {
-                tracing::error!("Falha ao publicar evento no barramento: {:?}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+        if let Err(e) = bus::publicar_evento(&mut state.redis, &envelope).await {
+            tracing::error!("Falha ao publicar evento no barramento: {:?}", e);
+            if let Some(chave) = chave_de_idempotencia {
+                let desfeita: Result<i64, _> = redis::cmd("DEL")
+                    .arg(&chave)
+                    .query_async(&mut state.redis)
+                    .await;
+                if let Err(e) = desfeita {
+                    tracing::error!("chave de idempotência não desfeita: {:?}", e);
+                }
+            }
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
         tracing::info!(topico = topic, "Evento normalizado publicado no barramento");
 
         if is_msg_event {
@@ -1280,6 +1370,8 @@ mod tests {
         let mut normalizers: HashMap<&'static str, Arc<dyn WebhookNormalizer>> = HashMap::new();
         let evo_norm = Arc::new(EvolutionNormalizer);
         normalizers.insert(evo_norm.provider_name(), evo_norm);
+        let meta_norm = Arc::new(meta::MetaNormalizer);
+        normalizers.insert(meta_norm.provider_name(), meta_norm);
 
         let audit_logger = observability::AuditLogger::new_dummy("webhook_ingress");
         let state = AppState {
@@ -1295,7 +1387,101 @@ mod tests {
                 "/webhook/{provider}/{tenant_id}/{instance_id}",
                 post(handle_webhook),
             )
+            .route(
+                "/webhook/meta/{app}",
+                axum::routing::get(meta::handle_verificacao).post(meta::handle_webhook),
+            )
             .with_state(state)
+    }
+
+    // ------------------------------------------------- roteamento por provedor
+
+    #[test]
+    fn provedor_do_caminho_tem_de_ser_o_da_conexao() {
+        assert!(provedor_da_conexao_confere(Some("evolution"), "evolution"));
+        assert!(!provedor_da_conexao_confere(
+            Some("meta_cloud"),
+            "evolution"
+        ));
+        // data_postgres antigo (sem o campo) não bloqueia durante o deploy.
+        assert!(provedor_da_conexao_confere(None, "evolution"));
+        assert!(provedor_da_conexao_confere(Some(""), "evolution"));
+    }
+
+    /// A Cloud API não entra pela rota de token: lá não há assinatura do app.
+    #[tokio::test]
+    async fn rota_por_token_recusa_provedor_que_assina() {
+        let app = setup_test_app().await;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhook/meta_cloud/00000000-0000-0000-0000-000000000001/42")
+                    .header("content-type", "application/json")
+                    .header("apikey", "token-123")
+                    .body(Body::from(
+                        json!({ "event": "messages.upsert" }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// Sem o segredo do app a rota da Meta recusa (503) em vez de aceitar sem
+    /// conferir; com o segredo, assinatura errada é 401.
+    #[tokio::test]
+    async fn rota_da_meta_exige_segredo_e_assinatura() {
+        std::env::remove_var("META_APP_SECRET");
+        std::env::remove_var("META_APP_ID");
+        let corpo = json!({ "object": "whatsapp_business_account", "entry": [] }).to_string();
+        let pedido = |assinatura: &str| {
+            Request::builder()
+                .method("POST")
+                .uri("/webhook/meta/dev")
+                .header("content-type", "application/json")
+                .header("x-hub-signature-256", assinatura)
+                .body(Body::from(corpo.clone()))
+                .unwrap()
+        };
+
+        // Um app só: o `setup_test_app` prende portas fixas. As variáveis são
+        // lidas a cada requisição, então trocá-las entre chamadas basta.
+        let app = setup_test_app().await;
+        let r = app.clone().oneshot(pedido("sha256=00")).await.unwrap();
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        std::env::set_var("META_APP_SECRET", "segredo-de-teste");
+        let r = app.clone().oneshot(pedido("sha256=00")).await.unwrap();
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+
+        // Assinatura certa e nenhum evento: 200, nada publicado.
+        use hmac::Mac;
+        let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(b"segredo-de-teste").unwrap();
+        mac.update(corpo.as_bytes());
+        let certa = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
+        let r = app.oneshot(pedido(&certa)).await.unwrap();
+        std::env::remove_var("META_APP_SECRET");
+        assert_eq!(r.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn aperto_de_mao_da_meta_sem_token_configurado_e_503() {
+        std::env::remove_var("META_WEBHOOK_VERIFY_TOKEN");
+        std::env::remove_var("META_APP_ID");
+        let app = setup_test_app().await;
+        let r = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/webhook/meta/dev?hub.mode=subscribe&hub.verify_token=x&hub.challenge=1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     /// O pedido de bloqueio só é reconhecido (para o aviso do boot) com `"true"`;

@@ -1,4 +1,4 @@
-# ADR — Intermediário de webhooks de provedores (Evolution, Instagram, Telegram)
+# ADR — Intermediário de webhooks de provedores e contrato genérico de canal
 
 **Status:** Ativo na **dev** desde 2026-11-25 (deploy-infra `45740927602`, imagem `sha-6802ac4`; cutover da instância 181). **Prod:** cutover pendente (seção 5, passo 5).
 **Data:** 2026-11-24
@@ -78,6 +78,40 @@ Feito em dev primeiro. Prod só depois de a dev ficar estável.
 2. **Cutover** da instância 181 (passos da seção 5). Dev feito em 2026-11-25; falta a prova com webhook real e, depois, a prod.
 3. **`WEBHOOK_RATE_LIMIT_ENFORCE` no secret de prod** (`true`, conferido em 2026-11-24). Resolvido no código: o webhook não tem mais 429 e a chave não tem efeito (só aviso no boot). Limpeza recomendada ao dono: remover a linha do secret `ENV_FILE_B64` do environment `prod`. Não é pré-requisito de nada.
 4. **Nome de instância por ambiente.** Instâncias novas da dev nascem `dev-<nome>`; a prod fica sem prefixo e a checagem de nome único cobre o resto. Renomear instâncias existentes não é necessário.
+
+## 6-A. Contrato genérico de canal (2026-11-26)
+
+Até aqui a **entrada** era modular (normalizador por provedor), mas o **controle
+da conexão** não: criar instância, QR, religar e o webhook só existiam para a
+Evolution Go, e o app só sabia mostrar QR. Esta seção registra a correção.
+
+### Decisões (uma linha de motivo cada)
+
+1. **Núcleo mínimo por canal**: `ChannelLifecycle` (= `InstanceManager`) + `MessageSender` + `ChannelDescriptor`. Motivo: tudo que não é comum a todo canal vira capacidade opcional.
+2. **QR é capacidade (`QrPairing`), não núcleo**; conexão por credenciais é `TokenConnect`. Motivo: a Cloud API, o Telegram e o webchat não têm QR.
+3. **O descritor é dado**: `provider`, `kind`, `connection_mode` (`qr_pairing`, `token`, `oauth`, `embedded`, `copy_snippet`), `config_schema` (campos tipados), `capacidades`, `eventos_webhook`. Motivo: o app monta a tela de configuração pelo descritor, sem tela por provedor.
+4. **Capacidades opcionais derivadas dos traits** (`descritor_efetivo`). Motivo: o descritor não consegue prometer o que o adaptador não implementa.
+5. **Conexão continua em `whatsapp_instance`**, com `channel_kind` e `provider_config` (migração `0054`, só aditiva) e a view `channels` (`security_invoker`). Motivo: as FKs de contato, departamento e atendimento apontam para ela, e mover linhas arriscaria a 181.
+6. **`instance_id` é o id externo** (nome na Evolution, `phone_number_id` na Cloud API), e o descritor diz qual deles o adaptador recebe (`endereco`). Motivo: os handlers do `data_whatsapp` não precisam saber o provedor.
+7. **Binário segue `data_whatsapp`**; as RPCs `*Channel` são aliases das `*WhatsappInstance`. Motivo: renomear o serviço mexe em compose e deploy sem ganho funcional nesta etapa.
+8. **Provedor habilitado por ambiente** (`SMARTCORE_CANAIS_HABILITADOS`; vazio = `evolution`). Motivo: adaptador experimental não aparece habilitado por esquecimento.
+9. **Webhook da Meta numa rota própria**, `/webhook/meta/{app}`: um app por ambiente, sem tenant no caminho, HMAC `X-Hub-Signature-256` com `META_APP_SECRET`, aperto de mão GET com `META_WEBHOOK_VERIFY_TOKEN`, conexão achada pelo `phone_number_id` (`ResolverCanalPorIdExterno`, cross-tenant). Sem segredo, a rota responde 503. Motivo: a Meta não manda token de instância, e aceitar sem assinatura seria aceitar qualquer um.
+10. **Rota por token recusa provedor que assina** (404) e **confere que o provedor do caminho é o da conexão** (401). Motivo: o token de uma conexão não pode abrir a entrada de outro provedor.
+11. **Formato canônico do barramento continua o da Evolution/Baileys** (`data.key.remoteJid`…), e cada provedor traduz para ele antes do pipeline comum. Motivo: o worker e a idempotência pelo id nativo (`wamid`) já o entendem; um evento neutro de canal fica para quando entrar o primeiro canal que não seja WhatsApp.
+12. **`provider_edge` repassa GET.** Motivo: o aperto de mão da Meta é GET. Chega ao servidor pelo `deploy-infra`.
+
+### Estado
+
+| Item | Situação |
+|---|---|
+| Evolution atrás do contrato | Feito, sem mudança de comportamento: mesmos eventos e endereço por nome; o QR saiu do núcleo para `QrPairing`. |
+| Cloud API (`infrastructure_meta_cloud`) | **Experimental.** Conexão por token validada no Graph, saúde, envio de texto e mídia por link, recibo de leitura. `Unsupported` claro para criar instância, QR, registrar webhook, desconectar, religar. Download de mídia, templates, presença e reações: pendentes. |
+| Recebimento da Cloud API | Implementado no `webhook_ingress` (texto, mídia sem download, localização, contato, reação, resposta de botão, status entregue/lido). Depende de `META_APP_SECRET`/`META_WEBHOOK_VERIFY_TOKEN` no env do ambiente e do app da Meta configurado, que exigem credenciais da Meta. |
+| Webchat | Só o descritor, como `planejado` (o `webchat_gateway` de WebSocket é um serviço próprio, pendente). |
+| Telegram, Instagram, Messenger | Próxima etapa: o contrato já os comporta (`ChannelKind`, `connection_mode`). |
+| App (Flutter, web e Windows) | Tela de Integrações aberta pelo "Nova conexão": lista o catálogo e abre o fluxo pelo `connection_mode`; o formulário de credenciais é gerado do `config_schema`. |
+
+Guia para um provedor novo: `doc_dev/arquitetura/guia-novo-provedor-de-canal.md`.
 
 ## 7. Referências
 
