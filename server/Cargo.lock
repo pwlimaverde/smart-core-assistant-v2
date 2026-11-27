@@ -1224,6 +1224,7 @@ dependencies = [
  "error_core",
  "infrastructure_evolution",
  "infrastructure_messaging",
+ "infrastructure_meta_cloud",
  "observability",
  "redis",
  "reqwest",
@@ -2208,6 +2209,20 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "uuid",
+]
+
+[[package]]
+name = "infrastructure_meta_cloud"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "infrastructure_messaging",
+ "reqwest",
+ "secrecy",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wiremock",
 ]
 
 [[package]]
@@ -5019,13 +5034,18 @@ dependencies = [
  "axum 0.8.9",
  "chrono",
  "contracts",
+ "domain_whatsapp",
  "error_core",
+ "hex",
+ "hmac 0.12.1",
  "infrastructure_messaging",
  "observability",
  "redis",
  "secrecy",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
+ "subtle",
  "tokio",
  "tower 0.5.3",
  "tracing",

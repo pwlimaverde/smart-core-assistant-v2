@@ -2,13 +2,18 @@
 use async_trait::async_trait;
 use contracts::{Envelope, MessageKind, TenantEnvelope};
 use infrastructure_evolution::EvolutionProvider;
+use infrastructure_messaging::{
+    catalogo_planejado, descritor_efetivo, Capacidade, ChannelDescriptor, CredencialInformada,
+    EnderecoNoProvedor,
+};
 #[allow(unused_imports)]
 use infrastructure_messaging::{
     AdvancedSettings, ConnectionState, CreateInstanceResult, InstanceManager, MediaType,
     MessageSender, MessagingProvider, MessagingProviderError, PresenceState, ProviderRegistry,
     SendMessageResult, WebhookConfig,
 };
-use secrecy::SecretString;
+use infrastructure_meta_cloud::MetaCloudProvider;
+use secrecy::{ExposeSecret, SecretString};
 use std::env;
 use std::time::Duration;
 use transport::Server;
@@ -39,8 +44,13 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_default();
 
     let provider = EvolutionProvider::new(api_url, SecretString::from(api_token));
+    // Todo adaptador fica registrado; quem decide se o tenant pode CONECTAR um
+    // provedor é `SMARTCORE_CANAIS_HABILITADOS` (ver `provedores_habilitados`).
+    // Registrar sempre é o que permite atender uma conexão já gravada mesmo que
+    // o provedor seja desabilitado depois.
     let registry = ProviderRegistry::builder()
         .register(std::sync::Arc::new(provider))
+        .register(std::sync::Arc::new(MetaCloudProvider::do_ambiente()))
         .build();
 
     let redis_url =
@@ -71,7 +81,19 @@ async fn main() -> anyhow::Result<()> {
     let s_presence = state.clone();
     let s_profile = state.clone();
     let s_foto = state.clone();
-    let s_download = state;
+    let s_download = state.clone();
+    let s_provedores = state.clone();
+    let s_conectar = state.clone();
+
+    // Aliases do contrato de canal (`*Channel`): mesmos handlers das RPCs
+    // `*WhatsappInstance`, que seguem valendo durante a transição.
+    let s_alias_create = state.clone();
+    let s_alias_status = state.clone();
+    let s_alias_reconnect = state.clone();
+    let s_alias_disconnect = state.clone();
+    let s_alias_delete = state.clone();
+    let s_alias_send = state.clone();
+    let s_alias_media = state;
 
     let server = Server::from_env("DATA_WHATSAPP")
         .route("CreateWhatsappInstance", move |env| {
@@ -133,6 +155,42 @@ async fn main() -> anyhow::Result<()> {
         .route("DownloadWhatsappMedia", move |env| {
             let s = s_download.clone();
             Box::pin(async move { handler_download_whatsapp_media(s, env).await })
+        })
+        .route("ListChannelProviders", move |env| {
+            let s = s_provedores.clone();
+            Box::pin(async move { handler_list_channel_providers(s, env).await })
+        })
+        .route("ConnectChannel", move |env| {
+            let s = s_conectar.clone();
+            Box::pin(async move { handler_connect_channel(s, env).await })
+        })
+        .route("CreateChannel", move |env| {
+            let s = s_alias_create.clone();
+            Box::pin(async move { handler_create_whatsapp_instance(s, env).await })
+        })
+        .route("GetChannelStatus", move |env| {
+            let s = s_alias_status.clone();
+            Box::pin(async move { handler_get_whatsapp_instance_status(s, env).await })
+        })
+        .route("ReconnectChannel", move |env| {
+            let s = s_alias_reconnect.clone();
+            Box::pin(async move { handler_reconnect_whatsapp_instance(s, env).await })
+        })
+        .route("DisconnectChannel", move |env| {
+            let s = s_alias_disconnect.clone();
+            Box::pin(async move { handler_disconnect_whatsapp_instance(s, env).await })
+        })
+        .route("DeleteChannel", move |env| {
+            let s = s_alias_delete.clone();
+            Box::pin(async move { handler_delete_whatsapp_instance(s, env).await })
+        })
+        .route("SendChannelMessage", move |env| {
+            let s = s_alias_send.clone();
+            Box::pin(async move { handler_send_whatsapp_message(s, env).await })
+        })
+        .route("SendChannelMedia", move |env| {
+            let s = s_alias_media.clone();
+            Box::pin(async move { handler_send_whatsapp_media(s, env).await })
         });
 
     tracing::info!("Servidor RPC do data_whatsapp configurado e pronto.");
@@ -325,6 +383,13 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
         Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
     };
 
+    // 0a. Este fluxo é o do QR. Provedor que conecta por credenciais (Cloud
+    // API) entra por `ConnectChannel`; deixá-lo passar aqui criaria um registro
+    // sem conexão nenhuma. Provedor desabilitado no ambiente também para aqui.
+    if let Err(e) = conferir_provedor_para_conectar(p.as_ref(), Capacidade::QrPairing) {
+        return erro(e, &env);
+    }
+
     // 0b. Nome único no gateway compartilhado. O Evolution é um só para dev e
     // prod: criar com um nome já existente sobrescreveria a URL de webhook e o
     // pareamento da instância que já está lá. Nome repetido é recusado com erro
@@ -399,18 +464,7 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
     };
 
     // 3. Conecta a instância passando webhook Url embutido e eventos de assinatura
-    let webhook_url = url_webhook(provider_name, &env.tenant_id, db_id);
-    let webhook_conf = WebhookConfig {
-        url: webhook_url,
-        subscribe: vec![
-            "MESSAGE".to_string(),
-            "CONNECTION".to_string(),
-            "PRESENCE".to_string(),
-            "QRCODE".to_string(),
-            // Recibos de entrega e leitura: sem eles o ✓✓ nunca aparece.
-            "READ_RECEIPT".to_string(),
-        ],
-    };
+    let webhook_conf = webhook_da_instancia(p.as_ref(), provider_name, &env.tenant_id, db_id);
 
     if let Err(e) = p
         .connect_instance(instance_name, &instance_token, &webhook_conf)
@@ -550,7 +604,7 @@ async fn handler_delete_whatsapp_instance(mut state: AppState, env: Envelope) ->
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) if !s.is_empty() => s,
         _ => {
             return erro(
@@ -689,7 +743,7 @@ async fn handler_reconnect_whatsapp_instance(mut state: AppState, env: Envelope)
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -720,23 +774,24 @@ async fn handler_reconnect_whatsapp_instance(mut state: AppState, env: Envelope)
 
     let api_key_sec = SecretString::from(api_key.to_string());
 
+    // Provedor sem sessão de aparelho (Cloud API) não tem o que religar: o
+    // erro diz isso em vez de tentar um `connect` que ele não implementa.
+    if !descritor_efetivo(p.as_ref()).suporta(Capacidade::Reconexao) {
+        return erro(
+            error_core::AppError::Validation(format!(
+                "a conexão pelo provedor '{provider_name}' não tem sessão para religar"
+            )),
+            &env,
+        );
+    }
+
     // `connect`, não `reconnect` — a mesma escolha que a reconciliação faz, e
     // pela mesma razão, documentada lá: `/instance/reconnect` responde "no
     // active session found" quando o socket já caiu. Ele serve para uma sessão
     // viva; aqui a sessão está morta, que é justamente por que o usuário
     // apertou o botão. Era isso o "não foi possível conectar" que ele via: o
     // botão chamava a rota que não podia funcionar no caso em que é usada.
-    let webhook_conf = WebhookConfig {
-        url: url_webhook(provider_name, &env.tenant_id, db_id),
-        subscribe: vec![
-            "MESSAGE".to_string(),
-            "CONNECTION".to_string(),
-            "PRESENCE".to_string(),
-            "QRCODE".to_string(),
-            // Recibos de entrega e leitura: sem eles o ✓✓ nunca aparece.
-            "READ_RECEIPT".to_string(),
-        ],
-    };
+    let webhook_conf = webhook_da_instancia(p.as_ref(), provider_name, &env.tenant_id, db_id);
 
     if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook_conf).await {
         gravar_estado(&env, db_id, "disconnected").await;
@@ -840,7 +895,7 @@ async fn handler_disconnect_whatsapp_instance(mut state: AppState, env: Envelope
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s.to_string(),
         None => {
             return erro(
@@ -868,6 +923,16 @@ async fn handler_disconnect_whatsapp_instance(mut state: AppState, env: Envelope
         Ok(prov) => prov,
         Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
     };
+
+    if !descritor_efetivo(p.as_ref()).suporta(Capacidade::Desconectar) {
+        return erro(
+            error_core::AppError::Validation(format!(
+                "a conexão pelo provedor '{provider_name}' não tem sessão para encerrar; \
+                 remova a conexão para deixar de usá-la"
+            )),
+            &env,
+        );
+    }
 
     let api_key_sec = SecretString::from(api_key);
     let falha = p.disconnect_instance(&name, &api_key_sec).await.err();
@@ -949,7 +1014,7 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -992,6 +1057,20 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
             &env,
             "ReconciliarConexaoInstanciaReply",
             serde_json::json!({ "state": "connected", "religada": false, "precisa_parear": false }),
+        );
+    }
+
+    // Provedor que não religa sessão (Cloud API): carimba o estado conferido e
+    // sai. Tentar um `connect` aqui só produziria erro a cada tick.
+    if !descritor_efetivo(p.as_ref()).suporta(Capacidade::Reconexao) {
+        let (texto, _, _) = desfecho_da_religada(estado_inicial.clone());
+        if estado_inicial != ConnectionState::Unknown {
+            gravar_estado(&env, db_id, texto).await;
+        }
+        return ok_reply(
+            &env,
+            "ReconciliarConexaoInstanciaReply",
+            serde_json::json!({ "state": texto, "religada": false, "precisa_parear": false }),
         );
     }
 
@@ -1078,17 +1157,7 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
         );
     }
 
-    let webhook_conf = WebhookConfig {
-        url: url_webhook(provider_name, &env.tenant_id, db_id),
-        subscribe: vec![
-            "MESSAGE".to_string(),
-            "CONNECTION".to_string(),
-            "PRESENCE".to_string(),
-            "QRCODE".to_string(),
-            // Recibos de entrega e leitura: sem eles o ✓✓ nunca aparece.
-            "READ_RECEIPT".to_string(),
-        ],
-    };
+    let webhook_conf = webhook_da_instancia(p.as_ref(), provider_name, &env.tenant_id, db_id);
 
     if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook_conf).await {
         // O estado gravado fica como estava (`connected`) de propósito: o
@@ -1191,17 +1260,18 @@ fn url_webhook(provider_name: &str, tenant_id: &str, db_id: i64) -> String {
     )
 }
 
-fn webhook_da_instancia(provider_name: &str, tenant_id: &str, db_id: i64) -> WebhookConfig {
+/// Webhook que o servidor grava no provedor: a URL de sempre e os eventos que
+/// o PRÓPRIO adaptador declara no descritor (a lista da Evolution saiu daqui
+/// para o `infrastructure_evolution`, sem mudar o conteúdo).
+fn webhook_da_instancia(
+    p: &dyn MessagingProvider,
+    provider_name: &str,
+    tenant_id: &str,
+    db_id: i64,
+) -> WebhookConfig {
     WebhookConfig {
         url: url_webhook(provider_name, tenant_id, db_id),
-        subscribe: vec![
-            "MESSAGE".to_string(),
-            "CONNECTION".to_string(),
-            "PRESENCE".to_string(),
-            "QRCODE".to_string(),
-            // Recibos de entrega e leitura: sem eles o ✓✓ nunca aparece.
-            "READ_RECEIPT".to_string(),
-        ],
+        subscribe: p.descritor().eventos_webhook,
     }
 }
 
@@ -1393,7 +1463,7 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -1475,7 +1545,9 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
     // literalmente o código que está valendo — e ainda faz a imagem parar de
     // piscar na tela a cada consulta.
     let mut qr_code = None;
-    if prov_state != ConnectionState::Connected {
+    // Só provedor com QR entra no ciclo de pareamento. Os demais (Cloud API)
+    // conectam por credenciais: não há código a mostrar nem cliente a iniciar.
+    if prov_state != ConnectionState::Connected && p.qr_pairing().is_some() {
         let chave = format!("whatsapp:qr:{name}");
         let mut redis = state.redis_conn.clone();
 
@@ -1529,12 +1601,16 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
                         // aparelho antigo e nunca gera QR. Recriar a instância (mesmo
                         // nome e token) abre um pareamento novo.
                         cancelar_pareamento(p.as_ref(), name, &api_key_sec, &state).await;
-                        let webhook = webhook_da_instancia(provider_name, &env.tenant_id, db_id);
+                        let webhook =
+                            webhook_da_instancia(p.as_ref(), provider_name, &env.tenant_id, db_id);
                         if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook).await {
                             tracing::warn!(instance_id = db_id, erro = %e, "falha ao preparar a instância para o QR");
                         }
                     }
-                } else if let Ok(qr) = p.get_qr_code(name, &api_key_sec).await {
+                } else if let Some(Ok(qr)) = match p.qr_pairing() {
+                    Some(q) => Some(q.get_qr_code(name, &api_key_sec).await),
+                    None => None,
+                } {
                     // `EX` e nao `PX`: a granularidade de segundos basta, e o
                     // valor fica legivel no `redis-cli TTL`.
                     let _: Result<(), _> = redis::cmd("SET")
@@ -1610,7 +1686,7 @@ async fn handler_send_whatsapp_message(state: AppState, env: Envelope) -> Envelo
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -1737,7 +1813,7 @@ async fn handler_send_whatsapp_media(state: AppState, env: Envelope) -> Envelope
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -1866,6 +1942,9 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
             Ok(prov) => prov,
             Err(_) => continue,
         };
+        if !descritor_efetivo(p.as_ref()).suporta(Capacidade::Desconectar) {
+            continue;
+        }
 
         let api_key_sec = SecretString::from(api_key.to_string());
         // Tenta desconectar no provedor
@@ -1969,7 +2048,7 @@ async fn handler_mark_whatsapp_message_read(state: AppState, env: Envelope) -> E
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -2088,7 +2167,7 @@ async fn handler_send_whatsapp_reaction(state: AppState, env: Envelope) -> Envel
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -2209,7 +2288,7 @@ async fn handler_set_whatsapp_presence(state: AppState, env: Envelope) -> Envelo
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -2303,7 +2382,7 @@ async fn handler_get_whatsapp_profile_picture(state: AppState, env: Envelope) ->
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -2399,7 +2478,7 @@ async fn handler_download_whatsapp_media(state: AppState, env: Envelope) -> Enve
         Err(e) => return erro(e, &env),
     };
 
-    let name = match instance.get("name").and_then(|v| v.as_str()) {
+    let name = match endereco_no_provedor(&state, &instance) {
         Some(s) => s,
         None => {
             return erro(
@@ -2646,7 +2725,7 @@ async fn handler_baixar_foto_do_contato(state: AppState, env: Envelope) -> Envel
         Ok(inst) => inst,
         Err(e) => return erro(e, &env),
     };
-    let Some(name) = instance.get("name").and_then(|v| v.as_str()) else {
+    let Some(name) = endereco_no_provedor(&state, &instance) else {
         return erro(
             error_core::AppError::Database("não encontrado: Instância não encontrada".into()),
             &env,
@@ -2732,6 +2811,342 @@ async fn handler_baixar_foto_do_contato(state: AppState, env: Envelope) -> Envel
             )
         }
     }
+}
+
+// ------------------------------------------------------------------ canais
+//
+// Contrato genérico de canal: o catálogo de provedores (descritor por
+// provedor, que o app usa para montar a tela) e a conexão por credenciais.
+// O fluxo do QR continua em `CreateWhatsappInstance`/`GetWhatsappInstanceStatus`.
+
+/// Provedores que o tenant pode CONECTAR neste ambiente.
+///
+/// `SMARTCORE_CANAIS_HABILITADOS` (lista separada por vírgula, no `<env>.vars`).
+/// Ausente ou vazio = só `evolution`, o comportamento de antes desta mudança:
+/// um provedor experimental nunca aparece habilitado por esquecimento.
+fn provedores_habilitados() -> Vec<String> {
+    lista_de_habilitados(
+        std::env::var("SMARTCORE_CANAIS_HABILITADOS")
+            .ok()
+            .as_deref(),
+    )
+}
+
+fn lista_de_habilitados(valor: Option<&str>) -> Vec<String> {
+    let lista: Vec<String> = valor
+        .unwrap_or("")
+        .split(',')
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if lista.is_empty() {
+        vec!["evolution".to_string()]
+    } else {
+        lista
+    }
+}
+
+/// Se o tenant pode conectar este provedor agora, e por quê não.
+fn situacao_do_provedor(d: &ChannelDescriptor, habilitados: &[String]) -> (bool, String) {
+    if d.estagio == infrastructure_messaging::Estagio::Planejado {
+        return (
+            false,
+            "Em planejamento: ainda não há adaptador para este canal.".into(),
+        );
+    }
+    if !habilitados.iter().any(|h| h == &d.provider) {
+        return (false, "Não habilitado neste ambiente.".into());
+    }
+    (true, String::new())
+}
+
+/// Recusa conectar por um provedor desabilitado ou por um modo que ele não
+/// tem. Devolve o descritor para quem precisa dele em seguida.
+fn conferir_provedor_para_conectar(
+    p: &dyn MessagingProvider,
+    modo: Capacidade,
+) -> Result<ChannelDescriptor, error_core::AppError> {
+    let d = descritor_efetivo(p);
+    let (habilitado, motivo) = situacao_do_provedor(&d, &provedores_habilitados());
+    if !habilitado {
+        return Err(error_core::AppError::Validation(format!(
+            "o provedor '{}' não pode ser conectado: {motivo}",
+            d.provider
+        )));
+    }
+    if !d.suporta(modo) {
+        let como = match modo {
+            Capacidade::QrPairing => "por QR code",
+            Capacidade::TokenConnect => "por credenciais",
+            _ => "por este caminho",
+        };
+        return Err(error_core::AppError::Validation(format!(
+            "o provedor '{}' não conecta {como}",
+            d.provider
+        )));
+    }
+    Ok(d)
+}
+
+/// Como o adaptador desta instância a endereça no provedor: o NOME (Evolution)
+/// ou o id externo gravado em `instance_id` (Cloud API: o `phone_number_id`).
+///
+/// Para a Evolution o resultado é idêntico ao `instance.get("name")` de antes —
+/// é o que mantém as instâncias existentes (a 181 da dev) intactas.
+fn endereco_no_provedor<'a>(state: &AppState, instance: &'a serde_json::Value) -> Option<&'a str> {
+    let provider = instance
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("evolution");
+    let endereco = state
+        .registry
+        .resolve(provider)
+        .map(|p| p.descritor().endereco)
+        .unwrap_or(EnderecoNoProvedor::Nome);
+    match endereco {
+        EnderecoNoProvedor::Nome => instance.get("name").and_then(|v| v.as_str()),
+        EnderecoNoProvedor::IdExterno => instance
+            .get("instance_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty()),
+    }
+}
+
+/// O catálogo: um descritor por provedor registrado, mais os canais planejados
+/// (sem adaptador), cada um com `habilitado` e o motivo quando não está.
+#[tracing::instrument(skip_all, fields(rpc = "ListChannelProviders", tenant_id = %env.tenant_id))]
+async fn handler_list_channel_providers(state: AppState, env: Envelope) -> Envelope {
+    let habilitados = provedores_habilitados();
+    let registrados: Vec<ChannelDescriptor> = state
+        .registry
+        .listar()
+        .iter()
+        .map(|p| descritor_efetivo(p.as_ref()))
+        .collect();
+    let planejados = catalogo_planejado()
+        .into_iter()
+        .filter(|d| !registrados.iter().any(|r| r.provider == d.provider));
+
+    let provedores: Vec<serde_json::Value> = registrados
+        .iter()
+        .cloned()
+        .chain(planejados)
+        .map(|d| {
+            let (habilitado, motivo) = situacao_do_provedor(&d, &habilitados);
+            let mut v = serde_json::to_value(&d).unwrap_or_default();
+            v["habilitado"] = serde_json::json!(habilitado);
+            v["motivo_indisponivel"] = serde_json::json!(motivo);
+            v
+        })
+        .collect();
+
+    ok_reply(
+        &env,
+        "ListChannelProvidersReply",
+        serde_json::json!({ "provedores": provedores }),
+    )
+}
+
+/// URL pública que o app da Meta do ambiente chama. Vai na resposta da
+/// conexão para a tela mostrar onde configurar; vazia quando o ambiente não a
+/// declarou (`META_WEBHOOK_URL_PUBLICA`).
+fn url_publica_do_webhook_meta() -> String {
+    std::env::var("META_WEBHOOK_URL_PUBLICA")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .unwrap_or_default()
+}
+
+/// Conecta um canal por credenciais (`TokenConnect`).
+///
+/// Ordem pensada para não deixar sujeira: valida no provedor ANTES de gravar
+/// (credencial errada não vira linha no banco); grava o registro; grava o id
+/// externo — se falhar (o número já está em outra conexão: `instance_id` é
+/// único), desfaz o registro.
+#[tracing::instrument(skip_all, fields(rpc = "ConnectChannel", tenant_id = %env.tenant_id))]
+async fn handler_connect_channel(mut state: AppState, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let Some(nome) = payload
+        .get("instance_name")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    else {
+        return erro(
+            error_core::AppError::Validation("instance_name ausente".into()),
+            &env,
+        );
+    };
+    let Some(provider_name) = payload.get("provider").and_then(|v| v.as_str()) else {
+        return erro(
+            error_core::AppError::Validation("provider ausente".into()),
+            &env,
+        );
+    };
+
+    let p = match state.registry.resolve(provider_name) {
+        Ok(prov) => prov,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let descritor = match conferir_provedor_para_conectar(p.as_ref(), Capacidade::TokenConnect) {
+        Ok(d) => d,
+        Err(e) => return erro(e, &env),
+    };
+    let Some(conector) = p.token_connect() else {
+        return erro(
+            error_core::AppError::Validation("provedor sem conexão por credenciais".into()),
+            &env,
+        );
+    };
+
+    if let Err(e) = aplicar_quota_guard("instancias", &env).await {
+        return erro(e, &env);
+    }
+
+    // Só chaves do formulário declarado: campo inventado pelo cliente não
+    // chega ao adaptador.
+    let campos: Vec<CredencialInformada> = payload
+        .get("campos")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|c| {
+                    let chave = c.get("chave")?.as_str()?;
+                    let valor = c.get("valor")?.as_str()?;
+                    descritor
+                        .config_schema
+                        .iter()
+                        .any(|f| f.chave == chave)
+                        .then(|| CredencialInformada {
+                            chave: chave.to_string(),
+                            valor: SecretString::from(valor.to_string()),
+                        })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // 1. Valida no provedor.
+    let conectado = match conector.conectar_com_credenciais(&campos).await {
+        Ok(c) => c,
+        Err(e) => {
+            return erro(
+                error_core::AppError::Validation(format!("o provedor recusou as credenciais: {e}")),
+                &env,
+            )
+        }
+    };
+
+    // 2. Registro da conexão. O token vai cifrado em `api_key`.
+    let db_record = match chamar_data_postgres(
+        "CreateWhatsappInstanceRecord",
+        &env.tenant_id,
+        serde_json::json!({
+            "name": nome,
+            "api_key": conectado.token.expose_secret(),
+            "provider": provider_name,
+        }),
+        &env,
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => return erro(e, &env),
+    };
+    let Some(db_id) = db_record.get("id").and_then(|v| v.as_i64()) else {
+        return erro(
+            error_core::AppError::Internal("ID de banco não retornado pelo data_postgres".into()),
+            &env,
+        );
+    };
+
+    // 3. Id externo: é a chave de roteamento do webhook.
+    if let Err(e) = chamar_data_postgres(
+        "AtualizarInstanciaProviderId",
+        &env.tenant_id,
+        serde_json::json!({
+            "id": db_id,
+            "instance_id": conectado.id_externo,
+            "phone_number": conectado.telefone,
+        }),
+        &env,
+    )
+    .await
+    {
+        let _ = chamar_data_postgres(
+            "AdminDeletarInstancia",
+            &env.tenant_id,
+            serde_json::json!({ "id": db_id }),
+            &env,
+        )
+        .await;
+        tracing::warn!(erro = %e, "id externo recusado; registro desfeito");
+        return erro(
+            error_core::AppError::Validation(
+                "este número já está conectado em outra conexão".into(),
+            ),
+            &env,
+        );
+    }
+
+    // 4. Tipo do canal e configuração não secreta. Best-effort: sem ela a
+    // conexão funciona (envio e saúde só usam o id externo e o token).
+    if let Err(e) = chamar_data_postgres(
+        "GravarConfigDoCanal",
+        &env.tenant_id,
+        serde_json::json!({
+            "id": db_id,
+            "channel_kind": descritor.kind,
+            "provider_config": conectado.config,
+        }),
+        &env,
+    )
+    .await
+    {
+        tracing::warn!(instance_id = db_id, erro = %e, "falha ao gravar a configuração do canal");
+    }
+
+    gravar_estado(&env, db_id, "connected").await;
+
+    auditar_instancia(
+        &mut state.redis_conn,
+        &env,
+        "whatsapp.instance.create",
+        format!("Conexão '{nome}' criada por credenciais (provedor: {provider_name})"),
+        serde_json::json!({ "instance_id": db_id, "instance_name": nome, "provider": provider_name }),
+    )
+    .await;
+
+    let webhook_url = url_publica_do_webhook_meta();
+    let instrucoes = if webhook_url.is_empty() {
+        "Conexão validada. O recebimento de mensagens depende do webhook do app \
+         da Meta deste ambiente, configurado pelo administrador do servidor."
+            .to_string()
+    } else {
+        format!(
+            "Conexão validada. No app da Meta, o webhook do WhatsApp deve apontar \
+             para {webhook_url} com o campo \"messages\" assinado."
+        )
+    };
+
+    ok_reply(
+        &env,
+        "ConnectChannelReply",
+        serde_json::json!({
+            "status": "success",
+            "id": db_id,
+            "instance_name": nome,
+            "provider": provider_name,
+            "phone_number": conectado.telefone,
+            "connection_state": "connected",
+            "webhook_url": webhook_url,
+            "instrucoes": instrucoes,
+        }),
+    )
 }
 
 /// Limite de tamanho de mídia baixada, em bytes. Configurável por
@@ -3084,14 +3499,6 @@ mod tests {
             let _ = (name, token);
             Ok(())
         }
-        async fn get_qr_code(
-            &self,
-            name: &str,
-            token: &SecretString,
-        ) -> Result<String, MessagingProviderError> {
-            let _ = (name, token);
-            Ok("fake-qr".to_string())
-        }
         async fn get_connection_state(
             &self,
             name: &str,
@@ -3136,7 +3543,44 @@ mod tests {
         }
     }
 
-    impl MessagingProvider for FakeMessagingProvider {}
+    #[async_trait]
+    impl infrastructure_messaging::QrPairing for FakeMessagingProvider {
+        async fn get_qr_code(
+            &self,
+            name: &str,
+            token: &SecretString,
+        ) -> Result<String, MessagingProviderError> {
+            let _ = (name, token);
+            Ok("fake-qr".to_string())
+        }
+    }
+
+    impl MessagingProvider for FakeMessagingProvider {
+        fn descritor(&self) -> ChannelDescriptor {
+            ChannelDescriptor {
+                provider: "fake".into(),
+                kind: infrastructure_messaging::ChannelKind::Whatsapp,
+                nome: "Fake".into(),
+                descricao: "provedor de teste".into(),
+                estagio: infrastructure_messaging::Estagio::Estavel,
+                connection_mode: infrastructure_messaging::ConnectionMode::QrPairing,
+                endereco: EnderecoNoProvedor::Nome,
+                config_schema: vec![],
+                capacidades: vec![
+                    Capacidade::Health,
+                    Capacidade::Reconexao,
+                    Capacidade::Desconectar,
+                    Capacidade::RegistraWebhook,
+                    Capacidade::EnvioTexto,
+                    Capacidade::EnvioMidia,
+                ],
+                eventos_webhook: vec!["MESSAGE".into()],
+            }
+        }
+        fn qr_pairing(&self) -> Option<&dyn infrastructure_messaging::QrPairing> {
+            Some(self)
+        }
+    }
 
     async fn fake_bus(porta: u16) -> redis::aio::ConnectionManager {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", porta))
@@ -3203,14 +3647,38 @@ mod tests {
             })
             .route("GetWhatsappInstance", |env| {
                 Box::pin(async move {
-                    Envelope {
-                        kind: MessageKind::Reply as i32,
-                        payload: serde_json::to_vec(&serde_json::json!({
+                    // Id 77 é uma conexão da Cloud API: endereçada pelo id
+                    // externo (`instance_id` = phone_number_id), não pelo nome.
+                    let pedido: serde_json::Value =
+                        serde_json::from_slice(&env.payload).unwrap_or_default();
+                    let instancia = if pedido.get("id").and_then(|v| v.as_i64()) == Some(77) {
+                        serde_json::json!({
+                            "id": 77,
+                            "name": "atendimento-meta",
+                            "instance_id": "555000",
+                            "api_key": "meta-token",
+                            "provider": "meta_cloud"
+                        })
+                    } else {
+                        serde_json::json!({
                             "id": 42,
                             "name": "instancia-test",
                             "api_key": "inst-key-123",
                             "provider": "evolution"
-                        })).unwrap(),
+                        })
+                    };
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&instancia).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("GravarConfigDoCanal", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "status": "success" })).unwrap(),
                         ..env
                     }
                 })
@@ -3281,6 +3749,11 @@ mod tests {
         let registry = ProviderRegistry::builder()
             .register(std::sync::Arc::new(provider))
             .register(std::sync::Arc::new(FakeMessagingProvider))
+            // A Cloud API responde no mesmo wiremock: os caminhos não colidem
+            // com os da Evolution (`/{phone_number_id}/messages`).
+            .register(std::sync::Arc::new(MetaCloudProvider::new(
+                wiremock_server.uri(),
+            )))
             .build();
 
         let redis_conn = fake_bus(29257).await;
@@ -3845,5 +4318,274 @@ mod tests {
         std::env::set_var("SMARTCORE_MEDIA_MAX_BYTES", "nao-numero");
         assert_eq!(limite_midia_bytes(), 20 * 1024 * 1024);
         std::env::remove_var("SMARTCORE_MEDIA_MAX_BYTES");
+    }
+
+    // ------------------------------------------------- canais e roteamento
+
+    fn pedido(metodo: &str, corpo: serde_json::Value) -> Envelope {
+        Envelope {
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&corpo).unwrap(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn habilitados_ausente_e_so_a_evolution() {
+        assert_eq!(lista_de_habilitados(None), vec!["evolution"]);
+        assert_eq!(lista_de_habilitados(Some("  ")), vec!["evolution"]);
+        assert_eq!(
+            lista_de_habilitados(Some("Evolution, meta_cloud ,")),
+            vec!["evolution", "meta_cloud"]
+        );
+    }
+
+    #[tokio::test]
+    async fn catalogo_lista_provedores_com_descritor_e_habilitacao() {
+        let (_server, state, pg_handle) = setup_test_env().await;
+        std::env::remove_var("SMARTCORE_CANAIS_HABILITADOS");
+
+        let res = handler_list_channel_providers(
+            state,
+            pedido("ListChannelProviders", serde_json::json!({})),
+        )
+        .await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let corpo: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        let provedores = corpo["provedores"].as_array().unwrap();
+        let achar = |id: &str| {
+            provedores
+                .iter()
+                .find(|p| p["provider"] == id)
+                .unwrap_or_else(|| panic!("{id} fora do catálogo"))
+                .clone()
+        };
+
+        let evo = achar("evolution");
+        assert_eq!(evo["habilitado"], true);
+        assert_eq!(evo["connection_mode"], "qr_pairing");
+
+        // Experimental e fora da lista do ambiente: aparece, mas desabilitado.
+        let meta = achar("meta_cloud");
+        assert_eq!(meta["habilitado"], false);
+        assert_eq!(meta["connection_mode"], "token");
+        assert!(meta["config_schema"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["chave"] == "access_token" && c["tipo"] == "segredo"));
+
+        // Planejado: sem adaptador, nunca habilitado.
+        let web = achar("webchat");
+        assert_eq!(web["habilitado"], false);
+        assert_eq!(web["estagio"], "planejado");
+
+        pg_handle.abort();
+    }
+
+    /// Roteamento do ENVIO pelo provedor gravado na conexão: a instância 77 é
+    /// da Cloud API, então o texto sai pelo Graph (`/{phone_number_id}/messages`
+    /// com o token dela) e nunca pela Evolution.
+    #[tokio::test]
+    async fn envio_segue_o_provedor_da_conexao() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("POST"))
+            .and(path("/555000/messages"))
+            .and(wiremock::matchers::header(
+                "authorization",
+                "Bearer meta-token",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "messages": [{ "id": "wamid.ROTA" }]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/send/text"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let res = handler_send_whatsapp_message(
+            state,
+            pedido(
+                "SendWhatsappMessage",
+                serde_json::json!({ "id": 77, "to_number": "5588999990000", "text": "oi" }),
+            ),
+        )
+        .await;
+        assert_eq!(res.kind, MessageKind::Reply as i32, "{:?}", res.error);
+        let corpo: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(corpo["message_id"], "wamid.ROTA");
+
+        pg_handle.abort();
+    }
+
+    /// Conexão sem QR: o status confere a saúde e NÃO entra no ciclo de
+    /// pareamento (nenhum `/instance/connect` nem `/instance/qr`).
+    #[tokio::test]
+    async fn status_de_conexao_por_token_nao_pede_qr() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("GET"))
+            .and(path("/555000"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({})))
+            .mount(&server)
+            .await;
+        for rota in ["/instance/connect", "/instance/qr"] {
+            Mock::given(path(rota))
+                .respond_with(ResponseTemplate::new(200))
+                .expect(0)
+                .mount(&server)
+                .await;
+        }
+
+        let res = handler_get_whatsapp_instance_status(
+            state,
+            pedido("GetWhatsappInstanceStatus", serde_json::json!({ "id": 77 })),
+        )
+        .await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let corpo: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(corpo["connection_state"], "disconnected");
+        assert!(corpo["qr_code"].is_null());
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn fluxo_de_qr_recusa_provedor_sem_qr() {
+        let (server, state, pg_handle) = setup_test_env().await;
+        std::env::set_var("SMARTCORE_CANAIS_HABILITADOS", "evolution,meta_cloud");
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let res = handler_create_whatsapp_instance(
+            state,
+            pedido(
+                "CreateWhatsappInstance",
+                serde_json::json!({ "instance_name": "x", "provider": "meta_cloud" }),
+            ),
+        )
+        .await;
+        std::env::remove_var("SMARTCORE_CANAIS_HABILITADOS");
+        assert_eq!(res.kind, MessageKind::Error as i32);
+        assert!(res.error.unwrap().message.contains("QR"));
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn conectar_por_credenciais_recusa_provedor_desabilitado() {
+        let (server, state, pg_handle) = setup_test_env().await;
+        std::env::remove_var("SMARTCORE_CANAIS_HABILITADOS");
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let res = handler_connect_channel(
+            state,
+            pedido(
+                "ConnectChannel",
+                serde_json::json!({
+                    "provider": "meta_cloud",
+                    "instance_name": "atendimento",
+                    "campos": [
+                        { "chave": "phone_number_id", "valor": "555000" },
+                        { "chave": "access_token", "valor": "tok" }
+                    ]
+                }),
+            ),
+        )
+        .await;
+        assert_eq!(res.kind, MessageKind::Error as i32);
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn conectar_por_credenciais_valida_e_grava_o_id_externo() {
+        let (server, state, pg_handle) = setup_test_env().await;
+        std::env::set_var("SMARTCORE_CANAIS_HABILITADOS", "evolution,meta_cloud");
+
+        Mock::given(method("GET"))
+            .and(path("/555000"))
+            .and(wiremock::matchers::header("authorization", "Bearer tok"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "display_phone_number": "+55 88 98106-1874",
+                "verified_name": "Loja"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let res = handler_connect_channel(
+            state,
+            pedido(
+                "ConnectChannel",
+                serde_json::json!({
+                    "provider": "meta_cloud",
+                    "instance_name": "atendimento",
+                    "campos": [
+                        { "chave": "phone_number_id", "valor": "555000" },
+                        { "chave": "access_token", "valor": "tok" },
+                        // Chave fora do formulário declarado: descartada.
+                        { "chave": "inventada", "valor": "x" }
+                    ]
+                }),
+            ),
+        )
+        .await;
+        std::env::remove_var("SMARTCORE_CANAIS_HABILITADOS");
+        assert_eq!(res.kind, MessageKind::Reply as i32, "{:?}", res.error);
+        let corpo: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(corpo["id"], 42);
+        assert_eq!(corpo["provider"], "meta_cloud");
+        assert_eq!(corpo["phone_number"], "5588981061874");
+        assert_eq!(corpo["connection_state"], "connected");
+
+        pg_handle.abort();
+    }
+
+    /// Sessão da Cloud API não existe: religar e desconectar respondem erro
+    /// claro, sem chamar provedor nenhum.
+    #[tokio::test]
+    async fn religar_e_desconectar_conexao_sem_sessao_dao_erro_claro() {
+        let (server, state, pg_handle) = setup_test_env().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let res = handler_reconnect_whatsapp_instance(
+            state.clone(),
+            pedido("ReconnectWhatsappInstance", serde_json::json!({ "id": 77 })),
+        )
+        .await;
+        assert_eq!(res.kind, MessageKind::Error as i32);
+        assert!(res.error.unwrap().message.contains("religar"));
+
+        let res = handler_disconnect_whatsapp_instance(
+            state,
+            pedido(
+                "DisconnectWhatsappInstance",
+                serde_json::json!({ "id": 77 }),
+            ),
+        )
+        .await;
+        assert_eq!(res.kind, MessageKind::Error as i32);
+
+        pg_handle.abort();
     }
 }

@@ -4,7 +4,7 @@ use infrastructure_messaging::{
     AdvancedSettings, AdvancedSettingsControl, ConnectionState, CreateInstanceResult,
     InstanceManager, MediaDownloadResult, MediaDownloader, MediaType, MessageSender,
     MessagingProvider, MessagingProviderError, PresenceControl, PresenceState, ProfileQuery,
-    Reactions, ReadReceipts, SendMessageResult, WebhookConfig,
+    QrPairing, Reactions, ReadReceipts, SendMessageResult, WebhookConfig,
 };
 use secrecy::SecretString;
 use wiremock::matchers::{body_json, header, method, path};

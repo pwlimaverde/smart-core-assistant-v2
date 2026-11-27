@@ -1,6 +1,19 @@
-//! Contrato genérico de mensageria (WhatsApp). Sem runtime, sem I/O, sem logs.
+//! Contrato genérico de mensageria por canal. Sem runtime, sem I/O, sem logs.
+//!
+//! Núcleo obrigatório de todo canal: [`ChannelLifecycle`] (ciclo de vida da
+//! conexão) + [`MessageSender`] (envio) + o [`ChannelDescriptor`] que o
+//! provedor declara. Tudo o mais — QR, conexão por credenciais, presença,
+//! recibos, reações, mídia — é capacidade opcional descoberta pela fachada
+//! [`MessagingProvider`], com `None` como padrão. Ver o guia em
+//! `doc_dev/arquitetura/guia-novo-provedor-de-canal.md`.
+pub mod canal;
 pub mod errors;
 pub mod registry;
+
+pub use canal::{
+    catalogo_planejado, descritor_efetivo, CampoConfiguracao, Capacidade, ChannelDescriptor,
+    ChannelKind, ConnectionMode, EnderecoNoProvedor, Estagio, TipoCampo,
+};
 
 use async_trait::async_trait;
 pub use errors::MessagingProviderError;
@@ -81,6 +94,13 @@ impl Default for AdvancedSettings {
 }
 
 // ---------- Núcleo OBRIGATÓRIO ----------
+/// Ciclo de vida da conexão no provedor. `ChannelLifecycle` é o nome genérico
+/// (contrato de canal); `InstanceManager` fica como nome histórico, porque é
+/// assim que os adaptadores e testes já o implementam.
+///
+/// Provedor que não tem uma operação devolve
+/// [`MessagingProviderError::Unsupported`] — nunca `Ok` de mentira. Quem chama
+/// consulta o descritor antes, e o erro é a rede de segurança.
 #[async_trait]
 pub trait InstanceManager: Send + Sync {
     fn provider_name(&self) -> &'static str;
@@ -106,11 +126,6 @@ pub trait InstanceManager: Send + Sync {
         name: &str,
         token: &SecretString,
     ) -> Result<(), MessagingProviderError>;
-    async fn get_qr_code(
-        &self,
-        name: &str,
-        token: &SecretString,
-    ) -> Result<String, MessagingProviderError>;
     async fn get_connection_state(
         &self,
         name: &str,
@@ -144,7 +159,53 @@ pub trait MessageSender: Send + Sync {
     ) -> Result<SendMessageResult, MessagingProviderError>;
 }
 
+pub use InstanceManager as ChannelLifecycle;
+
+/// Uma credencial digitada no formulário do provedor (`config_schema`).
+pub struct CredencialInformada {
+    pub chave: String,
+    pub valor: SecretString,
+}
+
+/// Uma conexão aceita pelo provedor a partir de credenciais.
+pub struct CanalConectado {
+    /// Id da conexão no provedor (o `phone_number_id` na Cloud API). Vai para
+    /// `whatsapp_instance.instance_id` e é a chave de roteamento do webhook.
+    pub id_externo: String,
+    pub telefone: Option<String>,
+    pub nome_exibicao: Option<String>,
+    /// O que o adaptador recebe como `token` nas próximas chamadas. Vai cifrado
+    /// para `whatsapp_instance.api_key`.
+    pub token: SecretString,
+    /// Configuração NÃO secreta do provedor (ex.: `waba_id`). Vai para
+    /// `whatsapp_instance.provider_config`.
+    pub config: serde_json::Value,
+}
+
 // ---------- Capacidades OPCIONAIS ----------
+
+/// Pareamento por QR (Evolution Go). Pedir o QR pode reiniciar o cliente no
+/// provedor — quem chama controla a frequência (ver o cache do `data_whatsapp`).
+#[async_trait]
+pub trait QrPairing: Send + Sync {
+    async fn get_qr_code(
+        &self,
+        name: &str,
+        token: &SecretString,
+    ) -> Result<String, MessagingProviderError>;
+}
+
+/// Conexão por credenciais (Cloud API da Meta, bot do Telegram). O adaptador
+/// VALIDA as credenciais no provedor antes de devolver: credencial errada é
+/// erro aqui, não uma conexão morta gravada no banco.
+#[async_trait]
+pub trait TokenConnect: Send + Sync {
+    async fn conectar_com_credenciais(
+        &self,
+        campos: &[CredencialInformada],
+    ) -> Result<CanalConectado, MessagingProviderError>;
+}
+
 #[async_trait]
 pub trait PresenceControl: Send + Sync {
     async fn set_presence(
@@ -213,6 +274,16 @@ pub trait AdvancedSettingsControl: Send + Sync {
 
 // ---------- Fachada: núcleo + DESCOBERTA de capacidades (default None) ----------
 pub trait MessagingProvider: InstanceManager + MessageSender {
+    /// O que o provedor declara de si. Obrigatório: sem descritor a tela não
+    /// sabe como conectar. A borda usa [`descritor_efetivo`], que corrige as
+    /// capacidades opcionais pelo que os traits realmente implementam.
+    fn descritor(&self) -> ChannelDescriptor;
+    fn qr_pairing(&self) -> Option<&dyn QrPairing> {
+        None
+    }
+    fn token_connect(&self) -> Option<&dyn TokenConnect> {
+        None
+    }
     fn presence(&self) -> Option<&dyn PresenceControl> {
         None
     }

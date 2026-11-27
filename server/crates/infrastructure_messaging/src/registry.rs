@@ -29,6 +29,17 @@ impl ProviderRegistry {
             MessagingProviderError::Config(format!("provedor não registrado: {provider}"))
         })
     }
+
+    /// Todos os provedores registrados, em ordem estável de chave (a tela não
+    /// pode trocar a ordem dos cartões a cada carga).
+    pub fn listar(&self) -> Vec<Arc<dyn MessagingProvider>> {
+        let mut chaves: Vec<&String> = self.map.keys().collect();
+        chaves.sort();
+        chaves
+            .into_iter()
+            .filter_map(|k| self.map.get(k).cloned())
+            .collect()
+    }
 }
 
 #[derive(Default)]

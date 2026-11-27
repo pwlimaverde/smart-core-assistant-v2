@@ -1,10 +1,11 @@
 use crate::client::{id_da_mensagem_enviada, AvatarResp, DownloadMediaResp, EvolutionProvider};
 use async_trait::async_trait;
 use infrastructure_messaging::{
-    AdvancedSettings, AdvancedSettingsControl, ConnectionState, CreateInstanceResult,
+    AdvancedSettings, AdvancedSettingsControl, Capacidade, ChannelDescriptor, ChannelKind,
+    ConnectionMode, ConnectionState, CreateInstanceResult, EnderecoNoProvedor, Estagio,
     InstanceManager, MediaDownloadResult, MediaDownloader, MediaType, MessageSender,
     MessagingProvider, MessagingProviderError, PresenceControl, PresenceState, ProfileQuery,
-    Reactions, ReadReceipts, SendMessageResult, WebhookConfig,
+    QrPairing, Reactions, ReadReceipts, SendMessageResult, WebhookConfig,
 };
 use secrecy::{ExposeSecret, SecretString};
 use std::time::Duration;
@@ -337,30 +338,6 @@ impl InstanceManager for EvolutionProvider {
 
         Self::ok_or_api(resp).await?;
         Ok(())
-    }
-
-    #[tracing::instrument(err, skip(self, instance_token), fields(provider = "evolution", instance_name = %instance_name))]
-    async fn get_qr_code(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-    ) -> Result<String, MessagingProviderError> {
-        let resp = self
-            .http
-            .get(format!("{}/instance/qr", self.base_url))
-            .header("apikey", instance_token.expose_secret())
-            .send()
-            .await
-            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
-
-        let resp = Self::ok_or_api(resp).await?;
-        let corpo = Self::json_do_provedor(resp).await?;
-
-        qr_do_corpo(&corpo).ok_or_else(|| {
-            MessagingProviderError::Deserialization(
-                "Não foi possível extrair o QR code da resposta".into(),
-            )
-        })
     }
 
     #[tracing::instrument(err, skip(self, instance_token), fields(provider = "evolution", instance_name = %instance_name))]
@@ -863,7 +840,73 @@ impl AdvancedSettingsControl for EvolutionProvider {
     }
 }
 
+/// O QR é capacidade só da Evolution: a Cloud API e os demais canais conectam
+/// por credenciais ou OAuth.
+#[async_trait]
+impl QrPairing for EvolutionProvider {
+    #[tracing::instrument(err, skip(self, instance_token), fields(provider = "evolution", instance_name = %instance_name))]
+    async fn get_qr_code(
+        &self,
+        instance_name: &str,
+        instance_token: &SecretString,
+    ) -> Result<String, MessagingProviderError> {
+        let resp = self
+            .http
+            .get(format!("{}/instance/qr", self.base_url))
+            .header("apikey", instance_token.expose_secret())
+            .send()
+            .await
+            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
+
+        let resp = Self::ok_or_api(resp).await?;
+        let corpo = Self::json_do_provedor(resp).await?;
+
+        qr_do_corpo(&corpo).ok_or_else(|| {
+            MessagingProviderError::Deserialization(
+                "Não foi possível extrair o QR code da resposta".into(),
+            )
+        })
+    }
+}
+
+/// Eventos que a evolution-go entrega no webhook da instância. Recibos de
+/// entrega e leitura (`READ_RECEIPT`) ficam aqui: sem eles o ✓✓ nunca aparece.
+const EVENTOS_DO_WEBHOOK: [&str; 5] = [
+    "MESSAGE",
+    "CONNECTION",
+    "PRESENCE",
+    "QRCODE",
+    "READ_RECEIPT",
+];
+
 impl MessagingProvider for EvolutionProvider {
+    fn descritor(&self) -> ChannelDescriptor {
+        ChannelDescriptor {
+            provider: "evolution".into(),
+            kind: ChannelKind::Whatsapp,
+            nome: "WhatsApp (QR code)".into(),
+            descricao: "Conecta um número de WhatsApp lendo o QR code no celular,                         como no WhatsApp Web. Usa o gateway Evolution Go do servidor."
+                .into(),
+            estagio: Estagio::Estavel,
+            connection_mode: ConnectionMode::QrPairing,
+            endereco: EnderecoNoProvedor::Nome,
+            // O nome da conexão é pedido pela própria tela de QR; não há
+            // credencial a informar.
+            config_schema: vec![],
+            capacidades: vec![
+                Capacidade::Health,
+                Capacidade::Reconexao,
+                Capacidade::Desconectar,
+                Capacidade::RegistraWebhook,
+                Capacidade::EnvioTexto,
+                Capacidade::EnvioMidia,
+            ],
+            eventos_webhook: EVENTOS_DO_WEBHOOK.iter().map(|e| e.to_string()).collect(),
+        }
+    }
+    fn qr_pairing(&self) -> Option<&dyn QrPairing> {
+        Some(self)
+    }
     fn presence(&self) -> Option<&dyn PresenceControl> {
         Some(self)
     }
@@ -916,6 +959,52 @@ mod tests {
     }
 
     use super::*;
+
+    /// Contrato do descritor da Evolution: QR é o modo de conexão, os eventos
+    /// do webhook são os de sempre (a mudança para o descritor não pode trocar
+    /// o que as instâncias existentes, como a 181 da dev, assinam), e as
+    /// capacidades opcionais batem com os traits implementados.
+    #[test]
+    fn descritor_da_evolution_preserva_o_comportamento_atual() {
+        let p = EvolutionProvider::new("http://x".into(), SecretString::from("k".to_string()));
+        let d = infrastructure_messaging::descritor_efetivo(&p);
+        assert_eq!(d.provider, "evolution");
+        assert_eq!(
+            d.provider,
+            p.provider_name(),
+            "chave do registro = provider do banco"
+        );
+        assert_eq!(d.connection_mode, ConnectionMode::QrPairing);
+        assert_eq!(d.endereco, EnderecoNoProvedor::Nome);
+        assert_eq!(
+            d.eventos_webhook,
+            vec![
+                "MESSAGE",
+                "CONNECTION",
+                "PRESENCE",
+                "QRCODE",
+                "READ_RECEIPT"
+            ]
+        );
+        for c in [
+            Capacidade::QrPairing,
+            Capacidade::Health,
+            Capacidade::Reconexao,
+            Capacidade::Desconectar,
+            Capacidade::RegistraWebhook,
+            Capacidade::EnvioTexto,
+            Capacidade::EnvioMidia,
+            Capacidade::Presenca,
+            Capacidade::Recibos,
+            Capacidade::Reacoes,
+            Capacidade::DownloadMidia,
+            Capacidade::FotoPerfil,
+        ] {
+            assert!(d.suporta(c), "{c:?}");
+        }
+        assert!(!d.suporta(Capacidade::TokenConnect));
+        assert!(!d.suporta(Capacidade::Templates));
+    }
 
     // `map_state` é lógica pura de normalização dos vários rótulos de estado que a
     // Evolution API retorna para o enum canônico `ConnectionState`. Testável sem HTTP.
