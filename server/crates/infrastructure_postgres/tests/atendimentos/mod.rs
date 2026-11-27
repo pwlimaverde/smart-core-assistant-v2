@@ -3,7 +3,10 @@ use crate::common::{
 };
 use infrastructure_postgres::{
     atendimentos::{
-        atendimentos::{AtendimentoRepository, PostgresAtendimentoRepository},
+        atendimentos::{
+            atendimento_para_mensagem_do_contato, AtendimentoRepository,
+            PostgresAtendimentoRepository,
+        },
         campos::{
             CampoPersonalizadoRepository, PostgresCampoPersonalizadoRepository,
             PostgresValorCampoRepository, ValorCampoRepository,
@@ -626,84 +629,119 @@ async fn painel_nao_abre_segundo_atendimento_para_o_mesmo_contato() {
     tx.rollback().await.unwrap();
 }
 
-/// Quem arquivou por inatividade e volta a escrever cai na mesma conversa. Sem
-/// isto, cada mensagem nova abria um card que o scheduler arquivava 30 minutos
-/// depois, e o cliente sumia da tela do atendente.
-#[tokio::test]
-async fn cliente_que_volta_reabre_o_arquivado_recente() {
-    let pool = obter_pool_teste().await;
-    let mut tx = pool.begin().await.unwrap();
-
-    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Reabre Arquivado").await;
-    configurar_tenant_transacao(&mut tx, tenant.id).await;
-    let ctx = criar_contexto_teste(tenant.id);
-
+/// Prepara um contato com um atendimento no status pedido, para os testes da
+/// política de ticket da ingestão. `data_fim` recente imita o encerramento de
+/// minutos atrás — o caso que a antiga reabertura de arquivado pegava.
+async fn contato_com_atendimento_em(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ctx: &RequestContext,
+    telefone: &str,
+    status: &str,
+) -> (i32, i32) {
     let contato = PostgresContatoRepository
-        .salvar(&mut tx, &ctx, "5511955554444", Some("Cliente Volta"))
+        .salvar(tx, ctx, telefone, Some("Cliente Política"))
         .await
         .unwrap();
-    let antigo = PostgresAtendimentoRepository
-        .criar(&mut tx, &ctx, contato.id, None, None, None)
+    let anterior = PostgresAtendimentoRepository
+        .criar(tx, ctx, contato.id, None, None, None)
         .await
         .unwrap();
     sqlx::query(
-        "UPDATE oraculo_atendimento SET status = 'arquivado', data_fim = NOW() - INTERVAL '1 hour' WHERE id = $1",
+        "UPDATE oraculo_atendimento SET status = $2, \
+         data_fim = CASE WHEN $2 = 'fila' THEN NULL ELSE NOW() - INTERVAL '1 hour' END \
+         WHERE id = $1",
     )
-    .bind(antigo.id)
-    .execute(&mut *tx)
+    .bind(anterior.id)
+    .bind(status)
+    .execute(&mut **tx)
     .await
     .unwrap();
+    (contato.id, anterior.id)
+}
 
-    let reaberto = PostgresAtendimentoRepository
-        .reabrir_arquivado_recente(&mut tx, &ctx, contato.id)
+/// Contrato da ingestão: mensagem nova de contato com atendimento RESOLVIDO abre
+/// atendimento novo; o resolvido não recebe mensagem nem muda de status.
+#[tokio::test]
+async fn mensagem_nova_em_resolvido_abre_atendimento_novo() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Politica Resolvido").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let (contato_id, anterior_id) =
+        contato_com_atendimento_em(&mut tx, &ctx, "5511955554401", "resolvido").await;
+
+    let (atendimento, novo) = atendimento_para_mensagem_do_contato(&mut tx, &ctx, contato_id)
         .await
         .unwrap();
-    assert_eq!(reaberto.map(|a| a.id), Some(antigo.id));
+    assert!(novo, "resolvido não pode ser reaproveitado");
+    assert_ne!(atendimento.id, anterior_id);
+    assert_eq!(atendimento.status, "fila");
 
-    let ativo = PostgresAtendimentoRepository
-        .buscar_ativo_por_contato(&mut tx, &ctx, contato.id)
+    let anterior = PostgresAtendimentoRepository
+        .buscar_por_id(&mut tx, &ctx, anterior_id)
         .await
+        .unwrap()
         .unwrap();
-    assert_eq!(
-        ativo.map(|a| a.id),
-        Some(antigo.id),
-        "a conversa precisa voltar a ficar ativa"
-    );
+    assert_eq!(anterior.status, "resolvido", "o encerrado fica encerrado");
 
     tx.rollback().await.unwrap();
 }
 
-/// Arquivado há mais de 7 dias não é reaberto: a próxima mensagem abre conversa nova.
+/// Contrato da ingestão: ARQUIVADO há pouco também abre atendimento novo. A
+/// reabertura antiga trocava só o status para `fila` e deixava o cartão na
+/// coluna de finalização, recebendo mensagem como se estivesse resolvido.
 #[tokio::test]
-async fn arquivado_antigo_nao_e_reaberto() {
+async fn mensagem_nova_em_arquivado_abre_atendimento_novo() {
     let pool = obter_pool_teste().await;
     let mut tx = pool.begin().await.unwrap();
 
-    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Arquivado Antigo").await;
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Politica Arquivado").await;
     configurar_tenant_transacao(&mut tx, tenant.id).await;
     let ctx = criar_contexto_teste(tenant.id);
 
-    let contato = PostgresContatoRepository
-        .salvar(&mut tx, &ctx, "5511944443333", Some("Cliente Antigo"))
-        .await
-        .unwrap();
-    let antigo = PostgresAtendimentoRepository
-        .criar(&mut tx, &ctx, contato.id, None, None, None)
-        .await
-        .unwrap();
-    sqlx::query(
-        "UPDATE oraculo_atendimento SET status = 'arquivado', data_fim = NOW() - INTERVAL '8 days' WHERE id = $1",
-    )
-    .bind(antigo.id)
-    .execute(&mut *tx)
-    .await
-    .unwrap();
+    for (i, status) in ["arquivado", "cancelado"].into_iter().enumerate() {
+        let (contato_id, anterior_id) =
+            contato_com_atendimento_em(&mut tx, &ctx, &format!("551195555441{i}"), status).await;
 
-    let reaberto = PostgresAtendimentoRepository
-        .reabrir_arquivado_recente(&mut tx, &ctx, contato.id)
+        let (atendimento, novo) = atendimento_para_mensagem_do_contato(&mut tx, &ctx, contato_id)
+            .await
+            .unwrap();
+        assert!(novo, "{status} não pode ser reaberto pela mensagem nova");
+        assert_ne!(atendimento.id, anterior_id);
+
+        let anterior = PostgresAtendimentoRepository
+            .buscar_por_id(&mut tx, &ctx, anterior_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(anterior.status, status, "o {status} fica como estava");
+    }
+
+    tx.rollback().await.unwrap();
+}
+
+/// Contrato da ingestão: atendimento ainda ATIVO (na fila) continua recebendo
+/// as mensagens do contato — nada de segundo cartão.
+#[tokio::test]
+async fn mensagem_nova_em_fila_continua_no_mesmo_atendimento() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Politica Fila").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let (contato_id, anterior_id) =
+        contato_com_atendimento_em(&mut tx, &ctx, "5511955554420", "fila").await;
+
+    let (atendimento, novo) = atendimento_para_mensagem_do_contato(&mut tx, &ctx, contato_id)
         .await
         .unwrap();
-    assert!(reaberto.is_none());
+    assert!(!novo, "a fila é reaproveitada");
+    assert_eq!(atendimento.id, anterior_id);
 
     tx.rollback().await.unwrap();
 }

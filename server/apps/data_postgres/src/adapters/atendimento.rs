@@ -1122,7 +1122,6 @@ impl AtendimentoStore for PgAtendimentoStore {
         push_name: Option<String>,
     ) -> Result<(i32, Atendimento, bool), DbError> {
         let repo_contato = PostgresContatoRepository;
-        let repo_atendimento = PostgresAtendimentoRepository;
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
         let telefone = telefone.to_string();
@@ -1165,26 +1164,13 @@ impl AtendimentoStore for PgAtendimentoStore {
                 .await?;
             }
 
-            let mut is_new = false;
-            // 2. Busca se já existe um atendimento ativo para o contato
-            let atendimento = match repo_atendimento
-                .buscar_ativo_por_contato(&mut tx, &ctx, contato.id)
-                .await?
-            {
-                Some(a) => a,
-                None => match repo_atendimento
-                    .reabrir_arquivado_recente(&mut tx, &ctx, contato.id)
-                    .await?
-                {
-                    Some(a) => a,
-                    None => {
-                        is_new = true;
-                        repo_atendimento
-                            .criar(&mut tx, &ctx, contato.id, None, None, None)
-                            .await?
-                    }
-                },
-            };
+            // 2. Política de ticket: reaproveita só atendimento ativo; encerrado
+            // (resolvido/cancelado/arquivado) abre um novo.
+            let (atendimento, is_new) =
+                infrastructure_postgres::atendimentos::atendimentos::atendimento_para_mensagem_do_contato(
+                    &mut tx, &ctx, contato.id,
+                )
+                .await?;
 
             Ok(((contato.id, atendimento, is_new), tx))
         })
