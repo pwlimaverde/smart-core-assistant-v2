@@ -151,10 +151,35 @@ smoke() {
   [ -z "$falhas" ]
 }
 
+# Religamento do WhatsApp depois de recriar a Evolution. Só AVISA (não reprova):
+# sessão revogada no celular não é defeito do deploy, e voltar o bundle por isso
+# derrubaria o WhatsApp de todos. O aviso existe porque o incidente de
+# 2026-11-26 passou despercebido — o deploy saiu "ok" com a instância parada.
+confere_whatsapp() {
+  local cid inicio total ligadas espera=0
+  cid=$(dci "$BUNDLE" ps -q evolution 2>/dev/null || true)
+  [ -n "$cid" ] || return 0
+  inicio=$(docker inspect -f '{{.State.StartedAt}}' "$cid")
+  while [ "$espera" -lt 120 ]; do
+    total=$(docker logs --since "$inicio" "$cid" 2>&1 | sed -nE 's/.*Found ([0-9]+) connected instances.*/\1/p' | tail -n 1)
+    ligadas=$(docker logs --since "$inicio" "$cid" 2>&1 | grep -c 'Connected to Whatsapp' || true)
+    if [ -n "$total" ] && [ "$ligadas" -ge "$total" ]; then
+      echo "ok  evolution: $ligadas de $total instâncias religadas"; return 0
+    fi
+    sleep 5; espera=$((espera + 5))
+  done
+  if [ -z "$total" ]; then
+    echo "::warning::evolution: sem 'Found N connected instances' no boot (CONNECT_ON_STARTUP desligado?) — conferir /instance/status"
+  else
+    echo "::warning::evolution: $ligadas de $total instâncias religadas em 120s — conferir /instance/status e reconectar pelo painel"
+  fi
+}
+
 ANT="$(anterior)"
 if dci "$BUNDLE" up -d --pull missing --quiet-pull --remove-orphans && smoke "$BUNDLE"; then
   ln -sfn "$ID" "$DIR_REL/.current.tmp" && mv -Tf "$DIR_REL/.current.tmp" "$DIR_REL/current"
   marca ok
+  [ "$COMP" = evolution ] && confere_whatsapp
   # Retenção: 5 bundles por componente (o current nunca sai).
   find "$DIR_REL" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -printf '%T@ %f\n' | sort -rn | tail -n +6 \
     | cut -d' ' -f2- | while read -r velho; do [ "$velho" = "$ID" ] || rm -rf "${DIR_REL:?}/$velho"; done
