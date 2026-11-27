@@ -13158,9 +13158,11 @@ class UpdateTenantUserResponse extends $pb.GeneratedMessage {
 class CreateMyWhatsappInstanceRequest extends $pb.GeneratedMessage {
   factory CreateMyWhatsappInstanceRequest({
     $core.String? instanceName,
+    $core.String? provider,
   }) {
     final result = create();
     if (instanceName != null) result.instanceName = instanceName;
+    if (provider != null) result.provider = provider;
     return result;
   }
 
@@ -13179,6 +13181,7 @@ class CreateMyWhatsappInstanceRequest extends $pb.GeneratedMessage {
           _omitMessageNames ? '' : 'smartcore.contracts.queries'),
       createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'instanceName')
+    ..aOS(2, _omitFieldNames ? '' : 'provider')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -13213,6 +13216,17 @@ class CreateMyWhatsappInstanceRequest extends $pb.GeneratedMessage {
   $core.bool hasInstanceName() => $_has(0);
   @$pb.TagNumber(1)
   void clearInstanceName() => $_clearField(1);
+
+  /// Contrato de canal — provedor de QR escolhido na tela de Integrações.
+  /// Vazio = `evolution`, o comportamento de antes (cliente antigo não manda).
+  @$pb.TagNumber(2)
+  $core.String get provider => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set provider($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasProvider() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearProvider() => $_clearField(2);
 }
 
 class CreateMyWhatsappInstanceResponse extends $pb.GeneratedMessage {
@@ -13432,6 +13446,635 @@ class GetMyWhatsappInstanceStatusResponse extends $pb.GeneratedMessage {
   $core.bool hasQrCode() => $_has(1);
   @$pb.TagNumber(2)
   void clearQrCode() => $_clearField(2);
+}
+
+class CampoConfiguracaoCanal extends $pb.GeneratedMessage {
+  factory CampoConfiguracaoCanal({
+    $core.String? chave,
+    $core.String? rotulo,
+    $core.String? tipo,
+    $core.bool? obrigatorio,
+    $core.String? ajuda,
+  }) {
+    final result = create();
+    if (chave != null) result.chave = chave;
+    if (rotulo != null) result.rotulo = rotulo;
+    if (tipo != null) result.tipo = tipo;
+    if (obrigatorio != null) result.obrigatorio = obrigatorio;
+    if (ajuda != null) result.ajuda = ajuda;
+    return result;
+  }
+
+  CampoConfiguracaoCanal._();
+
+  factory CampoConfiguracaoCanal.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CampoConfiguracaoCanal.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CampoConfiguracaoCanal',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'chave')
+    ..aOS(2, _omitFieldNames ? '' : 'rotulo')
+    ..aOS(3, _omitFieldNames ? '' : 'tipo')
+    ..aOB(4, _omitFieldNames ? '' : 'obrigatorio')
+    ..aOS(5, _omitFieldNames ? '' : 'ajuda')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CampoConfiguracaoCanal clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CampoConfiguracaoCanal copyWith(
+          void Function(CampoConfiguracaoCanal) updates) =>
+      super.copyWith((message) => updates(message as CampoConfiguracaoCanal))
+          as CampoConfiguracaoCanal;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CampoConfiguracaoCanal create() => CampoConfiguracaoCanal._();
+  @$core.override
+  CampoConfiguracaoCanal createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CampoConfiguracaoCanal getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CampoConfiguracaoCanal>(create);
+  static CampoConfiguracaoCanal? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get chave => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set chave($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasChave() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearChave() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get rotulo => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set rotulo($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasRotulo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearRotulo() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get tipo => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set tipo($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasTipo() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearTipo() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get obrigatorio => $_getBF(3);
+  @$pb.TagNumber(4)
+  set obrigatorio($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasObrigatorio() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearObrigatorio() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get ajuda => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set ajuda($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAjuda() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAjuda() => $_clearField(5);
+}
+
+class ProvedorDeCanal extends $pb.GeneratedMessage {
+  factory ProvedorDeCanal({
+    $core.String? id,
+    $core.String? tipoCanal,
+    $core.String? nome,
+    $core.String? descricao,
+    $core.String? modoConexao,
+    $core.String? estagio,
+    $core.bool? habilitado,
+    $core.String? motivoIndisponivel,
+    $core.Iterable<CampoConfiguracaoCanal>? campos,
+    $core.Iterable<$core.String>? capacidades,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (tipoCanal != null) result.tipoCanal = tipoCanal;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (modoConexao != null) result.modoConexao = modoConexao;
+    if (estagio != null) result.estagio = estagio;
+    if (habilitado != null) result.habilitado = habilitado;
+    if (motivoIndisponivel != null)
+      result.motivoIndisponivel = motivoIndisponivel;
+    if (campos != null) result.campos.addAll(campos);
+    if (capacidades != null) result.capacidades.addAll(capacidades);
+    return result;
+  }
+
+  ProvedorDeCanal._();
+
+  factory ProvedorDeCanal.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ProvedorDeCanal.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ProvedorDeCanal',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'tipoCanal')
+    ..aOS(3, _omitFieldNames ? '' : 'nome')
+    ..aOS(4, _omitFieldNames ? '' : 'descricao')
+    ..aOS(5, _omitFieldNames ? '' : 'modoConexao')
+    ..aOS(6, _omitFieldNames ? '' : 'estagio')
+    ..aOB(7, _omitFieldNames ? '' : 'habilitado')
+    ..aOS(8, _omitFieldNames ? '' : 'motivoIndisponivel')
+    ..pPM<CampoConfiguracaoCanal>(9, _omitFieldNames ? '' : 'campos',
+        subBuilder: CampoConfiguracaoCanal.create)
+    ..pPS(10, _omitFieldNames ? '' : 'capacidades')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ProvedorDeCanal clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ProvedorDeCanal copyWith(void Function(ProvedorDeCanal) updates) =>
+      super.copyWith((message) => updates(message as ProvedorDeCanal))
+          as ProvedorDeCanal;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ProvedorDeCanal create() => ProvedorDeCanal._();
+  @$core.override
+  ProvedorDeCanal createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ProvedorDeCanal getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ProvedorDeCanal>(create);
+  static ProvedorDeCanal? _defaultInstance;
+
+  /// Chave do provedor (`evolution`, `meta_cloud`, `webchat`).
+  @$pb.TagNumber(1)
+  $core.String get id => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set id($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get tipoCanal => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set tipoCanal($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTipoCanal() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTipoCanal() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get nome => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set nome($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasNome() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearNome() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get descricao => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set descricao($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDescricao() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDescricao() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get modoConexao => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set modoConexao($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasModoConexao() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearModoConexao() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get estagio => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set estagio($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasEstagio() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearEstagio() => $_clearField(6);
+
+  /// Se o tenant pode conectar este provedor neste ambiente.
+  @$pb.TagNumber(7)
+  $core.bool get habilitado => $_getBF(6);
+  @$pb.TagNumber(7)
+  set habilitado($core.bool value) => $_setBool(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasHabilitado() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearHabilitado() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get motivoIndisponivel => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set motivoIndisponivel($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasMotivoIndisponivel() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearMotivoIndisponivel() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $pb.PbList<CampoConfiguracaoCanal> get campos => $_getList(8);
+
+  @$pb.TagNumber(10)
+  $pb.PbList<$core.String> get capacidades => $_getList(9);
+}
+
+class ListMyChannelProvidersRequest extends $pb.GeneratedMessage {
+  factory ListMyChannelProvidersRequest() => create();
+
+  ListMyChannelProvidersRequest._();
+
+  factory ListMyChannelProvidersRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyChannelProvidersRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyChannelProvidersRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyChannelProvidersRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyChannelProvidersRequest copyWith(
+          void Function(ListMyChannelProvidersRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyChannelProvidersRequest))
+          as ListMyChannelProvidersRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyChannelProvidersRequest create() =>
+      ListMyChannelProvidersRequest._();
+  @$core.override
+  ListMyChannelProvidersRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyChannelProvidersRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyChannelProvidersRequest>(create);
+  static ListMyChannelProvidersRequest? _defaultInstance;
+}
+
+class ListMyChannelProvidersResponse extends $pb.GeneratedMessage {
+  factory ListMyChannelProvidersResponse({
+    $core.Iterable<ProvedorDeCanal>? provedores,
+  }) {
+    final result = create();
+    if (provedores != null) result.provedores.addAll(provedores);
+    return result;
+  }
+
+  ListMyChannelProvidersResponse._();
+
+  factory ListMyChannelProvidersResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyChannelProvidersResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyChannelProvidersResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<ProvedorDeCanal>(1, _omitFieldNames ? '' : 'provedores',
+        subBuilder: ProvedorDeCanal.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyChannelProvidersResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyChannelProvidersResponse copyWith(
+          void Function(ListMyChannelProvidersResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyChannelProvidersResponse))
+          as ListMyChannelProvidersResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyChannelProvidersResponse create() =>
+      ListMyChannelProvidersResponse._();
+  @$core.override
+  ListMyChannelProvidersResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyChannelProvidersResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyChannelProvidersResponse>(create);
+  static ListMyChannelProvidersResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<ProvedorDeCanal> get provedores => $_getList(0);
+}
+
+/// Par chave/valor do formulário (o conversor proto→flatbuffers não aceita map).
+class ValorDeCampoCanal extends $pb.GeneratedMessage {
+  factory ValorDeCampoCanal({
+    $core.String? chave,
+    $core.String? valor,
+  }) {
+    final result = create();
+    if (chave != null) result.chave = chave;
+    if (valor != null) result.valor = valor;
+    return result;
+  }
+
+  ValorDeCampoCanal._();
+
+  factory ValorDeCampoCanal.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ValorDeCampoCanal.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ValorDeCampoCanal',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'chave')
+    ..aOS(2, _omitFieldNames ? '' : 'valor')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ValorDeCampoCanal clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ValorDeCampoCanal copyWith(void Function(ValorDeCampoCanal) updates) =>
+      super.copyWith((message) => updates(message as ValorDeCampoCanal))
+          as ValorDeCampoCanal;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ValorDeCampoCanal create() => ValorDeCampoCanal._();
+  @$core.override
+  ValorDeCampoCanal createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ValorDeCampoCanal getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ValorDeCampoCanal>(create);
+  static ValorDeCampoCanal? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get chave => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set chave($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasChave() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearChave() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get valor => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set valor($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasValor() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearValor() => $_clearField(2);
+}
+
+/// Conexão por credenciais (`modo_conexao = token`). O servidor valida no
+/// provedor antes de gravar; segredo não volta na resposta.
+class ConnectMyChannelRequest extends $pb.GeneratedMessage {
+  factory ConnectMyChannelRequest({
+    $core.String? provider,
+    $core.String? instanceName,
+    $core.Iterable<ValorDeCampoCanal>? campos,
+  }) {
+    final result = create();
+    if (provider != null) result.provider = provider;
+    if (instanceName != null) result.instanceName = instanceName;
+    if (campos != null) result.campos.addAll(campos);
+    return result;
+  }
+
+  ConnectMyChannelRequest._();
+
+  factory ConnectMyChannelRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ConnectMyChannelRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ConnectMyChannelRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'provider')
+    ..aOS(2, _omitFieldNames ? '' : 'instanceName')
+    ..pPM<ValorDeCampoCanal>(3, _omitFieldNames ? '' : 'campos',
+        subBuilder: ValorDeCampoCanal.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ConnectMyChannelRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ConnectMyChannelRequest copyWith(
+          void Function(ConnectMyChannelRequest) updates) =>
+      super.copyWith((message) => updates(message as ConnectMyChannelRequest))
+          as ConnectMyChannelRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ConnectMyChannelRequest create() => ConnectMyChannelRequest._();
+  @$core.override
+  ConnectMyChannelRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ConnectMyChannelRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ConnectMyChannelRequest>(create);
+  static ConnectMyChannelRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get provider => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set provider($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProvider() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProvider() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get instanceName => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set instanceName($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasInstanceName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearInstanceName() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $pb.PbList<ValorDeCampoCanal> get campos => $_getList(2);
+}
+
+class ConnectMyChannelResponse extends $pb.GeneratedMessage {
+  factory ConnectMyChannelResponse({
+    $core.int? id,
+    $core.String? instanceName,
+    $core.String? provider,
+    $core.String? phoneNumber,
+    $core.String? connectionState,
+    $core.String? webhookUrl,
+    $core.String? instrucoes,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (instanceName != null) result.instanceName = instanceName;
+    if (provider != null) result.provider = provider;
+    if (phoneNumber != null) result.phoneNumber = phoneNumber;
+    if (connectionState != null) result.connectionState = connectionState;
+    if (webhookUrl != null) result.webhookUrl = webhookUrl;
+    if (instrucoes != null) result.instrucoes = instrucoes;
+    return result;
+  }
+
+  ConnectMyChannelResponse._();
+
+  factory ConnectMyChannelResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ConnectMyChannelResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ConnectMyChannelResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'instanceName')
+    ..aOS(3, _omitFieldNames ? '' : 'provider')
+    ..aOS(4, _omitFieldNames ? '' : 'phoneNumber')
+    ..aOS(5, _omitFieldNames ? '' : 'connectionState')
+    ..aOS(6, _omitFieldNames ? '' : 'webhookUrl')
+    ..aOS(7, _omitFieldNames ? '' : 'instrucoes')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ConnectMyChannelResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ConnectMyChannelResponse copyWith(
+          void Function(ConnectMyChannelResponse) updates) =>
+      super.copyWith((message) => updates(message as ConnectMyChannelResponse))
+          as ConnectMyChannelResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ConnectMyChannelResponse create() => ConnectMyChannelResponse._();
+  @$core.override
+  ConnectMyChannelResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ConnectMyChannelResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ConnectMyChannelResponse>(create);
+  static ConnectMyChannelResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get instanceName => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set instanceName($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasInstanceName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearInstanceName() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get provider => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set provider($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasProvider() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearProvider() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get phoneNumber => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set phoneNumber($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPhoneNumber() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPhoneNumber() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get connectionState => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set connectionState($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasConnectionState() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearConnectionState() => $_clearField(5);
+
+  /// Onde o webhook do provedor deve apontar (vazio quando não se aplica).
+  @$pb.TagNumber(6)
+  $core.String get webhookUrl => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set webhookUrl($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasWebhookUrl() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearWebhookUrl() => $_clearField(6);
+
+  /// O que a pessoa precisa fazer a seguir, em texto para a tela.
+  @$pb.TagNumber(7)
+  $core.String get instrucoes => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set instrucoes($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasInstrucoes() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearInstrucoes() => $_clearField(7);
 }
 
 class CreateMyDepartamentoRequest extends $pb.GeneratedMessage {

@@ -2,6 +2,7 @@ import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../domain/usecases/conexoes_usecases.dart';
 import '../controllers/conexoes_controllers.dart';
+import '../controllers/integracoes_controller.dart';
 import '../pages/conexoes_page.dart';
 
 /// Gestão das conexões de WhatsApp — rota administrativa do tenant.
@@ -27,6 +28,14 @@ final class ConexoesRoute extends GetItModule {
         desconectar: inject<DesconectarConexaoUsecase>(),
         definirDepartamento: inject<DefinirDepartamentoDaConexaoUsecase>(),
         detalhe: inject<DetalheDaConexaoUsecase>(),
+      ),
+    );
+    // Tela de Integrações: abre por cima desta rota (catálogo de provedores e
+    // conexão por credenciais).
+    i.controller<IntegracoesController>(
+      () => IntegracoesController(
+        listar: inject<ListarProvedoresUsecase>(),
+        conectar: inject<ConectarCanalUsecase>(),
       ),
     );
   }

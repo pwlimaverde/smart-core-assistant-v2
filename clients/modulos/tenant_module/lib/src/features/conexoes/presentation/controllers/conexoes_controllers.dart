@@ -166,10 +166,15 @@ final class ConexoesController extends BaseController<List<Conexao>> {
     return usecase(ConexaoIdParameters(id: id));
   }
 
+  /// Cria a conexão de QR. [provedor] vem da tela de Integrações; o padrão é
+  /// o provedor de QR de antes dela existir.
   Future<ReturnSuccessOrError<ConexaoCriada, ConexoesError>> criar(
-    String nome,
-  ) async {
-    final res = await _criar(CriarConexaoParameters(nome: nome));
+    String nome, {
+    String provedor = 'evolution',
+  }) async {
+    final res = await _criar(
+      CriarConexaoParameters(nome: nome, provedor: provedor),
+    );
     if (res is Success) await carregar();
     return res;
   }

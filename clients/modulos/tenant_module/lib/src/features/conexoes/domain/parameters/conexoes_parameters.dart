@@ -12,7 +12,14 @@ final class ConexaoIdParameters extends Parameters {
 final class CriarConexaoParameters extends Parameters {
   final String nome;
 
-  const CriarConexaoParameters({required this.nome});
+  /// Provedor de QR escolhido na tela de Integrações. O padrão é o de antes
+  /// desta tela existir.
+  final String provedor;
+
+  const CriarConexaoParameters({
+    required this.nome,
+    this.provedor = 'evolution',
+  });
 }
 
 /// Liga/desliga a resposta automática da IA para a conexão inteira (D3).
@@ -34,5 +41,19 @@ final class DepartamentoDaConexaoParameters extends Parameters {
   const DepartamentoDaConexaoParameters({
     required this.id,
     required this.departamentoId,
+  });
+}
+
+/// Conexão por credenciais: o provedor, o nome da conexão e os valores do
+/// formulário que ele declarou (chave → valor).
+final class ConectarCanalParameters extends Parameters {
+  final String provedor;
+  final String nome;
+  final Map<String, String> valores;
+
+  const ConectarCanalParameters({
+    required this.provedor,
+    required this.nome,
+    required this.valores,
   });
 }

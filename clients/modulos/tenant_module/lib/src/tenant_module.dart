@@ -258,6 +258,21 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    // Contrato de canal: catálogo de provedores e conexão por credenciais.
+    i.lazySingleton<ListarProvedoresUsecase>(
+      () => ListarProvedoresUsecase(
+        repository: ListarProvedoresRepository(
+          datasource: ListarProvedoresDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<ConectarCanalUsecase>(
+      () => ConectarCanalUsecase(
+        repository: ConectarCanalRepository(
+          datasource: ConectarCanalDatasource(client: _adminClient()),
+        ),
+      ),
+    );
     i.lazySingleton<DefinirRespostaBotUsecase>(
       () => DefinirRespostaBotUsecase(
         repository: DefinirRespostaBotRepository(

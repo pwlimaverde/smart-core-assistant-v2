@@ -62,6 +62,10 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("ListWhatsappInstances", &["operacional:read"]),
     ("GetWhatsappInstanceStatus", &["operacional:read"]),
     ("CreateWhatsappInstance", &["operacional:admin"]),
+    // Contrato de canal: ver o catálogo é leitura; conectar por credenciais
+    // grava um número do tenant, como criar a instância de QR.
+    ("ListChannelProviders", &["operacional:read"]),
+    ("ConnectChannel", &["operacional:admin"]),
     ("ReconnectWhatsappInstance", &["operacional:admin"]),
     ("DeleteWhatsappInstance", &["operacional:admin"]),
     // P7 — encerrar a sessão é do administrador pelo mesmo motivo que remover:

@@ -1198,6 +1198,9 @@ message UpdateTenantUserResponse {
 message CreateMyWhatsappInstanceRequest {
   // Nome da instância no provedor. Precisa ser único entre todos os tenants.
   string instance_name = 1;
+  // Contrato de canal — provedor de QR escolhido na tela de Integrações.
+  // Vazio = `evolution`, o comportamento de antes (cliente antigo não manda).
+  string provider = 2;
 }
 
 message CreateMyWhatsappInstanceResponse {
@@ -1216,6 +1219,75 @@ message GetMyWhatsappInstanceStatusResponse {
   // QR em base64 para o pareamento; vazio quando já conectado (ou quando o
   // provedor ainda não o gerou).
   string qr_code = 2;
+}
+
+// --- Contrato de canal: catálogo de provedores e conexão por capacidade ---
+//
+// O descritor é DADO: a tela de Integrações lista os provedores e monta a
+// configuração de cada um pelo `modo_conexao` e pelos `campos`, sem tela
+// escrita para um provedor específico. Vocabulários (strings, não enums, para
+// um provedor novo não exigir app novo só para aparecer na lista):
+// - tipo_canal: whatsapp | webchat | telegram | instagram | messenger
+// - modo_conexao: qr_pairing | token | oauth | embedded | copy_snippet
+// - estagio: estavel | experimental | planejado
+// - campos[].tipo: texto | segredo | telefone | url
+// - capacidades[]: qr_pairing, token_connect, health, reconexao, desconectar,
+//   registra_webhook, envio_texto, envio_midia, presenca, recibos, reacoes,
+//   download_midia, foto_perfil, templates
+
+message CampoConfiguracaoCanal {
+  string chave = 1;
+  string rotulo = 2;
+  string tipo = 3;
+  bool obrigatorio = 4;
+  string ajuda = 5;
+}
+
+message ProvedorDeCanal {
+  // Chave do provedor (`evolution`, `meta_cloud`, `webchat`).
+  string id = 1;
+  string tipo_canal = 2;
+  string nome = 3;
+  string descricao = 4;
+  string modo_conexao = 5;
+  string estagio = 6;
+  // Se o tenant pode conectar este provedor neste ambiente.
+  bool habilitado = 7;
+  string motivo_indisponivel = 8;
+  repeated CampoConfiguracaoCanal campos = 9;
+  repeated string capacidades = 10;
+}
+
+message ListMyChannelProvidersRequest {}
+
+message ListMyChannelProvidersResponse {
+  repeated ProvedorDeCanal provedores = 1;
+}
+
+// Par chave/valor do formulário (o conversor proto→flatbuffers não aceita map).
+message ValorDeCampoCanal {
+  string chave = 1;
+  string valor = 2;
+}
+
+// Conexão por credenciais (`modo_conexao = token`). O servidor valida no
+// provedor antes de gravar; segredo não volta na resposta.
+message ConnectMyChannelRequest {
+  string provider = 1;
+  string instance_name = 2;
+  repeated ValorDeCampoCanal campos = 3;
+}
+
+message ConnectMyChannelResponse {
+  int32 id = 1;
+  string instance_name = 2;
+  string provider = 3;
+  string phone_number = 4;
+  string connection_state = 5;
+  // Onde o webhook do provedor deve apontar (vazio quando não se aplica).
+  string webhook_url = 6;
+  // O que a pessoa precisa fazer a seguir, em texto para a tela.
+  string instrucoes = 7;
 }
 
 message CreateMyDepartamentoRequest {
@@ -1468,6 +1540,10 @@ service AdminService {
   // Configuração inicial guiada (passos 5 a 8)
   rpc CreateMyWhatsappInstance(CreateMyWhatsappInstanceRequest) returns (CreateMyWhatsappInstanceResponse);
   rpc GetMyWhatsappInstanceStatus(GetMyWhatsappInstanceStatusRequest) returns (GetMyWhatsappInstanceStatusResponse);
+  // Contrato de canal — catálogo de provedores (descritor por provedor) e a
+  // conexão por credenciais. O fluxo de QR segue nas duas RPCs acima.
+  rpc ListMyChannelProviders(ListMyChannelProvidersRequest) returns (ListMyChannelProvidersResponse);
+  rpc ConnectMyChannel(ConnectMyChannelRequest) returns (ConnectMyChannelResponse);
   rpc CreateMyDepartamento(CreateMyDepartamentoRequest) returns (CreateMyDepartamentoResponse);
   rpc SetMyBotPersona(SetMyBotPersonaRequest) returns (SetMyBotPersonaResponse);
   rpc SetOnboardingProgress(SetOnboardingProgressRequest) returns (SetOnboardingProgressResponse);

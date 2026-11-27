@@ -37,6 +37,10 @@ use contracts::grpc::queries::{
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
     AvaliacaoDeTeste,
+    // Contrato de canal
+    CampoConfiguracaoCanal,
+    ConnectMyChannelRequest,
+    ConnectMyChannelResponse,
     ContagemDeMigracao,
     ContatoDoCliente,
     CoreSetting as ProtoCoreSetting,
@@ -149,6 +153,8 @@ use contracts::grpc::queries::{
     ListMyAvaliacoesDeTesteResponse,
     ListMyCamposRequest,
     ListMyCamposResponse,
+    ListMyChannelProvidersRequest,
+    ListMyChannelProvidersResponse,
     ListMyClientesRequest,
     ListMyClientesResponse,
     ListMyContatosDoClienteResponse,
@@ -248,6 +254,7 @@ use contracts::grpc::queries::{
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
     PromptDoTenant,
+    ProvedorDeCanal,
     // Fase 5 - Auditoria & Saúde
     QueryAuditLogRequest,
     QueryAuditLogResponse,
@@ -3917,6 +3924,12 @@ impl AdminService for AdminFacade {
         if nome.is_empty() {
             return Err(Status::invalid_argument("informe o nome da conexão"));
         }
+        // Contrato de canal: o provedor de QR vem da tela de Integrações.
+        // Cliente antigo não manda, e o vazio continua sendo a Evolution.
+        let provider = match req.get_ref().provider.trim() {
+            "" => "evolution".to_string(),
+            p => p.to_string(),
+        };
 
         // O `data_whatsapp` aplica o QuotaGuard de instâncias contra o
         // `max_instances` do plano antes de criar no provedor — estourar o
@@ -3926,7 +3939,7 @@ impl AdminService for AdminFacade {
                 &req,
                 &self.whatsapp,
                 "CreateWhatsappInstance",
-                serde_json::json!({ "instance_name": nome }),
+                serde_json::json!({ "instance_name": nome, "provider": provider }),
             )
             .await?;
 
@@ -3979,6 +3992,92 @@ impl AdminService for AdminFacade {
                 .and_then(|v| v.as_str())
                 .unwrap_or_default()
                 .to_string(),
+        }))
+    }
+
+    // --- Contrato de canal ---
+    //
+    // O catálogo vem do `data_whatsapp` (é ele que tem os adaptadores
+    // registrados) e passa como está: a tela monta a configuração pelo
+    // descritor, então a borda não pode filtrar nem reescrever capacidades.
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyChannelProviders", traceparent)
+    )]
+    async fn list_my_channel_providers(
+        &self,
+        req: Request<ListMyChannelProvidersRequest>,
+    ) -> Result<Response<ListMyChannelProvidersResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.whatsapp,
+                "ListChannelProviders",
+                serde_json::json!({}),
+            )
+            .await?;
+        let provedores = corpo
+            .get("provedores")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(provedor_de_canal_do_json).collect())
+            .unwrap_or_default();
+        Ok(Response::new(ListMyChannelProvidersResponse { provedores }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ConnectMyChannel", traceparent)
+    )]
+    async fn connect_my_channel(
+        &self,
+        req: Request<ConnectMyChannelRequest>,
+    ) -> Result<Response<ConnectMyChannelResponse>, Status> {
+        let r = req.get_ref();
+        let nome = r.instance_name.trim().to_string();
+        if nome.is_empty() {
+            return Err(Status::invalid_argument("informe o nome da conexão"));
+        }
+        if r.provider.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o provedor"));
+        }
+        let campos: Vec<serde_json::Value> = r
+            .campos
+            .iter()
+            .map(|c| serde_json::json!({ "chave": c.chave, "valor": c.valor }))
+            .collect();
+        let provider = r.provider.trim().to_string();
+
+        // O corpo leva credenciais: não entra em log nenhum (o `encaminhar_tenant`
+        // só registra rota e escopo).
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.whatsapp,
+                "ConnectChannel",
+                serde_json::json!({
+                    "provider": provider,
+                    "instance_name": nome,
+                    "campos": campos,
+                }),
+            )
+            .await?;
+
+        let texto = |k: &str| {
+            corpo
+                .get(k)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        Ok(Response::new(ConnectMyChannelResponse {
+            id: corpo.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            instance_name: texto("instance_name"),
+            provider: texto("provider"),
+            phone_number: texto("phone_number"),
+            connection_state: texto("connection_state"),
+            webhook_url: texto("webhook_url"),
+            instrucoes: texto("instrucoes"),
         }))
     }
 
@@ -11390,6 +11489,55 @@ fn atendente_do_json(v: &serde_json::Value) -> MyAtendente {
 }
 
 /// Converte a instância de WhatsApp do JSON interno no tipo do contrato.
+/// Contrato de canal — descritor do `data_whatsapp` (JSON) para o proto.
+///
+/// Os nomes do JSON são os do `infrastructure_messaging::ChannelDescriptor`
+/// (`provider`, `kind`, `connection_mode`, `config_schema`, `capacidades`).
+fn provedor_de_canal_do_json(v: &serde_json::Value) -> ProvedorDeCanal {
+    let texto = |o: &serde_json::Value, chave: &str| {
+        o.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let lista = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_array())
+            .cloned()
+            .unwrap_or_default()
+    };
+    ProvedorDeCanal {
+        id: texto(v, "provider"),
+        tipo_canal: texto(v, "kind"),
+        nome: texto(v, "nome"),
+        descricao: texto(v, "descricao"),
+        modo_conexao: texto(v, "connection_mode"),
+        estagio: texto(v, "estagio"),
+        habilitado: v
+            .get("habilitado")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false),
+        motivo_indisponivel: texto(v, "motivo_indisponivel"),
+        campos: lista("config_schema")
+            .iter()
+            .map(|c| CampoConfiguracaoCanal {
+                chave: texto(c, "chave"),
+                rotulo: texto(c, "rotulo"),
+                tipo: texto(c, "tipo"),
+                obrigatorio: c
+                    .get("obrigatorio")
+                    .and_then(|x| x.as_bool())
+                    .unwrap_or(false),
+                ajuda: texto(c, "ajuda"),
+            })
+            .collect(),
+        capacidades: lista("capacidades")
+            .iter()
+            .filter_map(|c| c.as_str().map(str::to_string))
+            .collect(),
+    }
+}
+
 fn instancia_do_json(v: &serde_json::Value) -> MyWhatsappInstance {
     let texto = |chave: &str| {
         v.get(chave)

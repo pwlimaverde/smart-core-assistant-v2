@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart' as proto;
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/model/conexao.dart';
+import '../../domain/model/provedor_canal.dart';
 import '../../domain/parameters/conexoes_parameters.dart';
 
 Conexao _paraDominio(proto.MyWhatsappInstance c) => Conexao(
@@ -78,7 +79,10 @@ final class CriarConexaoDatasource
   @override
   Future<ConexaoCriada> call(CriarConexaoParameters parameters) async {
     final resp = await _client.createMyWhatsappInstance(
-      proto.CreateMyWhatsappInstanceRequest(instanceName: parameters.nome),
+      proto.CreateMyWhatsappInstanceRequest(
+        instanceName: parameters.nome,
+        provider: parameters.provedor,
+      ),
     );
     return ConexaoCriada(id: resp.id, nome: resp.instanceName);
   }
@@ -235,5 +239,79 @@ final class ReenviarNaoEntregueDatasource
       proto.ReenviarMensagemNaoEntregueRequest(id: parameters.id),
     );
     return DesfechoReenvio.doServidor(resp.status);
+  }
+}
+
+/// Contrato de canal — o catálogo de provedores, como o servidor o declara.
+ProvedorCanal provedorDoProto(proto.ProvedorDeCanal p) => ProvedorCanal(
+  id: p.id,
+  tipoCanal: p.tipoCanal,
+  nome: p.nome,
+  descricao: p.descricao,
+  modo: ModoConexao.doServidor(p.modoConexao),
+  estagio: p.estagio,
+  habilitado: p.habilitado,
+  motivoIndisponivel: p.motivoIndisponivel,
+  campos: [
+    for (final c in p.campos)
+      CampoCanal(
+        chave: c.chave,
+        rotulo: c.rotulo,
+        tipo: TipoCampoCanal.doServidor(c.tipo),
+        obrigatorio: c.obrigatorio,
+        ajuda: c.ajuda,
+      ),
+  ],
+  capacidades: p.capacidades.toSet(),
+);
+
+final class ListarProvedoresDatasource
+    implements Datasource<List<ProvedorCanal>, NoParams> {
+  final proto.AdminServiceClient _client;
+
+  const ListarProvedoresDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<List<ProvedorCanal>> call(NoParams parameters) async {
+    final resp = await _client.listMyChannelProviders(
+      proto.ListMyChannelProvidersRequest(),
+    );
+    return resp.provedores.map(provedorDoProto).toList();
+  }
+}
+
+/// Contrato de canal — conexão por credenciais. Os valores vão como pares
+/// (o contrato não usa `map<>`).
+final class ConectarCanalDatasource
+    implements Datasource<CanalConectado, ConectarCanalParameters> {
+  final proto.AdminServiceClient _client;
+
+  const ConectarCanalDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<CanalConectado> call(ConectarCanalParameters parameters) async {
+    final resp = await _client.connectMyChannel(
+      proto.ConnectMyChannelRequest(
+        provider: parameters.provedor,
+        instanceName: parameters.nome,
+        campos: [
+          for (final e in parameters.valores.entries)
+            proto.ValorDeCampoCanal(chave: e.key, valor: e.value),
+        ],
+      ),
+    );
+    return CanalConectado(
+      id: resp.id,
+      nome: resp.instanceName,
+      provedor: resp.provider,
+      telefone: resp.phoneNumber,
+      estado: resp.connectionState,
+      webhookUrl: resp.webhookUrl,
+      instrucoes: resp.instrucoes,
+    );
   }
 }

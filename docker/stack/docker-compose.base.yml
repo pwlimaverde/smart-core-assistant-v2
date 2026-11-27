@@ -538,6 +538,10 @@ services:
       # Prefixo do nome de instâncias NOVAS no gateway compartilhado (dev.vars:
       # `dev-`; prod sem prefixo). Instâncias existentes não mudam de nome.
       SMARTCORE_WHATSAPP_PREFIXO_INSTANCIA: ${WHATSAPP_PREFIXO_INSTANCIA:-}
+      # Contrato de canal: provedores que o tenant pode CONECTAR neste ambiente
+      # (ADR §6-A). Padrão = só a Evolution; a dev habilita a Cloud API
+      # (experimental) no dev.vars.
+      SMARTCORE_CANAIS_HABILITADOS: ${CANAIS_HABILITADOS:-evolution}
     networks: [internal, observability, evolution_net]
     depends_on:
       redis: { condition: service_healthy }

@@ -9,6 +9,7 @@ import '../controllers/conexoes_controllers.dart';
 import '../widgets/detalhe_conexao_dialog.dart';
 import '../widgets/nao_entregues_dialog.dart';
 import '../widgets/pareamento_dialog.dart';
+import 'integracoes_page.dart';
 
 /// Conexões de WhatsApp do tenant.
 ///
@@ -210,9 +211,27 @@ class _ConexoesPageState extends State<ConexoesPage> {
     }
   }
 
+  /// Nova conexão: abre as Integrações, onde o tenant escolhe o provedor e o
+  /// fluxo sai do descritor dele. Por credenciais, a própria tela conclui; por
+  /// QR, ela devolve o provedor e o pareamento segue aqui, onde vive a caixa
+  /// do QR.
+  Future<void> _novaConexao(BuildContext context) async {
+    final provedor = await abrirIntegracoes(context);
+    if (!context.mounted) return;
+    if (provedor == null) {
+      // Pode ter conectado por credenciais: a lista precisa mostrar.
+      await _controller.carregar();
+      return;
+    }
+    await _novaConexaoPorQr(context, provedor: provedor.id);
+  }
+
   /// Cria a conexão e emenda direto no pareamento: o nome sozinho não serve de
   /// nada — sem ler o QR em seguida a instância nasce e fica pendurada.
-  Future<void> _novaConexao(BuildContext context) async {
+  Future<void> _novaConexaoPorQr(
+    BuildContext context, {
+    required String provedor,
+  }) async {
     final nome = TextEditingController();
     final confirmado = await showDialog<bool>(
       context: context,
@@ -253,7 +272,7 @@ class _ConexoesPageState extends State<ConexoesPage> {
     if (texto.isEmpty) return;
 
     final messenger = ScaffoldMessenger.of(context);
-    final res = await _controller.criar(texto);
+    final res = await _controller.criar(texto, provedor: provedor);
     if (!context.mounted) return;
 
     switch (res) {

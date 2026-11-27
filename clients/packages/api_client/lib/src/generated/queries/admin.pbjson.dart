@@ -3425,6 +3425,7 @@ const CreateMyWhatsappInstanceRequest$json = {
   '1': 'CreateMyWhatsappInstanceRequest',
   '2': [
     {'1': 'instance_name', '3': 1, '4': 1, '5': 9, '10': 'instanceName'},
+    {'1': 'provider', '3': 2, '4': 1, '5': 9, '10': 'provider'},
   ],
 };
 
@@ -3432,7 +3433,7 @@ const CreateMyWhatsappInstanceRequest$json = {
 final $typed_data.Uint8List createMyWhatsappInstanceRequestDescriptor =
     $convert.base64Decode(
         'Ch9DcmVhdGVNeVdoYXRzYXBwSW5zdGFuY2VSZXF1ZXN0EiMKDWluc3RhbmNlX25hbWUYASABKA'
-        'lSDGluc3RhbmNlTmFtZQ==');
+        'lSDGluc3RhbmNlTmFtZRIaCghwcm92aWRlchgCIAEoCVIIcHJvdmlkZXI=');
 
 @$core.Deprecated('Use createMyWhatsappInstanceResponseDescriptor instead')
 const CreateMyWhatsappInstanceResponse$json = {
@@ -3478,6 +3479,153 @@ final $typed_data.Uint8List getMyWhatsappInstanceStatusResponseDescriptor =
     $convert.base64Decode(
         'CiNHZXRNeVdoYXRzYXBwSW5zdGFuY2VTdGF0dXNSZXNwb25zZRIpChBjb25uZWN0aW9uX3N0YX'
         'RlGAEgASgJUg9jb25uZWN0aW9uU3RhdGUSFwoHcXJfY29kZRgCIAEoCVIGcXJDb2Rl');
+
+@$core.Deprecated('Use campoConfiguracaoCanalDescriptor instead')
+const CampoConfiguracaoCanal$json = {
+  '1': 'CampoConfiguracaoCanal',
+  '2': [
+    {'1': 'chave', '3': 1, '4': 1, '5': 9, '10': 'chave'},
+    {'1': 'rotulo', '3': 2, '4': 1, '5': 9, '10': 'rotulo'},
+    {'1': 'tipo', '3': 3, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'obrigatorio', '3': 4, '4': 1, '5': 8, '10': 'obrigatorio'},
+    {'1': 'ajuda', '3': 5, '4': 1, '5': 9, '10': 'ajuda'},
+  ],
+};
+
+/// Descriptor for `CampoConfiguracaoCanal`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List campoConfiguracaoCanalDescriptor = $convert.base64Decode(
+    'ChZDYW1wb0NvbmZpZ3VyYWNhb0NhbmFsEhQKBWNoYXZlGAEgASgJUgVjaGF2ZRIWCgZyb3R1bG'
+    '8YAiABKAlSBnJvdHVsbxISCgR0aXBvGAMgASgJUgR0aXBvEiAKC29icmlnYXRvcmlvGAQgASgI'
+    'UgtvYnJpZ2F0b3JpbxIUCgVhanVkYRgFIAEoCVIFYWp1ZGE=');
+
+@$core.Deprecated('Use provedorDeCanalDescriptor instead')
+const ProvedorDeCanal$json = {
+  '1': 'ProvedorDeCanal',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'tipo_canal', '3': 2, '4': 1, '5': 9, '10': 'tipoCanal'},
+    {'1': 'nome', '3': 3, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 4, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'modo_conexao', '3': 5, '4': 1, '5': 9, '10': 'modoConexao'},
+    {'1': 'estagio', '3': 6, '4': 1, '5': 9, '10': 'estagio'},
+    {'1': 'habilitado', '3': 7, '4': 1, '5': 8, '10': 'habilitado'},
+    {
+      '1': 'motivo_indisponivel',
+      '3': 8,
+      '4': 1,
+      '5': 9,
+      '10': 'motivoIndisponivel'
+    },
+    {
+      '1': 'campos',
+      '3': 9,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.CampoConfiguracaoCanal',
+      '10': 'campos'
+    },
+    {'1': 'capacidades', '3': 10, '4': 3, '5': 9, '10': 'capacidades'},
+  ],
+};
+
+/// Descriptor for `ProvedorDeCanal`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List provedorDeCanalDescriptor = $convert.base64Decode(
+    'Cg9Qcm92ZWRvckRlQ2FuYWwSDgoCaWQYASABKAlSAmlkEh0KCnRpcG9fY2FuYWwYAiABKAlSCX'
+    'RpcG9DYW5hbBISCgRub21lGAMgASgJUgRub21lEhwKCWRlc2NyaWNhbxgEIAEoCVIJZGVzY3Jp'
+    'Y2FvEiEKDG1vZG9fY29uZXhhbxgFIAEoCVILbW9kb0NvbmV4YW8SGAoHZXN0YWdpbxgGIAEoCV'
+    'IHZXN0YWdpbxIeCgpoYWJpbGl0YWRvGAcgASgIUgpoYWJpbGl0YWRvEi8KE21vdGl2b19pbmRp'
+    'c3Bvbml2ZWwYCCABKAlSEm1vdGl2b0luZGlzcG9uaXZlbBJLCgZjYW1wb3MYCSADKAsyMy5zbW'
+    'FydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuQ2FtcG9Db25maWd1cmFjYW9DYW5hbFIGY2FtcG9z'
+    'EiAKC2NhcGFjaWRhZGVzGAogAygJUgtjYXBhY2lkYWRlcw==');
+
+@$core.Deprecated('Use listMyChannelProvidersRequestDescriptor instead')
+const ListMyChannelProvidersRequest$json = {
+  '1': 'ListMyChannelProvidersRequest',
+};
+
+/// Descriptor for `ListMyChannelProvidersRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyChannelProvidersRequestDescriptor =
+    $convert.base64Decode('Ch1MaXN0TXlDaGFubmVsUHJvdmlkZXJzUmVxdWVzdA==');
+
+@$core.Deprecated('Use listMyChannelProvidersResponseDescriptor instead')
+const ListMyChannelProvidersResponse$json = {
+  '1': 'ListMyChannelProvidersResponse',
+  '2': [
+    {
+      '1': 'provedores',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.ProvedorDeCanal',
+      '10': 'provedores'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyChannelProvidersResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyChannelProvidersResponseDescriptor =
+    $convert.base64Decode(
+        'Ch5MaXN0TXlDaGFubmVsUHJvdmlkZXJzUmVzcG9uc2USTAoKcHJvdmVkb3JlcxgBIAMoCzIsLn'
+        'NtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5Qcm92ZWRvckRlQ2FuYWxSCnByb3ZlZG9yZXM=');
+
+@$core.Deprecated('Use valorDeCampoCanalDescriptor instead')
+const ValorDeCampoCanal$json = {
+  '1': 'ValorDeCampoCanal',
+  '2': [
+    {'1': 'chave', '3': 1, '4': 1, '5': 9, '10': 'chave'},
+    {'1': 'valor', '3': 2, '4': 1, '5': 9, '10': 'valor'},
+  ],
+};
+
+/// Descriptor for `ValorDeCampoCanal`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List valorDeCampoCanalDescriptor = $convert.base64Decode(
+    'ChFWYWxvckRlQ2FtcG9DYW5hbBIUCgVjaGF2ZRgBIAEoCVIFY2hhdmUSFAoFdmFsb3IYAiABKA'
+    'lSBXZhbG9y');
+
+@$core.Deprecated('Use connectMyChannelRequestDescriptor instead')
+const ConnectMyChannelRequest$json = {
+  '1': 'ConnectMyChannelRequest',
+  '2': [
+    {'1': 'provider', '3': 1, '4': 1, '5': 9, '10': 'provider'},
+    {'1': 'instance_name', '3': 2, '4': 1, '5': 9, '10': 'instanceName'},
+    {
+      '1': 'campos',
+      '3': 3,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.ValorDeCampoCanal',
+      '10': 'campos'
+    },
+  ],
+};
+
+/// Descriptor for `ConnectMyChannelRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List connectMyChannelRequestDescriptor = $convert.base64Decode(
+    'ChdDb25uZWN0TXlDaGFubmVsUmVxdWVzdBIaCghwcm92aWRlchgBIAEoCVIIcHJvdmlkZXISIw'
+    'oNaW5zdGFuY2VfbmFtZRgCIAEoCVIMaW5zdGFuY2VOYW1lEkYKBmNhbXBvcxgDIAMoCzIuLnNt'
+    'YXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5WYWxvckRlQ2FtcG9DYW5hbFIGY2FtcG9z');
+
+@$core.Deprecated('Use connectMyChannelResponseDescriptor instead')
+const ConnectMyChannelResponse$json = {
+  '1': 'ConnectMyChannelResponse',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'instance_name', '3': 2, '4': 1, '5': 9, '10': 'instanceName'},
+    {'1': 'provider', '3': 3, '4': 1, '5': 9, '10': 'provider'},
+    {'1': 'phone_number', '3': 4, '4': 1, '5': 9, '10': 'phoneNumber'},
+    {'1': 'connection_state', '3': 5, '4': 1, '5': 9, '10': 'connectionState'},
+    {'1': 'webhook_url', '3': 6, '4': 1, '5': 9, '10': 'webhookUrl'},
+    {'1': 'instrucoes', '3': 7, '4': 1, '5': 9, '10': 'instrucoes'},
+  ],
+};
+
+/// Descriptor for `ConnectMyChannelResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List connectMyChannelResponseDescriptor = $convert.base64Decode(
+    'ChhDb25uZWN0TXlDaGFubmVsUmVzcG9uc2USDgoCaWQYASABKAVSAmlkEiMKDWluc3RhbmNlX2'
+    '5hbWUYAiABKAlSDGluc3RhbmNlTmFtZRIaCghwcm92aWRlchgDIAEoCVIIcHJvdmlkZXISIQoM'
+    'cGhvbmVfbnVtYmVyGAQgASgJUgtwaG9uZU51bWJlchIpChBjb25uZWN0aW9uX3N0YXRlGAUgAS'
+    'gJUg9jb25uZWN0aW9uU3RhdGUSHwoLd2ViaG9va191cmwYBiABKAlSCndlYmhvb2tVcmwSHgoK'
+    'aW5zdHJ1Y29lcxgHIAEoCVIKaW5zdHJ1Y29lcw==');
 
 @$core.Deprecated('Use createMyDepartamentoRequestDescriptor instead')
 const CreateMyDepartamentoRequest$json = {
