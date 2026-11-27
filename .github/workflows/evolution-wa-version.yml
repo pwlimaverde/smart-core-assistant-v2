@@ -43,5 +43,6 @@ jobs:
           context: docker/evolution/wa-version
           build-args: |
             EVOLUTION_REF=0.7.3
+            PATCH_REV=wa2
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/evolution-go-wa:0.7.3-wa1
+          tags: ghcr.io/${{ github.repository_owner }}/evolution-go-wa:0.7.3-wa2

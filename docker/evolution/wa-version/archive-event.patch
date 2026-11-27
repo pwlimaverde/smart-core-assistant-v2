@@ -1,0 +1,13 @@
+--- a/pkg/whatsmeow/service/whatsmeow.go
++++ b/pkg/whatsmeow/service/whatsmeow.go
+@@ -1857,7 +1857,9 @@
+ 		doWebhook = true
+ 		postMap["event"] = "Archive"
+ 
+-		dataMap := postMap["data"].(map[string]interface{})
++		// postMap["data"] ainda é o *events.Archive (sem conversão para mapa);
++		// a asserção direta entrava em panic a cada arquivamento sincronizado.
++		dataMap := map[string]interface{}{}
+ 		dataMap["JID"] = evt.JID
+ 		dataMap["Timestamp"] = evt.Timestamp
+ 		dataMap["Action"] = evt.Action
