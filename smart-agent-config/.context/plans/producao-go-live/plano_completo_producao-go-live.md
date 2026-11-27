@@ -97,7 +97,7 @@ canal), L10–L14, M1, M8–M18 e o enxugamento do servidor (Fase 2B).
 | Dentro | Fora (adiado, com condição) |
 |---|---|
 | Stack de servidor de produção na VPS, ao lado da dev | Abertura da web admin/tenant ao público (Fase A, só com aprovação do dono) |
-| Evolution Go compartilhado, sem troca além da `0.7.3-wa1` | Botões "Entrar" e "Criar conta" do site |
+| Evolution Go compartilhado, sem troca além da `0.7.3-wa2` | Botões "Entrar" e "Criar conta" do site |
 | App Windows: canal estável, assinatura, auto-update | App para macOS/Linux/mobile |
 | Servidor de releases em produção, por versão | Segunda VPS, réplica de banco, orquestrador |
 | Site público por versão, no deploy de produção | Loja da Microsoft (alternativa registrada em D15) |
@@ -155,7 +155,7 @@ Todos com `restart: unless-stopped`, rotação de log (`:20-24`) e `mem_limit`.
 
 | Projeto | Serviços | Observações |
 |---|---|---|
-| `smart-core-v2-evolution` | `smartcore-evolution` (`ghcr.io/pwlimaverde/evolution-go-wa:0.7.3-wa1` fixada por digest, `docker/evolution/compose.yml:68`), `smartcore-evolution-postgres` | Porta só em 127.0.0.1. **Sem `mem_limit`, sem rotação de log, sem backup, sem sonda no `evolution`** |
+| `smart-core-v2-evolution` | `smartcore-evolution` (`ghcr.io/pwlimaverde/evolution-go-wa:0.7.3-wa2` fixada por digest, `docker/evolution/compose.yml`), `smartcore-evolution-postgres` | Porta só em 127.0.0.1. **Sem `mem_limit`, sem rotação de log, sem backup, sem sonda no `evolution`** |
 | `smart-core-v2-observability` | docker-proxy, otel-collector, loki, tempo, prometheus, grafana, promtail | Imagens fixadas. Loki e Tempo 14 dias, Prometheus 15 dias. **Sem `mem_limit`, sem rotação de log, sem sonda** |
 | `smart-core-v2-edge` | `caddy` (`smartcore-edge:latest`) | Única coisa em 0.0.0.0 (80, 443, 443/udp). Um Caddyfile para dev **e** produção |
 
@@ -585,7 +585,7 @@ exceção é o item 2, que só aplica a decisão já tomada de manter a web fech
 
 ### Fase 7 — Evolution compartilhado
 
-- **Entregáveis (IA):** confirmar a versão `0.7.3-wa1` (alinhar se houver outra instância, e parar aí); produção na `smart_core_v2_evolution_net` com o apelido próprio; chave global trocada uma vez (Dono fornece); backup do banco e do volume; limites.
+- **Entregáveis (IA):** confirmar a versão `0.7.3-wa2` (alinhar se houver outra instância, e parar aí); produção na `smart_core_v2_evolution_net` com o apelido próprio; chave global trocada uma vez (Dono fornece); backup do banco e do volume; limites.
 - **Regra:** o deploy de produção não sobe nem recria o Evolution; só confere rede e saúde.
 - **Risco:** alto para a dev durante a troca de chave e a regravação (janela curta). Sessões pareadas se mantêm enquanto os volumes não forem tocados.
 - **Conclusão:** instância `prod-…` criada; mensagem chega só no `webhook_ingress` de produção; dev segue funcionando.
@@ -733,7 +733,7 @@ D11); D1; D8.
 1. Não subir compose de produção fora do bundle (`/opt/smartcore/prod/releases/current`) nem a partir do checkout `/opt/smartcore/ops/...`; prod só por tag (`deploy-prod.yml`) ou `rollback-prod.yml`. *(Revisão 3: substitui "não subir `docker/prod`", pasta que não existe mais.)*
 2. Não editar `docker/*/.env` à mão; a fonte é `/opt/smartcore/*/env/`.
 3. Não colocar `COMPOSE_PROJECT_NAME` em `dev.env` nem em `prod.env`.
-4. Não trocar, recriar nem apagar volumes do Evolution; nenhuma versão além da `0.7.3-wa1` (troca de 26/11: a `0.7.2-wa1` não dava ack na stanza `<status>` e a recepção travava; rollback: padrão do compose de volta e `deploy-infra`).
+4. Não trocar, recriar nem apagar volumes do Evolution; nenhuma versão além da `0.7.3-wa2` (27/11: patch do panic do evento Archive; troca de 26/11: a `0.7.2-wa1` não dava ack na stanza `<status>` e a recepção travava; rollback: padrão do compose de volta e `deploy-infra`).
 5. Não rodar `infra/server-setup.sh` nem `infra/cleanup-hostinger.sh` no servidor em uso.
 6. Não reaproveitar segredo da dev em produção (exceto os compartilhados por decisão).
 7. Não usar `:latest` nem `:dev` em produção, incluindo releases, site e borda.

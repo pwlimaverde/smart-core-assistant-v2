@@ -3,10 +3,14 @@
 # não compilar contra o whatsmeow da tag, o job falha e nada é publicado.
 #
 # A stack fundacional (docker/evolution) puxa esta imagem no deploy-infra.yml
-# (infra compartilhada, aprovação de prod). A tag 0.7.2-wa1 continua no GHCR
-# para rollback (padrão do compose de volta + deploy-infra). Republicar a tag
-# não muda o que roda: o compose fixa o digest; ao republicar, atualize-o.
-# Rodar manualmente ou ao mudar o Dockerfile/patch.
+# (infra compartilhada, aprovação de prod). Tags anteriores ficam no GHCR para
+# rollback: 0.7.3-wa1 (sem o patch do Archive) e 0.7.2-wa1 (anterior ao ack da
+# stanza <status>; voltar a ela trava a recepção). Republicar a tag não muda o
+# que roda: o compose fixa o digest; ao republicar, atualize-o.
+# Build só por workflow_dispatch (`gh workflow run evolution-wa-version.yml
+# --ref <branch>`): o push só dispara no branch histórico abaixo.
+# Versão e revisão de patch ficam no `env` do job: build-arg e tag usam os
+# mesmos valores, então a tag sempre bate com o main.version do binário.
 name: Evolution Go (WhatsApp Web atual)
 
 on:
@@ -25,6 +29,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      EVOLUTION_REF: '0.7.3'
+      PATCH_REV: 'wa2'
     steps:
       - uses: actions/checkout@v5
 
@@ -42,7 +49,7 @@ jobs:
         with:
           context: docker/evolution/wa-version
           build-args: |
-            EVOLUTION_REF=0.7.3
-            PATCH_REV=wa2
+            EVOLUTION_REF=${{ env.EVOLUTION_REF }}
+            PATCH_REV=${{ env.PATCH_REV }}
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/evolution-go-wa:0.7.3-wa2
+          tags: ghcr.io/${{ github.repository_owner }}/evolution-go-wa:${{ env.EVOLUTION_REF }}-${{ env.PATCH_REV }}

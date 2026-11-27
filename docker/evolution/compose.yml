@@ -56,12 +56,15 @@ services:
     # (docker/evolution/wa-version). Para atualizar, trocar a tag e publicar pelo
     # workflow evolution-wa-version.
     #
-    # wa2: patch do panic no evento Archive (docker/evolution/wa-version).
-    # Rollback do wa2: 0.7.3-wa1@sha256:b0e6c38d58e2ce09105f9b1fcb4c35829e47b3d35731acd11bdd68392996a843.
+    # Atual: 0.7.3-wa2 = patch do panic no evento Archive
+    # (docker/evolution/wa-version). ROLLBACK ATUAL: 0.7.3-wa1 por digest
+    # (sha256:b0e6c38d58e2ce09105f9b1fcb4c35829e47b3d35731acd11bdd68392996a843)
+    # e deploy-infra.
     #
-    # 0.7.3: o whatsmeow da 0.7.2 não dava ack na stanza `<status>` (stories) e
-    # a fila do WhatsApp travava — nenhuma mensagem recebida chegava. Rollback:
-    # voltar este padrão para 0.7.2-wa1 e rodar o deploy-infra (as migrações
+    # Histórico, 0.7.3-wa1: o whatsmeow da 0.7.2 não dava ack na stanza
+    # `<status>` (stories) e a fila do WhatsApp travava — nenhuma mensagem
+    # recebida chegava. Voltar à 0.7.2-wa1 só em último caso (a recepção trava
+    # de novo); o banco aceita a volta (as migrações
     # v15/v16 do store só adicionam colunas com default e são marcadas
     # "compatible with v8+", então a 0.7.2, que vai até a v14, abre o banco).
     #
